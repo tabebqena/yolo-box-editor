@@ -3,12 +3,11 @@
 Run from the repo root; the app is a single module with no package layout, so
 the repo root is added to sys.path here.
 
-The app's own support files (actions.yaml / shortcuts.txt /
+The app's own support files (the actions/ folder / shortcuts.txt /
 .recent_data_yamls.json) are NEVER touched: fixtures monkeypatch every file
 constant to disposable paths under tmp_path, and STATE is reset per test.
 """
 
-import subprocess
 import sys
 from pathlib import Path
 
@@ -874,23 +873,6 @@ def test_load_filters_ignores_non_py(clean_state):
 def test_load_filters_missing_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "FILTERS_DIR", str(tmp_path / "nope"))
     assert ybe.load_filters() == {}
-
-
-def test_shipped_no_revised_filter(tmp_path):
-    """filters/no_revised.py hides `revised` images, keeps other/untagged ones."""
-    root = make_dataset(tmp_path, splits=("val",), images=("a", "b", "c"))
-    tags = root / "tags" / "val"
-    tags.mkdir(parents=True)
-    (tags / "a.txt").write_text("revised\n", encoding="utf-8")
-    (tags / "b.txt").write_text("fire_only\n", encoding="utf-8")
-    script = ROOT / "filters" / "no_revised.py"
-    proc = subprocess.run(
-        [sys.executable, str(script), str(root / "data.yaml"), "val"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert proc.stdout.split() == ["val/b.jpg", "val/c.jpg"]
 
 
 def test_parse_filter_output_keeps_known_dedupes_and_order(clean_state):

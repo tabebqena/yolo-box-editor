@@ -202,6 +202,11 @@ override), and are git-ignored so app updates never touch them. A file with
 neither `steps` nor `after_success` is ignored — `actions/example.yaml` is such
 a template.
 
+Helper programs called by those steps live in the `scripts/` folder (next to
+`app.py`); `scripts/example.py` is a comments-only template and personal
+`scripts/*.a.py` are git-ignored. The app does not scan this folder — a script
+runs only when a `steps` command names it.
+
 **`after_success`** is a list of *app actions* (the same `app_*` names used for
 keyboard shortcuts) **or other non-hook actions** that run client-side after
 every step succeeded. They run in order; on an error the chain stops, the
