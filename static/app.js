@@ -48,6 +48,7 @@ let hookInFlight = new Set(); // hooks currently running (re-entrancy guard)
 let autoSave = false;        // save labels automatically after each edit
 let autoSaveTimer = null;    // debounce timer for auto-save
 let debugMode = false;       // --debug: log verbose messages to the browser console
+let resumeSplitTried = false; // guard: resumeLastImage switches split at most once
 const LAST_IMAGE_KEY = 'ybe_last_image'; // localStorage key: last image reached
 const VIEW_KEY = 'ybe_view';             // localStorage key: last split + filter per dataset
 const SHOW_BOXES_KEY = 'ybe_show_boxes'; // localStorage key: box overlay shown/hidden
@@ -819,9 +820,14 @@ async function maybeRestoreView(cfg) {
     clearSavedView();
     return cfg;
   }
+  // Only restore a remembered split when the server has none (a restart). If the
+  // server already has one it is authoritative — e.g. `resumeLastImage` switched
+  // to the last image's split, or the user picked one — so never override it,
+  // especially not with null ("All splits"), which would fight `resumeLastImage`
+  // in an endless switch/restore loop.
   const wantedSplit = saved.split || null;
-  if (wantedSplit !== (cfg.active_split || null)) {
-    const valid = wantedSplit === null || (cfg.splits || []).some((s) => s.name === wantedSplit);
+  if (wantedSplit && !cfg.active_split) {
+    const valid = (cfg.splits || []).some((s) => s.name === wantedSplit);
     if (valid) {
       const data = await postJson('/api/split', { split: wantedSplit });
       if (data.ok) cfg = data;
@@ -945,6 +951,10 @@ async function resumeLastImage(cfg) {
   // (with a filter active the split is just its input, so don't force it)
   if (!cfg.active_filter && mem.split && mem.split !== cfg.active_split) {
     if (cfg.splits.some((s) => s.name === mem.split)) {
+      // one attempt per page load: if the switch doesn't stick, give up instead
+      // of letting a repeated reload re-issue it forever.
+      if (resumeSplitTried) { loadImage(0); return; }
+      resumeSplitTried = true;
       await setSplit(mem.split, true);
       return;
     }

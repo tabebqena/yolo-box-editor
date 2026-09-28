@@ -122,6 +122,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   showing the removed image. `loadImage` now cache-busts its image URL like
   `app_refresh_image`, so the stale decoded frame can't be restored when the
   index the two actions use is the one that was just archived.
+- Start-up no longer hangs in an endless split-switch/reload loop when the
+  remembered last image lives in a different split than the remembered active
+  split (e.g. an image in `val` while the saved view is *All splits*).
+  `maybeRestoreView` only restores a remembered split when the server has none,
+  so it no longer overrides the split `resumeLastImage` just set (especially not
+  back to `null`), and `resumeLastImage` gives up after one switch attempt.
 
 ## [0.5.0] — 2026-09-21
 
