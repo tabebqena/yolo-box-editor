@@ -108,7 +108,7 @@ they are **not** valid in `steps`, which are shell commands.
 | `app_show_hide` | `.` | toggle the box overlay on the image (hidden boxes ignore the mouse) |
 | `app_fix_box` | `F` | fix / unfix the selected box (transient: never saved, reset on image change) |
 | `app_force_draw` | `Ctrl` | held modifier, not a key: hold it and drag to always draw a new box (configurable, e.g. `<Alt>`) |
-| `app_refresh_images_list` | — | re-scan the image folders; stay on the same index (clamped) |
+| `app_refresh_images_list` | — | re-scan the image folders; stay on the same image by path (clamped when gone) |
 | `app_refresh_image` | — | re-fetch the current image (cache-busted) |
 
 `app_refresh_images_list` and `app_refresh_image` have **no default keys** —
@@ -244,8 +244,10 @@ every step succeeded. They run in order; on an error the chain stops, the
 message is shown and logged to the browser console. An action can therefore
 chain into another action (a cascade is capped at 8 levels). Useful app actions:
 
-- `app_refresh_images_list` — re-scan the image folders; navigation stays on the
-  same index (clamped), so a removed image disappears instead of 404ing forever.
+- `app_refresh_images_list` — re-scan the image folders; the current image is
+  kept **by path**, not by index, so the display survives list changes from an
+  action (`Archive`) or a re-applied filter. When that image was removed, the
+  next one that followed it and still exists is shown (clamped at the end).
 - `app_refresh_image` — re-fetch the current image from disk (cache-busted),
   e.g. after an external editor saved a new version. Image responses are served
   with `Cache-Control: no-store`, so you never see a stale frame.
@@ -366,8 +368,11 @@ and a notice is shown. A non-zero exit code or a timeout (120 s) is reported as
 a filter failure and the previous filter (if any) stays active.
 
 Filters re-run when you pick one, when you change the split (while one is
-active), and after an image-list rescan. The active filter is remembered in your
-browser and restored when you reopen the app — even after a server restart.
+active), and after an image-list rescan. The image you are on is tracked by its
+path, so re-applying a filter keeps you on it when it is still in the result
+(otherwise you are moved to the nearest surviving image). The active filter is
+remembered in your browser and restored when you reopen the app — even after a
+server restart.
 
 Personal filters live in `filters/*.a.py` (git-ignored, read after the shipped
 files, win on a name clash). `filters/example.py` is a comments-only template

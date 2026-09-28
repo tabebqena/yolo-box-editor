@@ -753,6 +753,8 @@ async function loadConfig(startIdx = 0, opts = {}) {
   if (images.length) {
     if (opts.explicit) {
       loadImage(startIdx);
+    } else if (opts.anchor) {
+      loadImage(resolveImageAnchor(opts.anchor));
     } else if (!opts.noResume) {
       resumeLastImage(cfg);
     } else {
@@ -890,6 +892,48 @@ function readLastImage() {
   } catch (e) { return null; }
 }
 
+// A stable identity for an image, independent of its position in the list
+// (indices shift whenever the list is rescanned or a filter is re-applied).
+function imageKey(entry) {
+  return entry ? `${entry.split}/${entry.name}` : null;
+}
+
+// Snapshot where the user is *by path* before the image list is rebuilt: the
+// current image, plus (when `follow`) the ones that followed it. This is
+// filter/order agnostic, so a user without any filter keeps the plain "same
+// image / next image" behaviour.
+function captureImageAnchor(follow = true) {
+  if (currentIndex < 0 || !images[currentIndex]) return null;
+  return {
+    path: imageKey(images[currentIndex]),
+    following: follow ? images.slice(currentIndex + 1).map(imageKey) : [],
+    follow,
+  };
+}
+
+// Find the image to show after the list was rebuilt: the same image by path;
+// else, when the anchor asked to `follow`, the first still-present image that
+// came after it (a removed/archived image thus shows its successor); else the
+// first image.
+function resolveImageAnchor(anchor) {
+  if (!images.length) return -1;
+  if (anchor && anchor.path) {
+    const same = images.findIndex((im) => imageKey(im) === anchor.path);
+    if (same >= 0) return same;
+  }
+  if (anchor && anchor.follow && anchor.following && anchor.following.length) {
+    const present = new Set(images.map(imageKey));
+    for (const p of anchor.following) {
+      if (present.has(p)) return images.findIndex((im) => imageKey(im) === p);
+    }
+  }
+  // a follow anchor with nothing left after it stays near the old position
+  // (e.g. archiving the last image shows the new last one); otherwise start over
+  return anchor && anchor.follow
+    ? Math.max(0, Math.min(currentIndex, images.length - 1))
+    : 0;
+}
+
 async function resumeLastImage(cfg) {
   const mem = readLastImage();
   if (!mem || mem.dataYaml !== cfg.data_yaml || !images.length) {
@@ -905,7 +949,7 @@ async function resumeLastImage(cfg) {
       return;
     }
   }
-  const idx = images.findIndex((im) => im.split === mem.split && im.name === mem.name);
+  const idx = images.findIndex((im) => imageKey(im) === imageKey(mem));
   loadImage(idx >= 0 ? idx : 0);
 }
 
@@ -1237,6 +1281,7 @@ async function setDataYaml() {
 async function setSplit(split, resumeOk = false) {
   const status = el('folderStatus');
   status.textContent = 'Switching split…';
+  const anchor = resumeOk ? null : captureImageAnchor(false);
   try {
     const res = await fetch('/api/split', {
       method: 'POST',
@@ -1247,7 +1292,7 @@ async function setSplit(split, resumeOk = false) {
     if (res.ok && data.ok) {
       dbg('split changed', { split: split || null });
       status.textContent = '';
-      await loadConfig(0, { noResume: !resumeOk });
+      await loadConfig(0, resumeOk ? { noResume: false } : { noResume: true, anchor });
     } else {
       dbgWarn('split switch failed', { status: res.status, error: data.error });
       status.textContent = data.error || 'Split switch failed';
@@ -1261,6 +1306,7 @@ async function setSplit(split, resumeOk = false) {
 async function setFilter(name) {
   const status = el('folderStatus');
   status.textContent = 'Applying filter…';
+  const anchor = captureImageAnchor(false);
   try {
     const res = await fetch('/api/filter', {
       method: 'POST',
@@ -1272,7 +1318,7 @@ async function setFilter(name) {
       dbg('filter changed', { filter: name || null,
         images: (data.images || []).length, filter_error: data.filter_error });
       status.textContent = '';
-      await loadConfig(0, { noResume: true, skipFilterRestore: true });
+      await loadConfig(0, { noResume: true, skipFilterRestore: true, anchor });
     } else {
       dbgWarn('filter failed', { status: res.status, error: data.error });
       status.textContent = data.error || 'Filter failed';
@@ -1995,11 +2041,14 @@ const APP_SHORTCUT_HANDLERS = {
   // canvas mousedown (see forceDrawActive), so this handler is intentionally a
   // no-op. It exists so the binding can be validated and shown in the bar.
   app_force_draw: () => {},
-  // Re-scan the image folders and stay on the same index (clamped); used e.g.
+  // Re-scan the image folders and keep the user on the same image *by path*
+  // (falling back to the next surviving one when it was removed); used e.g.
   // after a user action deleted/added image files. Targeted — no full reload.
   app_refresh_images_list: async (e) => {
     e.preventDefault();
-    dbg('rescan images list', { was: images.length, index: currentIndex });
+    const anchor = captureImageAnchor();
+    dbg('rescan images list', { was: images.length, index: currentIndex,
+      anchor: anchor && anchor.path });
     try {
       const res = await fetch('/api/images/rescan', { method: 'POST' });
       const data = await res.json();
@@ -2029,8 +2078,7 @@ const APP_SHORTCUT_HANDLERS = {
         renderTagBar();
         return;
       }
-      const idx = Math.max(0, Math.min(currentIndex, images.length - 1));
-      loadImage(idx);
+      loadImage(resolveImageAnchor(anchor));
       runHook('on_images_list_loaded');
     } catch (err) {
       console.error('[app_refresh_images_list] failed:', err);

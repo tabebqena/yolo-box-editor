@@ -101,6 +101,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   toggle. The flag is transient — it is never saved and is cleared when the image
   changes.
 
+### Changed
+
+- **The current image is tracked by path, not index, across list changes.** When
+  an action (`Archive`) or a re-applied filter rebuilds the image list,
+  `app_refresh_images_list` now looks the image up by `split/name`; if it was
+  removed it falls back to the first still-present image that followed it, then
+  to the clamped index. Changing the split or filter preserves the current image
+  the same way. This is filter/order agnostic, so browsing a filter whose result
+  changes as you review (e.g. `no_revised`) no longer jumps to an arbitrary
+  image, and the remembered last image (already stored by path) is unaffected.
+
 ### Fixed
 
 - Hidden boxes (`.`) no longer intercept the mouse: their invisible rectangles
