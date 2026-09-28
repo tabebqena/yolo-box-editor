@@ -61,6 +61,7 @@ def make_dataset(root, names=("fire", "smoke"), splits=("train", "val", "test"),
                  images=("a", "b")):
     """Create a disposable YOLO dataset tree with real image files."""
     root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
     yaml_names = "[" + ", ".join(names) + "]"
     (root / "data.yaml").write_text(
         f"path: {root}\n"
@@ -459,6 +460,50 @@ def test_recent_cap_and_order(tmp_path, monkeypatch):
     assert len(set(recents)) == len(recents)
     ybe._push_recent("/d/5.yaml")
     assert ybe._load_recent()[0] == "/d/5.yaml"
+
+
+# --------------------------------------------------------------------------- #
+# resuming the last dataset at startup
+# --------------------------------------------------------------------------- #
+def test_load_dataset_sets_state(clean_state, tmp_path):
+    root = make_dataset(tmp_path, names=("fire", "smoke"))
+    assert ybe._load_dataset(str(root / "data.yaml")) is True
+    assert ybe.STATE["data_yaml"] == str(root / "data.yaml")
+    assert [s["name"] for s in ybe.STATE["splits"]] == ["train", "val", "test"]
+    assert ybe.STATE["images"]
+
+
+def test_load_dataset_false_without_splits(clean_state, tmp_path):
+    root = make_dataset(tmp_path, splits=())
+    assert ybe._load_dataset(str(root / "data.yaml")) is False
+
+
+def test_resume_last_dataset_opens_most_recent(clean_state, tmp_path):
+    first = make_dataset(tmp_path / "one")
+    second = make_dataset(tmp_path / "two")
+    ybe._push_recent(str(first / "data.yaml"))
+    ybe._push_recent(str(second / "data.yaml"))
+    resumed = ybe._resume_last_dataset()
+    assert resumed == str(second / "data.yaml")
+    assert ybe.STATE["data_yaml"] == str(second / "data.yaml")
+
+
+def test_resume_last_dataset_skips_missing_files(clean_state, tmp_path):
+    good = make_dataset(tmp_path / "good")
+    ybe._push_recent(str(good / "data.yaml"))
+    ybe._push_recent(str(tmp_path / "gone" / "data.yaml"))
+    assert ybe._resume_last_dataset() == str(good / "data.yaml")
+
+
+def test_resume_last_dataset_none_clears_state(clean_state):
+    ybe.STATE["data_yaml"] = "/stale/data.yaml"
+    ybe.STATE["splits"] = [{"name": "train"}]
+    ybe.STATE["images"] = [{"split": "train", "name": "a.jpg"}]
+    assert ybe._resume_last_dataset() is None
+    assert ybe.STATE["data_yaml"] is None
+    assert ybe.STATE["splits"] == []
+    assert ybe.STATE["images"] == []
+
 
 
 # --------------------------------------------------------------------------- #

@@ -15,7 +15,9 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   line or the UI. No database, no build step.
 - **Recent list**: the last 10 opened `data.yaml` paths are remembered in
   `.recent_data_yamls.json` next to `app.py`; reopen one from the *Recent…*
-  dropdown or type a new path.
+  dropdown or type a new path. Starting with a plain `python app.py` (no
+  `--data`) reopens the last dataset automatically — pass `--no-resume` to get
+  the settings screen instead.
 - **Browse** across `train` / `val` / `test` with Prev/Next buttons or the
   `→` / `←` arrow keys; the current image is shown as `<split>/<filename>`.
   The `current / total` counter is an input — type a number and press Enter to
@@ -140,10 +142,14 @@ pip install -r requirements.txt
 python app.py --data /path/to/data.yaml
 python app.py --data /path/to/data.yaml --readonly   # viewer only
 python app.py --data /path/to/data.yaml --debug      # verbose browser console
+python app.py --no-resume                            # settings screen, no auto-open
 ```
 
 Open <http://127.0.0.1:5000>. You can also leave out `--data` and paste the
-`data.yaml` path into the settings bar, then click *Load data.yaml*.
+`data.yaml` path into the settings bar, then click *Load data.yaml* — or just
+run `python app.py`, which reopens the dataset you used last (add `--no-resume`
+to start on the settings screen instead). The dataset, split, filter, last image
+and topbar switches are all restored, so the app comes back as you left it.
 
 `--debug` writes verbose messages to the **browser console** (prefixed `[ybe]`):
 the loaded config, image loads, saves, tag writes, user actions / `after_success`

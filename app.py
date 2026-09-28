@@ -711,6 +711,29 @@ def scan_images():
     return flat
 
 
+def _load_dataset(path):
+    """Activate the dataset at `path` in STATE. True when it has usable splits."""
+    STATE["data_yaml"] = os.path.abspath(path)
+    STATE["splits"] = scan_splits()
+    STATE["images"] = scan_images()
+    return bool(STATE["splits"])
+
+
+def _resume_last_dataset():
+    """Activate the most recent still-existing data.yaml; None when there is none.
+
+    Used at startup when `--data` is omitted, so a plain `python app.py` returns
+    to the dataset last opened (the newest entry of `.recent_data_yamls.json`).
+    """
+    for path in _load_recent():
+        if os.path.isfile(path) and _load_dataset(path):
+            return path
+    STATE["data_yaml"] = None
+    STATE["splits"] = []
+    STATE["images"] = []
+    return None
+
+
 def _current_images():
     """The images visible to the UI.
 
@@ -949,9 +972,7 @@ def api_data():
     if not os.path.isfile(path):
         return jsonify({"ok": False, "error": f"not a file: {path}"}), 400
 
-    STATE["data_yaml"] = os.path.abspath(path)
-    STATE["splits"] = scan_splits()
-    STATE["images"] = scan_images()
+    _load_dataset(path)
     _clear_filter()  # a filter belongs to the dataset that was active
     names = {s["name"] for s in STATE["splits"]}
     if STATE["active_split"] not in names:
@@ -1246,16 +1267,21 @@ def main():
         action="store_true",
         help="log verbose messages to the browser console (see /api/config)",
     )
+    parser.add_argument(
+        "--no-resume",
+        action="store_true",
+        help="start on the settings screen instead of reopening the last dataset",
+    )
     args = parser.parse_args()
 
     STATE["readonly"] = args.readonly
     STATE["debug"] = args.debug
 
     if args.data:
-        STATE["data_yaml"] = os.path.abspath(args.data)
-        STATE["splits"] = scan_splits()
-        STATE["images"] = scan_images()
+        _load_dataset(args.data)
         _push_recent(STATE["data_yaml"])
+    elif not args.no_resume:
+        _resume_last_dataset()
 
     app.run(host=args.host, port=args.port, debug=True)
 

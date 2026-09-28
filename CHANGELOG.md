@@ -8,6 +8,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Resume the previous session on start**: running `python app.py` without
+  `--data` reopens the dataset last used (the newest entry of
+  `.recent_data_yamls.json` that still exists); pass the new `--no-resume` flag
+  to start on the settings screen instead. The active split (with or without a
+  filter) is now remembered per dataset too, alongside the already-remembered
+  filter and last image, and the topbar switches (`Tags`, `Auto-save`, `Boxes`
+  panel and the box-overlay show/hide) are restored, so the UI comes back as it
+  was left.
 - **`--debug` flag**: when passed to `python app.py`, the UI logs verbose
   messages to the browser console (prefixed `[ybe]`) for the loaded config,
   image loads, saves, tag writes, user actions / `after_success` chains, hooks,

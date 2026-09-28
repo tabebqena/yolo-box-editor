@@ -49,7 +49,8 @@ let autoSave = false;        // save labels automatically after each edit
 let autoSaveTimer = null;    // debounce timer for auto-save
 let debugMode = false;       // --debug: log verbose messages to the browser console
 const LAST_IMAGE_KEY = 'ybe_last_image'; // localStorage key: last image reached
-const FILTER_KEY = 'ybe_filter';         // localStorage key: last active filter + split
+const VIEW_KEY = 'ybe_view';             // localStorage key: last split + filter per dataset
+const SHOW_BOXES_KEY = 'ybe_show_boxes'; // localStorage key: box overlay shown/hidden
 
 // Verbose logging, enabled by `python app.py --debug` (exposed via /api/config).
 // Writes to the browser console so the whole client flow can be traced.
@@ -710,7 +711,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
   const cfg0 = await (await fetch('/api/config')).json();
   debugMode = !!cfg0.debug;
   if (debugMode) console.log('[ybe] debug mode on — verbose logging enabled (--debug)');
-  const cfg = opts.skipFilterRestore ? cfg0 : await maybeRestoreFilter(cfg0);
+  const cfg = opts.skipFilterRestore ? cfg0 : await maybeRestoreView(cfg0);
   dbg('config loaded', {
     data_yaml: cfg.data_yaml, dataset_path: cfg.dataset_path,
     images: (cfg.images || []).length, splits: (cfg.splits || []).map((s) => s.name),
@@ -747,7 +748,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
   renderShortcutErrors();
   populateActions(cfg.actions || []);
   renderShortcuts();
-  persistFilterView(cfg);
+  persistView(cfg);
   if (cfg.filter_error) showTransientFilterMessage(cfg.filter_error);
   if (images.length) {
     if (opts.explicit) {
@@ -774,62 +775,61 @@ async function loadConfig(startIdx = 0, opts = {}) {
   runHook('on_images_list_loaded');
 }
 
-// The active filter (and the split it was selected with) live in the server's
-// STATE, which a restart clears. Persist them here so the view is restored.
-function persistFilterView(cfg) {
+// The active split and filter (and the split a filter was selected with) live
+// in the server's STATE, which a restart clears. Persist them per dataset so the
+// view is restored.
+function persistView(cfg) {
   try {
-    if (cfg.data_yaml && cfg.active_filter) {
-      localStorage.setItem(FILTER_KEY, JSON.stringify({
-        dataYaml: cfg.data_yaml,
-        split: cfg.active_split || null,
-        filter: cfg.active_filter,
-      }));
-    } else {
-      localStorage.removeItem(FILTER_KEY);
-    }
+    if (!cfg.data_yaml) return;
+    localStorage.setItem(VIEW_KEY, JSON.stringify({
+      dataYaml: cfg.data_yaml,
+      split: cfg.active_split || null,
+      filter: cfg.active_filter || null,
+    }));
   } catch (e) { /* storage unavailable */ }
 }
 
-function readSavedFilter() {
+function readSavedView() {
   try {
-    return JSON.parse(localStorage.getItem(FILTER_KEY) || 'null');
+    return JSON.parse(localStorage.getItem(VIEW_KEY) || 'null');
   } catch (e) { return null; }
 }
 
-function clearSavedFilter() {
-  try { localStorage.removeItem(FILTER_KEY); } catch (e) { /* ignore */ }
+function clearSavedView() {
+  try { localStorage.removeItem(VIEW_KEY); } catch (e) { /* ignore */ }
 }
 
-// On load, re-apply a remembered filter when the server has none (e.g. after a
-// restart). Direct fetches only — never re-enters loadConfig.
-async function maybeRestoreFilter(cfg) {
-  if (cfg.active_filter || !cfg.data_yaml || !(cfg.filters || []).length) return cfg;
-  const saved = readSavedFilter();
-  if (!saved || saved.dataYaml !== cfg.data_yaml || !cfg.filters.includes(saved.filter)) {
-    clearSavedFilter();
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+// On load, re-apply the remembered split and/or filter when the server has none
+// (e.g. after a restart). Direct fetches only — never re-enters loadConfig.
+async function maybeRestoreView(cfg) {
+  if (!cfg.data_yaml) return cfg;
+  const saved = readSavedView();
+  if (!saved || saved.dataYaml !== cfg.data_yaml) {
+    clearSavedView();
     return cfg;
   }
   const wantedSplit = saved.split || null;
   if (wantedSplit !== (cfg.active_split || null)) {
     const valid = wantedSplit === null || (cfg.splits || []).some((s) => s.name === wantedSplit);
     if (valid) {
-      const res = await fetch('/api/split', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ split: wantedSplit }),
-      });
-      const data = await res.json();
+      const data = await postJson('/api/split', { split: wantedSplit });
       if (data.ok) cfg = data;
     }
   }
-  const res = await fetch('/api/filter', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ filter: saved.filter }),
-  });
-  const data = await res.json();
-  if (data.ok) return data;
-  clearSavedFilter();
+  if (!cfg.active_filter && saved.filter && (cfg.filters || []).includes(saved.filter)) {
+    const data = await postJson('/api/filter', { filter: saved.filter });
+    if (data.ok) return data;
+    clearSavedView();
+  }
   return cfg;
 }
 
@@ -1983,6 +1983,7 @@ const APP_SHORTCUT_HANDLERS = {
   app_show_hide: (e) => {
     e.preventDefault();
     boxesVisible = !boxesVisible;
+    try { localStorage.setItem(SHOW_BOXES_KEY, boxesVisible ? '1' : '0'); } catch (err) { /* ignore */ }
     draw();
   },
   app_fix_box: (e) => {
@@ -2173,8 +2174,10 @@ function runActionForShortcut(e) {
 }
 
 el('taggingSw').checked = localStorage.getItem('taggingEnabled') === '1';
+taggingEnabled = el('taggingSw').checked;
 el('autoSaveSw').checked = localStorage.getItem('autoSave') === '1';
 autoSave = el('autoSaveSw').checked;
+boxesVisible = localStorage.getItem(SHOW_BOXES_KEY) !== '0';
 
 // With --debug these surface any error that would otherwise only show in the
 // browser console; without it they are no-ops.

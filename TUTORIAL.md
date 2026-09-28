@@ -65,10 +65,11 @@ python app.py --data /path/to/dataset/data.yaml
 Open <http://127.0.0.1:5000>. You should see your first image and an empty
 canvas.
 
-> Prefer pointing mouse only? Then start without `--data` and paste the
-> `data.yaml` path into the text field, then click **Load data.yaml**.
-> The field disappears after loading; use **Change dataset** (top right) to pick
-> another one.
+> Prefer pointing mouse only? Just run `python app.py` — it reopens the dataset
+> you used last, so you land right back where you left off. On a first run (or
+> with `--no-resume`) paste the `data.yaml` path into the text field and click
+> **Load data.yaml**. The field disappears after loading; use **Change dataset**
+> (top right) to pick another one.
 
 ## 4. The screen at a glance
 
