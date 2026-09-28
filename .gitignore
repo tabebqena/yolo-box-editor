@@ -2,6 +2,7 @@
 .recent_data_yamls.json
 actions/*.a.yaml
 filters/*.a.py
+scripts/*.a.py
 shortcuts.a.txt
 
 # --- Python / tooling ---
