@@ -862,7 +862,7 @@ function loadImage(i) {
     if (requested !== currentIndex) return; // a newer loadImage superseded us
     boxes = Array.isArray(labelData) ? labelData : [];
     imageTags = (tagData && tagData.tags) || [];
-    imageEl.src = '/api/image/' + currentIndex;
+    imageEl.src = '/api/image/' + currentIndex + '?_=' + Date.now();
     rememberLastImage();
     renderTagBar();
     dbg('loadImage resolved', { index: currentIndex, boxes: boxes.length,

@@ -98,6 +98,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Hidden boxes (`.`) no longer intercept the mouse: their invisible rectangles
   and delete / class buttons used to swallow clicks and could be moved or
   deleted while not shown.
+- After an action that changes the image list (e.g. `Archive` chaining
+  `app_refresh_images_list` and `app_refresh_image`), the canvas no longer keeps
+  showing the removed image. `loadImage` now cache-busts its image URL like
+  `app_refresh_image`, so the stale decoded frame can't be restored when the
+  index the two actions use is the one that was just archived.
 
 ## [0.5.0] — 2026-09-21
 
