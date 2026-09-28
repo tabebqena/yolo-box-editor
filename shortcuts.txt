@@ -1,0 +1,36 @@
+# yolo-box-editor keyboard shortcuts.
+# Syntax (one line per action):  ACTION_NAME  <SHORTCUT>  label shown in the UI
+#
+# SHORTCUT: zero or more modifiers joined with '+', then the main key, wrapped
+# in < > to separate it from the label. Supported modifiers: Ctrl Alt Shift Meta
+# (order doesn't matter). Keys: letters (A..Z), digits (0..9), or e.key names
+# like Escape, Delete, Backspace, ArrowLeft, ArrowRight, Space.
+#
+# The label after the closing '>' is free text displayed in the shortcuts bar.
+# Lines starting with # are ignored.
+#
+# ACTION_NAME must be one of:
+#   - a built-in app action (app_*), listed below, or
+#   - an action you defined in actions.yaml.
+# Anything else is reported as an error banner on the page (dismissible).
+#
+# Built-in app actions — edit the bindings or labels freely:
+app_prev     <ArrowLeft>     prev image
+app_next     <ArrowRight>    next image
+app_del      <Delete>        delete box
+app_drop     <Escape>        drop new box / deselect
+app_undo     <Z>             undo
+app_redo     <Y>             redo
+app_save     <S>             save labels
+app_ch_box   </>             change box class
+app_sel_box  <Shift>         select next box
+app_sel_points <Tab>      toggle active input
+app_escape    <Escape>    Ignore
+app_show_hide <.>         hide/show boxes
+#
+# An action from actions.yaml can also be bound here, e.g.:
+# Remove       <Ctrl+Shift+R>   Delete the current image
+#
+# App updates overwrite this file. Keep your personal remaps in shortcuts.a.txt
+# (same format, next to app.py): it is read after this file and wins on a name
+# clash. It is not shipped here — you create it on your machine.

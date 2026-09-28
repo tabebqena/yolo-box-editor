@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YOLO Box Editor</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">YOLO Box Editor</div>
+
+    <div class="splitbox">
+      <label for="splitSelect">Split</label>
+      <select id="splitSelect" title="Work on one split, or all splits together"></select>
+    </div>
+
+    <div id="filterBox" class="filterbox hidden">
+      <label for="filterSelect">Filter</label>
+      <select id="filterSelect" title="Limit the image list with a script from filters/"></select>
+    </div>
+
+    <div class="actionbox">
+      <span class="action-label" title="Run a user action from actions.yaml on the current image">Actions</span>
+      <div id="actionBtns" class="action-btns"></div>
+    </div>
+
+    <div class="actions">
+      <span id="status" class="status"></span>
+    </div>
+
+    <div class="topbar-end">
+      <div class="readonlybox">
+        <label class="ro-label" for="readonlySw" title="Disable drawing and saving">
+          <input type="checkbox" id="readonlySw">
+          Read-only
+        </label>
+      </div>
+
+      <div class="taggingbox">
+        <label class="tag-label" for="taggingSw" title="Show and edit image tags below the image">
+          <input type="checkbox" id="taggingSw">
+          Tags
+        </label>
+      </div>
+
+      <div class="autosavebox">
+        <label class="as-label" for="autoSaveSw" title="Save labels automatically after each edit (no save/discard prompt when navigating)">
+          <input type="checkbox" id="autoSaveSw">
+          Auto-save
+        </label>
+      </div>
+
+      <button id="changeDataBtn" class="hidden" title="Pick a different dataset">Change dataset</button>
+      <button id="sidePanelToggle" class="hidden" title="Show / hide the boxes panel">Boxes</button>
+    </div>
+  </header>
+
+  <div id="shortcutErrors" class="shortcut-errors hidden"></div>
+
+  <section id="settings" class="settings">
+    <label class="field" id="yamlField">
+      <span>data.yaml</span>
+      <select id="recentSelect" title="Open a recently used data.yaml">
+        <option value="">Recent…</option>
+      </select>
+      <input id="dataYaml" type="text" placeholder="/path/to/data.yaml">
+    </label>
+    <button id="setDataBtn">Load data.yaml</button>
+    <span id="folderStatus" class="status"></span>
+    <span id="datasetPath" class="hint"></span>
+  </section>
+
+  <div class="middle">
+    <main class="canvas-wrap">
+      <canvas id="canvas"></canvas>
+    </main>
+
+    <aside id="sidePanel" class="side-panel">
+      <div class="side-panel-head">
+        <span class="side-panel-title">Boxes</span>
+        <span id="sidePanelCount" class="side-panel-count">0</span>
+        <button id="sidePanelClose" class="side-panel-close" title="Hide panel">&#10005;</button>
+      </div>
+
+      <div id="boxList" class="box-list"></div>
+    </aside>
+  </div>
+
+  <section id="tagBar" class="tagbar hidden">
+    <span class="tagbar-title">Tags</span>
+    <span id="tagHint" class="tagbar-hint hidden">Alt+1..9 toggles</span>
+    <div id="tagBadges" class="tag-badges"></div>
+    <div class="tagbar-add">
+      <input id="tagInput" class="tag-input" type="text" placeholder="add a tag…"
+             list="tagSuggestions" maxlength="64">
+      <datalist id="tagSuggestions"></datalist>
+      <button id="addTagBtn" type="button" title="Add tag to the image (new names are written to tags.yaml)">+ Add tag</button>
+    </div>
+    <span id="tagStatus" class="status"></span>
+  </section>
+
+  <section class="imagebar">
+    <span id="filename" class="filename"></span>
+    <div class="imagebar-nav">
+      <button id="prevBtn" title="Previous (←)">&#9664; Prev</button>
+      <input id="counter" class="counter" type="text" inputmode="numeric"
+             title="Current image — type a number and press Enter to jump" value="0 / 0">
+      <button id="nextBtn" title="Next (→)">Next &#9654;</button>
+    </div>
+    <div class="imagebar-right">
+      <span id="boxCount" class="boxcount"></span>
+      <button id="undoBtn" title="Undo (Z)">Undo</button>
+      <button id="redoBtn" title="Redo (Y)">Redo</button>
+      <button id="saveBtn" class="primary" title="Save (S)">Save</button>
+    </div>
+  </section>
+
+  <section id="hookStatusBar" class="hook-statusbar hidden">
+    <span id="hookStatus" class="hook-status"></span>
+  </section>
+
+  <section id="shortcutBar" class="shortcuts">
+    <span class="shortcuts-title">Shortcuts</span>
+    <div id="shortcutItems" class="shortcut-items"></div>
+    <button id="shortcutsMoreBtn" class="shortcuts-more hidden" title="Show all shortcuts">&#8230;</button>
+    <div id="shortcutsMenu" class="shortcuts-menu hidden"></div>
+  </section>
+
+  <div id="classPicker" class="class-picker hidden"></div>
+
+  <div id="actionResult" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span id="actionResultTitle" class="modal-title"></span>
+        <button id="actionResultClose" class="modal-close" title="Close (Esc)">&#10005;</button>
+      </div>
+      <div id="actionResultCmd" class="modal-cmd"></div>
+      <pre id="actionResultExit" class="modal-exit"></pre>
+      <pre id="actionResultOut" class="modal-out"></pre>
+      <pre id="actionResultErr" class="modal-err"></pre>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

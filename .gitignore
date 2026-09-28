@@ -1,0 +1,12 @@
+# --- local / personal files: never tracked ---
+.recent_data_yamls.json
+actions/*.a.yaml
+filters/*.a.py
+shortcuts.a.txt
+
+# --- Python / tooling ---
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
