@@ -479,6 +479,10 @@ button.sidePanelToggle.active, button#sidePanelToggle.active { background: #3346
 }
 .box-row .box-row-class { flex: 1.6; }
 .box-row .box-row-point { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.box-row .box-row-fix { flex: 0 0 auto; width: 26px; padding: 2px 0; line-height: 1.1; }
+.box-row .box-row-fix.active { background: #3d4b63; border-color: #5b6f92; color: #dbe4f5; }
+.box-row.fixed { border-left: 3px solid #8a93a6; }
+.box-row.fixed .box-row-idx { color: #b6bece; }
 .box-row .box-row-del { flex: 0 0 auto; width: 26px; padding: 2px 0; line-height: 1.1; }
 .box-row .box-row-ctl:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
 

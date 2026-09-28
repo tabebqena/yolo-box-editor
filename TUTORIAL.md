@@ -93,6 +93,11 @@ The panel can be shown/hidden with the **Boxes** button in the top bar.
 The new box is automatically *selected*: it is yellow on the canvas, and its row
 in the right panel is **active** (controls enabled).
 
+> **Drawing on top of an existing box?** A normal drag inside a box grabs and
+> moves that box. Hold the force-draw modifier (default **`Ctrl`**) and drag to
+> draw a brand-new box regardless of what is under the cursor. The modifier is
+> configurable via `app_force_draw` in `shortcuts.txt`.
+
 ## 6. Selecting a box
 
 A box is *selected* in any of these ways:
@@ -115,6 +120,11 @@ deselect everything.
 - **Resize** it: drag any of the 8 handles (corners and edges).
 - **Change class**: click the `/` on the box, or press `/`.
 - **Delete** it: press `Delete`/`Backspace`, or click its `×` in the panel.
+- **Fix / unfix** it: press `F`, or click the `F` button in its row. A *fixed*
+  box is drawn with a dashed grey outline and no handles: it ignores dragging
+  (moving and resizing) but can still be clicked, selected and deleted. This is
+  handy to protect a finished box while you draw inside it. Fixing is transient
+  — it is **not saved** and is cleared as soon as you change image.
 
 ### With the keyboard (row editing)
 
@@ -189,6 +199,9 @@ an image does **not** remove it from `tags.yaml`.
 | `Shift`        | select the next box (resumes after `Esc`)   |
 | `Tab`          | cycle the selected row: class → cx → cy → w → h |
 | `Esc`          | drop a just-drawn box, deselect, or deactivate the focused row |
+| `.`            | hide / show the box overlay (hidden boxes ignore the mouse) |
+| `F`            | fix / unfix the selected box (transient, not saved) |
+| `Ctrl`+drag    | force-draw a new box, even inside an existing one |
 | `Alt+1`…`Alt+9`| toggle tag by number (from `tags.yaml`)     |
 
 All of these are configurable — edit `shortcuts.txt` next to `app.py` (see the

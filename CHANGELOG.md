@@ -8,6 +8,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`--debug` flag**: when passed to `python app.py`, the UI logs verbose
+  messages to the browser console (prefixed `[ybe]`) for the loaded config,
+  image loads, saves, tag writes, user actions / `after_success` chains, hooks,
+  image-list rescans and box edits, plus uncaught errors. The active state is
+  reported by `/api/config` as `debug`.
 - **Script-based image-list filters** (`filters/` folder, one Python script per
   filter): the topbar `Filter` dropdown (shown once a `data.yaml` is loaded)
   narrows the loaded image list to what the script returns. A filter is run as
@@ -25,15 +30,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   coalesce into one write). Prev/Next and the counter jump then skip the
   save/discard prompt and flush any pending save first, staying on the image if
   the write fails.
-- **Event hooks `on_app_hook_*`**: an action whose name starts with
-  `on_app_hook_` runs on an app event instead of a toolbar button / shortcut.
-  Available: `on_app_hook_images_list_loaded`, `on_app_hook_image_loaded`,
-  `on_app_hook_prev`, `on_app_hook_next` (fire on the image being left),
-  `on_app_hook_before_save` (failure aborts the save), `on_app_hook_after_save`,
-  `on_app_hook_box_created`, `on_app_hook_box_deleted`, `on_app_hook_box_edited`.
-  A successful hook reports in a new bottom status bar (auto-hides); a failed
-  hook opens the result modal. They are opt-in (defined by a file in
-  `actions/`); they cannot be bound to a key or named in `after_success`.
+- **Event hooks in a new `hooks/` folder**: a YAML file named
+  `on_<event>.yaml` runs on an app event instead of a toolbar button / shortcut;
+  when the file name names no event, the `event_name:` key is used, and
+  `active: false` skips the file. Available events: `images_list_loaded`,
+  `image_loaded`, `prev`, `next` (fire on the image being left), `before_save`
+  (failure aborts the save), `after_save`, `box_created`, `box_deleted`,
+  `box_edited`. Hooks use the same `steps` / `after_success` and placeholders as
+  actions; steps run with the working directory set to the app's folder and a
+  new `{APP_DIR}` placeholder resolves to it, so hooks can call `scripts/`
+  reliably. A successful hook reports in a new bottom status bar (auto-hides); a
+  failed hook opens the result modal. A `steps` hook with no resolvable event is
+  reported as an error (the comments-only `hooks/example.yaml` is ignored
+  silently and shows no error). They are opt-in and cannot be bound to a key or
+  named in `after_success`.
 - **`after_success` may now chain into another (non-hook) action**, not only app
   actions; cascades are capped at 8 levels to prevent recursion.
 - **User actions now live in an `actions/` folder, one YAML file per action**
@@ -73,6 +83,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - Server routes `GET/POST /api/tags.yaml` and `GET/POST /api/tags/<idx>`
   (read-only mode rejects both writes); `/api/config` now reports `tags` and a
   `tags_dir` per split.
+- **Force-draw modifier (`app_force_draw`, default `Ctrl`)**: hold the configured
+  modifier and drag to draw a new box even inside / on top of an existing one.
+  The modifier comes from `shortcuts.txt` / `shortcuts.a.txt` (`Ctrl`/`Meta` are
+  the Linux-safe choices; `Alt`+drag is often swallowed by window managers).
+- **Fix / unfix boxes (`app_fix_box`, default `F`)**: a fixed box is drawn with a
+  dashed grey outline and no handles and ignores dragging (moving / resizing),
+  while still being clickable, selectable and deletable via the side-panel `F`
+  toggle. The flag is transient — it is never saved and is cleared when the image
+  changes.
+
+### Fixed
+
+- Hidden boxes (`.`) no longer intercept the mouse: their invisible rectangles
+  and delete / class buttons used to swallow clicks and could be moved or
+  deleted while not shown.
 
 ## [0.5.0] — 2026-09-21
 

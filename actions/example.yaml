@@ -16,25 +16,9 @@
 #
 # `steps` and `after_success` may also be a single value on the key line.
 #
-# Event hooks: an action whose name starts with `on_app_hook_` is a hook. It is
-# not a toolbar button and cannot be bound to a key; the app runs it when the
-# matching event happens. Available hooks:
-#
-#   on_app_hook_images_list_loaded   image list loaded / rescanned
-#   on_app_hook_image_loaded         an image opened in the editor
-#   on_app_hook_prev                 before navigating to the previous image
-#   on_app_hook_next                 before navigating to the next image
-#   on_app_hook_before_save          before labels are written (failure aborts)
-#   on_app_hook_after_save           after a successful label write
-#   on_app_hook_box_created          a box was drawn
-#   on_app_hook_box_deleted          a box was removed
-#   on_app_hook_box_edited           a box was moved/resized/reclassed
-#
-# Example: actions/on_app_hook_after_save.yaml
-#   steps:
-#     - touch {DATASET_PATH}/saved.log
-#
-# Hooks may not be named in `after_success` (they are event-driven only).
+# Event hooks do NOT live here: they are YAML files in the sibling hooks/ folder
+# (see hooks/example.yaml). Hooks cannot be named in `after_success` (they are
+# event-driven only).
 #
 # Placeholders (do NOT quote them; the app shell-quotes each value for you):
 #   {IMAGE_PATH}     path of the current image
@@ -42,6 +26,9 @@
 #   {DATASET_PATH}   root path of the loaded dataset
 #   {DATA_YAML_PATH} path of the loaded data.yaml
 #   {IMAGE_INDEX}    1-based position of the current image in the list
+#   {APP_DIR}        the folder holding app.py, so `{APP_DIR}/scripts/x.py`
+#                    resolves from anywhere (steps also run with the working
+#                    directory set to that folder)
 #
 # App actions usable in after_success (see README for the full list):
 #   app_refresh_images_list   re-scan the image folders (stay on same index)

@@ -37,6 +37,7 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 
 RECENT_FILE = os.path.join(BASE_DIR, ".recent_data_yamls.json")
 ACTIONS_DIR = os.path.join(BASE_DIR, "actions")  # one YAML file per action
+HOOKS_DIR = os.path.join(BASE_DIR, "hooks")  # one YAML file per event hook
 FILTERS_DIR = os.path.join(BASE_DIR, "filters")  # one Python script per filter
 SHORTCUTS_FILE = os.path.join(BASE_DIR, "shortcuts.txt")
 SHORTCUTS_ADD_FILE = os.path.join(BASE_DIR, "shortcuts.a.txt")  # user overrides, never shipped
@@ -55,6 +56,8 @@ APP_ACTIONS = {
     "app_sel_points",
     "app_escape",
     "app_show_hide",
+    "app_fix_box",
+    "app_force_draw",
     "app_refresh_images_list",
     "app_refresh_image",
 }
@@ -63,13 +66,25 @@ MAX_RECENT = 10
 ACTION_TIMEOUT = 120  # seconds
 FILTER_TIMEOUT = 120  # seconds
 
-# Actions whose name starts with this prefix are event hooks: they run when the
-# app fires the matching event, never from a toolbar button or a shortcut.
-HOOK_PREFIX = "on_app_hook_"
+# Event hooks live in the hooks/ folder and fire on app events (never from a
+# toolbar button or a shortcut). A hook file is named `on_<event>.yaml`; when the
+# file name does not resolve to a known event, its `event_name:` key is used.
+HOOK_PREFIX = "on_"
+HOOK_EVENTS = (
+    "images_list_loaded",
+    "image_loaded",
+    "prev",
+    "next",
+    "before_save",
+    "after_save",
+    "box_created",
+    "box_deleted",
+    "box_edited",
+)
 
 
-def is_hook_action(name):
-    """True when `name` is an event hook (`on_app_hook_*`)."""
+def is_hook_name(name):
+    """True when `name` looks like a hook name (`on_*`)."""
     return bool(name) and name.startswith(HOOK_PREFIX)
 
 
@@ -90,6 +105,7 @@ STATE = {
     "filter_error": None,   # last filter failure/notice message (shown in the UI)
     "classes": [],  # resolved class names from data.yaml `names`
     "readonly": False,
+    "debug": False,  # --debug: the UI logs verbose messages to the browser console
 }
 
 
@@ -224,13 +240,12 @@ ACTIONS_DOC = (
     "Each action is a YAML file in the actions/ directory: an optional "
     "top-level `name:` (defaults to the file name), a `steps` list of shell "
     "commands (run in order, stopping at the first failure) and an optional "
-    "`after_success` list of app actions or other (non-hook) actions. Files "
+    "`after_success` list of app actions or other non-hook actions. Files "
     "ending in `.a.yaml` are the user's own (never shipped) and win on a name "
     "clash. Placeholders are substituted with shell-quoted values: "
     "{IMAGE_PATH}, {LABEL_PATH}, {DATASET_PATH}, {DATA_YAML_PATH}, "
-    "{IMAGE_INDEX}. Actions named "
-    "on_app_hook_* are event hooks, not buttons; they cannot be bound or used "
-    "in after_success."
+    "{IMAGE_INDEX}, {APP_DIR}. Event hooks live in the hooks/ directory and "
+    "cannot be bound or used in after_success."
 )
 
 
@@ -258,17 +273,26 @@ def _yaml_scalar(s):
 
 
 def _parse_action_file(text):
-    """Parse one action file into {"name", "steps", "after_success"}.
+    """Parse one action/hook file into a dict of its top-level keys.
 
     Top-level keys (2-space indentation, whole-line # comments):
         name: Remove            # optional; the file name is used otherwise
+        event_name: after_save  # hooks only: fallback event when the file
+                                # name does not encode one
+        active: false           # hooks only: ignore this file
         steps:
           - rm -f {IMAGE_PATH}
         after_success:
           - app_refresh_images_list
     `steps` and `after_success` may also be a single value on the key line.
     """
-    data = {"name": None, "steps": [], "after_success": []}
+    data = {
+        "name": None,
+        "event_name": None,
+        "active": True,
+        "steps": [],
+        "after_success": [],
+    }
     section = None
     for line in text.splitlines():
         stripped = line.strip()
@@ -282,6 +306,14 @@ def _parse_action_file(text):
                 section = None
                 if value:
                     data["name"] = _yaml_scalar(value)
+            elif key == "event_name":
+                section = None
+                if value:
+                    data["event_name"] = _yaml_scalar(value)
+            elif key == "active":
+                section = None
+                if value:
+                    data["active"] = value.lower() not in ("false", "no", "0")
             elif key in ("steps", "after_success"):
                 section = data[key]
                 if value and value != "[]":
@@ -342,6 +374,75 @@ def load_actions():
     return list(merged.values())
 
 
+HOOKS_DOC = (
+    "Each hook is a YAML file in the hooks/ directory, named `on_<event>.yaml` "
+    "(the file name picks the event). When the file name does not resolve to a "
+    "known event, the top-level `event_name:` key is used instead. A hook with "
+    "`active: false` is ignored. Hooks use the same `steps` / `after_success` "
+    "as actions and the same placeholders, but run on app events instead of a "
+    "button. Files ending in `.a.yaml` are the user's own (never shipped). "
+    "Available events: " + ", ".join(HOOK_EVENTS) + "."
+)
+
+
+def _hook_event(path, data):
+    """The event a hook file fires: `on_<event>.yaml` first, then `event_name:`.
+
+    Returns None when neither the file name nor the `event_name:` key names a
+    known app event.
+    """
+    fname = os.path.basename(path)
+    suffix = ".a.yaml" if fname.endswith(".a.yaml") else ".yaml"
+    stem = fname[: -len(suffix)]
+    if is_hook_name(stem):
+        event = stem[len(HOOK_PREFIX):]
+        if event in HOOK_EVENTS:
+            return event
+    key_event = (data.get("event_name") or "").strip()
+    if key_event in HOOK_EVENTS:
+        return key_event
+    return None
+
+
+def load_hooks():
+    """Parse the hooks/ directory into (hooks, errors) (read fresh).
+
+    One hook per `.yaml` file; its name is the canonical `on_<event>` and the
+    event comes from the file name or the `event_name:` key. `active: false`
+    hooks are skipped. Templates (files with neither `steps` nor
+    `after_success`, e.g. hooks/example.yaml) are ignored silently; a file that
+    does define steps but names no known event is reported in `errors`. The
+    user's `.a.yaml` files are read last and win on an event clash.
+    """
+    merged = {}
+    errors = []
+    paths = _action_files(HOOKS_DIR, overrides=False) + _action_files(
+        HOOKS_DIR, overrides=True
+    )
+    for path in paths:
+        data = _parse_action_file(_read_text(path))
+        event = _hook_event(path, data)
+        has_body = bool(data["steps"] or data["after_success"])
+        if event is None:
+            if has_body:
+                errors.append(
+                    f"'hooks/{os.path.basename(path)}': no app event — name it "
+                    f"on_<event>.yaml or set event_name: (known: "
+                    f"{', '.join(HOOK_EVENTS)})"
+                )
+            continue
+        if not data["active"] or not has_body:
+            continue
+        name = HOOK_PREFIX + event
+        merged[name] = {
+            "name": name,
+            "event": event,
+            "steps": data["steps"],
+            "after_success": data["after_success"],
+        }
+    return list(merged.values()), errors
+
+
 def build_command(template, values):
     """Replace only the placeholders present in `template` with shell-quoted paths."""
     cmd = template
@@ -354,9 +455,9 @@ SHORTCUTS_FILE_DOC = (
     "Each non-empty, non-comment line is  ACTION_NAME  <SHORTCUT>  label. "
     "SHORTCUT is wrapped in angle brackets: a key with optional +joined "
     "modifiers (Ctrl, Alt, Shift, Meta). The label after the '>' is free text. "
-    "ACTION_NAME must be an app action (app_*) or an action from actions.yaml. "
-    "Entries are merged from shortcuts.txt then shortcuts.a.txt (the user "
-    "file, which wins on a name clash)."
+    "ACTION_NAME must be an app action (app_*) or an action from the actions/ "
+    "folder (hooks cannot be bound). Entries are merged from shortcuts.txt then "
+    "shortcuts.a.txt (the user file, which wins on a name clash)."
 )
 
 
@@ -401,23 +502,22 @@ def load_shortcuts():
 
 def split_shortcuts(shortcuts):
     """Split raw shortcuts into (app, user) maps, collecting unknown names as errors."""
-    action_names = [a["name"] for a in load_actions()]
-    user_names = {n for n in action_names if not is_hook_action(n)}
-    hook_names = {n for n in action_names if is_hook_action(n)}
+    user_names = {a["name"] for a in load_actions()}
+    hook_names = {h["name"] for h in load_hooks()[0]}
     app, user, errors = {}, {}, []
     for name, info in shortcuts.items():
         if name in APP_ACTIONS:
             app[name] = info
-        elif name in user_names:
-            user[name] = info
         elif name in hook_names:
             errors.append(
                 f"'shortcuts.txt': '{name}' is an event hook; hooks cannot be bound"
             )
+        elif name in user_names:
+            user[name] = info
         else:
             errors.append(
                 f"'shortcuts.txt': unknown action '{name}' "
-                f"(not an app action and not defined in actions.yaml)"
+                f"(not an app action and not defined in the actions/ folder)"
             )
     return app, user, errors
 
@@ -805,6 +905,7 @@ def index():
 def api_config():
     app_shortcuts, user_shortcuts, shortcut_errors = split_shortcuts(load_shortcuts())
     actions = load_actions()
+    hooks, hook_errors = load_hooks()
     return jsonify(
         {
             "data_yaml": STATE["data_yaml"],
@@ -817,12 +918,14 @@ def api_config():
             "active_filter": STATE["active_filter"],
             "filter_error": STATE["filter_error"],
             "recent_data_yamls": _load_recent(),
-            "actions": [a["name"] for a in actions if not is_hook_action(a["name"])],
-            "hooks": [a["name"] for a in actions if is_hook_action(a["name"])],
+            "actions": [a["name"] for a in actions],
+            "hooks": [h["name"] for h in hooks],
+            "hook_errors": hook_errors,
             "shortcuts": app_shortcuts,
             "action_shortcuts": user_shortcuts,
             "shortcut_errors": shortcut_errors,
             "readonly": STATE["readonly"],
+            "debug": STATE["debug"],
             "splits": [
                 {
                     "name": s["name"],
@@ -962,6 +1065,9 @@ def api_action_run():
 
     action = next((a for a in load_actions() if a["name"] == name), None)
     if action is None:
+        # Event hooks are ordinary names here (`on_<event>`), so they can be run.
+        action = next((h for h in load_hooks()[0] if h["name"] == name), None)
+    if action is None:
         return jsonify({"ok": False, "error": f"unknown action: {name}"}), 400
 
     values = {
@@ -971,6 +1077,9 @@ def api_action_run():
         "DATA_YAML_PATH": STATE["data_yaml"] or "",
         # 1-based, matching the "current / total" counter shown in the UI.
         "IMAGE_INDEX": str(idx + 1),
+        # the folder holding app.py, so steps can reach scripts/ and other files
+        # the same way regardless of the directory the server was started from
+        "APP_DIR": BASE_DIR,
     }
     steps = action.get("steps") if isinstance(action.get("steps"), list) else []
     commands = [build_command(s, values) for s in steps]
@@ -1132,9 +1241,15 @@ def main():
         action="store_true",
         help="serve as a read-only viewer (no saving labels)",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="log verbose messages to the browser console (see /api/config)",
+    )
     args = parser.parse_args()
 
     STATE["readonly"] = args.readonly
+    STATE["debug"] = args.debug
 
     if args.data:
         STATE["data_yaml"] = os.path.abspath(args.data)

@@ -27,6 +27,12 @@ app_sel_box  <Shift>         select next box
 app_sel_points <Tab>      toggle active input
 app_escape    <Escape>    Ignore
 app_show_hide <.>         hide/show boxes
+app_fix_box  <F>          fix/unfix selected box
+# app_force_draw is a held modifier, not a key: hold it and drag to always
+# draw a new box (even on top of / inside an existing one). Use Ctrl or Meta on
+# Linux (Alt+drag is grabbed by many window managers); Shift stays reserved for
+# selecting. Put personal remaps in shortcuts.a.txt.
+app_force_draw <Ctrl>     hold + drag = new box
 #
 # An action from actions.yaml can also be bound here, e.g.:
 # Remove       <Ctrl+Shift+R>   Delete the current image

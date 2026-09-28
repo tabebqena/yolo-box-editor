@@ -33,6 +33,7 @@ DEFAULT_STATE = {
     "filter_error": None,
     "classes": [],
     "readonly": False,
+    "debug": False,
 }
 
 
@@ -47,6 +48,7 @@ def clean_state(tmp_path, monkeypatch):
     """Reset STATE and redirect file constants away from the repo."""
     monkeypatch.setattr(ybe, "RECENT_FILE", str(tmp_path / "recent.json"))
     monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
     monkeypatch.setattr(ybe, "FILTERS_DIR", str(tmp_path / "filters"))
     monkeypatch.setattr(ybe, "SHORTCUTS_FILE", str(tmp_path / "shortcuts.txt"))
     monkeypatch.setattr(ybe, "SHORTCUTS_ADD_FILE", str(tmp_path / "shortcuts.a.txt"))
@@ -85,6 +87,13 @@ def load_dataset(client, root):
 def write_action(root, fname, body):
     """Write one action file into <root>/actions (created on demand)."""
     d = Path(root) / "actions"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / fname).write_text(body, encoding="utf-8")
+
+
+def write_hook(root, fname, body):
+    """Write one hook file into <root>/hooks (created on demand)."""
+    d = Path(root) / "hooks"
     d.mkdir(parents=True, exist_ok=True)
     (d / fname).write_text(body, encoding="utf-8")
 
@@ -301,15 +310,89 @@ def test_load_actions_missing_dir(tmp_path, monkeypatch):
     assert ybe.load_actions() == []
 
 
-def test_is_hook_action_matches_only_hook_prefix():
-    assert ybe.is_hook_action("on_app_hook_after_save")
-    assert ybe.is_hook_action("on_app_hook_box_created")
-    assert ybe.is_hook_action("on_app_hook_prev")
-    assert ybe.is_hook_action("on_app_hook_next")
-    assert not ybe.is_hook_action("app_save")
-    assert not ybe.is_hook_action("Remove")
-    assert not ybe.is_hook_action("")
-    assert not ybe.is_hook_action(None)
+def test_is_hook_name_matches_only_on_prefix():
+    assert ybe.is_hook_name("on_after_save")
+    assert ybe.is_hook_name("on_box_created")
+    assert ybe.is_hook_name("on_prev")
+    assert ybe.is_hook_name("on_next")
+    assert not ybe.is_hook_name("app_save")
+    assert not ybe.is_hook_name("Remove")
+    assert not ybe.is_hook_name("")
+    assert not ybe.is_hook_name(None)
+
+
+def test_parse_action_file_reads_event_name_and_active():
+    parsed = ybe._parse_action_file(
+        "event_name: after_save\nactive: false\nsteps:\n  - echo hi\n"
+    )
+    assert parsed["event_name"] == "after_save"
+    assert parsed["active"] is False
+
+
+def test_load_hooks_event_from_filename(tmp_path, monkeypatch):
+    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    write_hook(tmp_path, "on_after_save.yaml", "steps:\n  - echo saved\n")
+    hooks, errors = ybe.load_hooks()
+    assert errors == []
+    assert [h["name"] for h in hooks] == ["on_after_save"]
+    assert hooks[0]["event"] == "after_save"
+    assert hooks[0]["steps"] == ["echo saved"]
+
+
+def test_load_hooks_event_name_fallback(tmp_path, monkeypatch):
+    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    write_hook(
+        tmp_path, "whatever.yaml", "event_name: after_save\nsteps:\n  - echo hi\n"
+    )
+    hooks, errors = ybe.load_hooks()
+    assert errors == []
+    assert [h["name"] for h in hooks] == ["on_after_save"]
+
+
+def test_load_hooks_known_filename_wins_over_event_name(tmp_path, monkeypatch):
+    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    write_hook(
+        tmp_path,
+        "on_after_save.yaml",
+        "event_name: before_save\nsteps:\n  - echo hi\n",
+    )
+    hooks, _ = ybe.load_hooks()
+    assert hooks[0]["event"] == "after_save"
+
+
+def test_load_hooks_inactive_is_ignored(tmp_path, monkeypatch):
+    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    write_hook(tmp_path, "on_after_save.yaml", "active: false\nsteps:\n  - echo hi\n")
+    hooks, errors = ybe.load_hooks()
+    assert hooks == [] and errors == []
+
+
+def test_load_hooks_unknown_event_with_steps_reports_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    write_hook(tmp_path, "on_nope.yaml", "steps:\n  - echo hi\n")
+    hooks, errors = ybe.load_hooks()
+    assert hooks == []
+    assert len(errors) == 1 and "on_nope.yaml" in errors[0]
+
+
+def test_load_hooks_empty_template_is_silent(tmp_path, monkeypatch):
+    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    write_hook(tmp_path, "example.yaml", "# comments only, no steps\n")
+    hooks, errors = ybe.load_hooks()
+    assert hooks == [] and errors == []
+
+
+def test_load_hooks_user_override_wins(tmp_path, monkeypatch):
+    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    write_hook(tmp_path, "on_after_save.yaml", "steps:\n  - echo repo\n")
+    write_hook(tmp_path, "on_after_save.a.yaml", "steps:\n  - echo user\n")
+    hooks, _ = ybe.load_hooks()
+    assert [h["steps"] for h in hooks] == [["echo user"]]
+
+
+def test_load_hooks_missing_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "nope"))
+    assert ybe.load_hooks() == ([], [])
 
 
 def test_load_shortcuts_merges_and_user_override_wins(tmp_path, monkeypatch):
@@ -323,8 +406,27 @@ def test_load_shortcuts_merges_and_user_override_wins(tmp_path, monkeypatch):
     assert shortcuts["app_undo"]["label"] == "undo"
 
 
+def test_modifier_only_shortcut_is_valid_app_binding(tmp_path, monkeypatch):
+    monkeypatch.setattr(ybe, "SHORTCUTS_FILE", str(tmp_path / "s.txt"))
+    monkeypatch.setattr(ybe, "SHORTCUTS_ADD_FILE", str(tmp_path / "s.a.txt"))
+    monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    (tmp_path / "s.txt").write_text(
+        "app_force_draw <Ctrl> hold + drag\napp_fix_box <F> fix\n",
+        encoding="utf-8",
+    )
+    app, user, errors = ybe.split_shortcuts(ybe.load_shortcuts())
+    assert errors == []
+    assert user == {}
+    assert app["app_force_draw"]["shortcut"] == "Ctrl"
+    assert "app_fix_box" in app
+    assert "app_fix_box" in ybe.APP_ACTIONS
+    assert "app_force_draw" in ybe.APP_ACTIONS
+
+
 def test_split_shortcuts_partitions_and_reports_unknown(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
     write_action(tmp_path, "Mine.yaml", "steps:\n  - echo hi\n")
     shortcuts = {
         "app_next": {"shortcut": "ArrowRight", "label": "next"},
@@ -338,12 +440,12 @@ def test_split_shortcuts_partitions_and_reports_unknown(tmp_path, monkeypatch):
 
 
 def test_split_shortcuts_rejects_hook_binding(clean_state):
-    write_action(clean_state, "on_app_hook_after_save.yaml", "steps:\n  - echo x\n")
-    shortcuts = {"on_app_hook_after_save": {"shortcut": "H", "label": "hook"}}
+    write_hook(clean_state, "on_after_save.yaml", "steps:\n  - echo x\n")
+    shortcuts = {"on_after_save": {"shortcut": "H", "label": "hook"}}
     app, user, errors = ybe.split_shortcuts(shortcuts)
     assert app == {} and user == {}
     assert len(errors) == 1
-    assert "event hook" in errors[0] and "on_app_hook_after_save" in errors[0]
+    assert "event hook" in errors[0] and "on_after_save" in errors[0]
 
 
 def test_recent_cap_and_order(tmp_path, monkeypatch):
@@ -428,18 +530,30 @@ def test_api_config_defaults(clean_state):
     assert cfg["recent_data_yamls"] == []
     assert "shortcuts" in cfg and "action_shortcuts" in cfg
     assert cfg["actions"] == [] and cfg["hooks"] == []
+    assert cfg["hook_errors"] == []
+    assert cfg["debug"] is False
+
+
+def test_api_config_reports_debug_flag(clean_state):
+    ybe.STATE["debug"] = True
+    cfg = ybe.app.test_client().get("/api/config").get_json()
+    assert cfg["debug"] is True
 
 
 def test_api_config_separates_hooks_from_actions(clean_state):
     write_action(clean_state, "Remove.yaml", "steps:\n  - echo hi\n")
-    write_action(
-        clean_state,
-        "on_app_hook_after_save.yaml",
-        "steps:\n  - echo saved\n",
-    )
+    write_hook(clean_state, "on_after_save.yaml", "steps:\n  - echo saved\n")
     cfg = ybe.app.test_client().get("/api/config").get_json()
     assert cfg["actions"] == ["Remove"]
-    assert cfg["hooks"] == ["on_app_hook_after_save"]
+    assert cfg["hooks"] == ["on_after_save"]
+    assert cfg["hook_errors"] == []
+
+
+def test_api_config_reports_hook_errors(clean_state):
+    write_hook(clean_state, "on_nope.yaml", "steps:\n  - echo hi\n")
+    cfg = ybe.app.test_client().get("/api/config").get_json()
+    assert cfg["hooks"] == []
+    assert len(cfg["hook_errors"]) == 1 and "on_nope.yaml" in cfg["hook_errors"][0]
 
 
 def test_api_data_requires_path(clean_state):
@@ -794,20 +908,44 @@ def test_api_action_run_substitutes_data_yaml_path(clean_state, tmp_path):
 
 
 def test_api_action_run_can_run_a_hook_by_name(clean_state, tmp_path):
-    write_action(
+    write_hook(
         tmp_path,
-        "on_app_hook_after_save.yaml",
+        "on_after_save.yaml",
         "steps:\n  - echo hooked\n"
         "after_success:\n  - app_refresh_image\n",
     )
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
     payload = client.post(
-        "/api/actions/run", json={"action": "on_app_hook_after_save", "idx": 0}
+        "/api/actions/run", json={"action": "on_after_save", "idx": 0}
     ).get_json()
     assert payload["ok"] is True
     assert "hooked" in payload["stdout"]
     assert payload["after_success"] == ["app_refresh_image"]
+
+
+def test_api_action_run_substitutes_app_dir(clean_state, tmp_path):
+    write_hook(tmp_path, "on_after_save.yaml", "steps:\n  - echo {APP_DIR}\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    payload = client.post(
+        "/api/actions/run", json={"action": "on_after_save", "idx": 0}
+    ).get_json()
+    assert payload["ok"] is True
+    assert ybe.BASE_DIR in payload["stdout"]
+
+
+def test_api_action_run_sets_cwd_to_app_dir(clean_state, tmp_path):
+    # scripts/ is a sibling of app.py; steps must resolve it regardless of the
+    # directory the server was started from
+    write_hook(tmp_path, "on_after_save.yaml", "steps:\n  - pwd\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    payload = client.post(
+        "/api/actions/run", json={"action": "on_after_save", "idx": 0}
+    ).get_json()
+    assert payload["ok"] is True
+    assert ybe.BASE_DIR in payload["stdout"]
 
 
 # --------------------------------------------------------------------------- #

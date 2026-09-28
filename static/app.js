@@ -17,7 +17,9 @@ let classes = [];
 let currentIndex = -1;
 let activeSplit = null;
 let activeFilter = null;
-let boxes = [];        // normalized: {class, cx, cy, w, h}
+let boxes = [];        // normalized: {class, cx, cy, w, h, fixed?}
+                       // `fixed` is transient (never saved / reloaded): it is
+                       // dropped when the image changes and is not written to labels
 let selected = -1;
 let lastSelected = 0; // most recent selected index; Shift resumes here after Esc
 let defaultClass = 0;
@@ -26,6 +28,7 @@ let editingPoint = null; // {i, name} -> coordinate input focused in the side pa
 let appShortcuts = {}; // app action  -> {shortcut, label} from shortcuts.txt
 let actionShortcuts = {}; // user action -> {shortcut, label} from shortcuts.txt
 let shortcutErrors = []; // validation errors from shortcuts.txt
+let hookErrors = []; // validation errors from hooks/
 let undoStack = [];   // snapshots of `boxes` before each edit (fresh per image)
 let redoStack = [];
 let moved = false;    // whether the current drag actually changed anything yet
@@ -39,13 +42,23 @@ let availableTags = [];     // dataset-wide list from tags.yaml (toggle order fo
 let imageTags = [];         // current image's tags
 let boxesVisible = true;    // `app_show_hide`: draw the box overlay or not
 let currentDataYaml = '';   // data.yaml of the loaded dataset (for resume)
-let hooksByName = new Set(); // event hooks defined in actions/ (on_app_hook_*)
+let hooksByName = new Set(); // event hooks defined in hooks/ (on_<event>)
 let userActions = new Set(); // non-hook action names (for after_success cascades)
 let hookInFlight = new Set(); // hooks currently running (re-entrancy guard)
 let autoSave = false;        // save labels automatically after each edit
 let autoSaveTimer = null;    // debounce timer for auto-save
+let debugMode = false;       // --debug: log verbose messages to the browser console
 const LAST_IMAGE_KEY = 'ybe_last_image'; // localStorage key: last image reached
 const FILTER_KEY = 'ybe_filter';         // localStorage key: last active filter + split
+
+// Verbose logging, enabled by `python app.py --debug` (exposed via /api/config).
+// Writes to the browser console so the whole client flow can be traced.
+function dbg(...args) {
+  if (debugMode) console.log('[ybe]', ...args);
+}
+function dbgWarn(...args) {
+  if (debugMode) console.warn('[ybe]', ...args);
+}
 
 // interaction state
 let mode = 'idle';     // idle | drawing | moving | resizing
@@ -61,11 +74,13 @@ imageEl.onload = () => {
   imgH = imageEl.naturalHeight;
   canvas.width = imgW;
   canvas.height = imgH;
+  dbg('image loaded', { src: imageEl.src, size: `${imgW}x${imgH}` });
   draw();
 };
 imageEl.onerror = () => {
   // the image file is gone (e.g. removed by an action): blank the canvas so
   // no stale frame keeps showing a deleted image.
+  dbgWarn('image failed to load', { src: imageEl.src });
   imgW = 0;
   imgH = 0;
   canvas.width = 0;
@@ -109,6 +124,13 @@ function normRect(a, b) {
   };
 }
 
+function clampToImage(p) {
+  return {
+    x: Math.max(0, Math.min(imgW, p.x)),
+    y: Math.max(0, Math.min(imgH, p.y)),
+  };
+}
+
 function handlePoints(r) {
   const midX = r.x + r.w / 2;
   const midY = r.y + r.h / 2;
@@ -140,15 +162,22 @@ function draw() {
     boxes.forEach((b, idx) => {
       const r = toPx(b);
       const active = idx === selected;
-      ctx.strokeStyle = active ? '#ffd166' : '#2ecc71';
-      ctx.lineWidth = active ? 3 : 2;
+      // fixed boxes: muted dashed outline, no resize handles (they ignore
+      // dragging but can still be clicked / selected)
+      const fixed = !!b.fixed;
+      ctx.strokeStyle = fixed ? '#8a93a6' : active ? '#ffd166' : '#2ecc71';
+      ctx.lineWidth = active && !fixed ? 3 : 2;
+      if (fixed) ctx.setLineDash([7, 4]);
       ctx.strokeRect(r.x, r.y, r.w, r.h);
+      ctx.setLineDash([]);
 
       const label = `${b.class}: ${classes[b.class] || 'class ' + b.class}`;
       ctx.font = '14px system-ui, sans-serif';
       const tw = ctx.measureText(label).width;
       const ly = Math.max(0, r.y - 18);
-      ctx.fillStyle = active ? 'rgba(255,209,102,0.92)' : 'rgba(46,204,113,0.85)';
+      ctx.fillStyle = fixed
+        ? 'rgba(138,147,166,0.9)'
+        : active ? 'rgba(255,209,102,0.92)' : 'rgba(46,204,113,0.85)';
       ctx.fillRect(r.x, ly, tw + 8, 18);
       ctx.fillStyle = '#111';
       ctx.fillText(label, r.x + 4, ly + 13);
@@ -157,7 +186,7 @@ function draw() {
         drawDeleteButton(r);
         drawClassButton(r);
       }
-      if (active && !readonly) drawHandles(r);
+      if (active && !readonly && !fixed) drawHandles(r);
       if (editingPoint && editingPoint.i === idx) drawPointGuide(r, editingPoint.name);
     });
   }
@@ -270,7 +299,9 @@ function canvasPos(e) {
 }
 
 function hitTest(p) {
-  if (selected >= 0) {
+  // hidden boxes are not drawn, so they must not swallow clicks either
+  if (!boxesVisible) return { type: 'none' };
+  if (selected >= 0 && !boxes[selected].fixed) {
     const r = toPx(boxes[selected]);
     for (const hp of handlePoints(r)) {
       if (Math.abs(p.x - hp.x) <= HANDLE_SIZE && Math.abs(p.y - hp.y) <= HANDLE_SIZE) {
@@ -299,6 +330,41 @@ function hitTest(p) {
   return { type: 'none' };
 }
 
+// Cursor shown while hovering each resize handle, so the user can see the box
+// is ready to resize (and in which direction) before pressing the mouse.
+const RESIZE_CURSORS = {
+  nw: 'nwse-resize', se: 'nwse-resize',
+  ne: 'nesw-resize', sw: 'nesw-resize',
+  n: 'ns-resize', s: 'ns-resize',
+  e: 'ew-resize', w: 'ew-resize',
+};
+
+function updateCursor(p) {
+  if (mode !== 'idle' || readonly || !boxesVisible) return;
+  const hit = hitTest(p);
+  canvas.style.cursor =
+    hit.type === 'handle' ? RESIZE_CURSORS[hit.handle] || 'crosshair' : '';
+}
+
+// True when the force-draw modifier is held for this event. The modifier is
+// configured by the `app_force_draw` binding in shortcuts.txt / shortcuts.a.txt
+// (e.g. <Ctrl>, <Alt> or <Ctrl+Shift>); it is not a keydown action. Falls back
+// to Ctrl when unbound. Ctrl/Meta are the Linux-safe choices — many window
+// managers swallow Alt+drag, and Shift is reserved for selecting boxes.
+function forceDrawActive(e) {
+  const info = appShortcuts['app_force_draw'];
+  const spec = (info && info.shortcut) || 'Ctrl';
+  const mods = spec.split('+').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (!mods.length) return false;
+  return mods.every((m) => {
+    if (m === 'ctrl' || m === 'control') return e.ctrlKey;
+    if (m === 'alt') return e.altKey;
+    if (m === 'shift') return e.shiftKey;
+    if (m === 'meta' || m === 'cmd' || m === 'command') return e.metaKey;
+    return false;
+  });
+}
+
 function syncClassSelect(idx) {
   if (idx >= 0) lastSelected = idx;
   const sel = el('classSelect');
@@ -309,16 +375,17 @@ function syncClassSelect(idx) {
 function moveBox(p) {
   const dx = (p.x - dragStart.x) / imgW;
   const dy = (p.y - dragStart.y) / imgH;
-  boxes[selected] = {
-    ...origBox,
-    cx: clamp01(origBox.cx + dx),
-    cy: clamp01(origBox.cy + dy),
-  };
+  // clamp the centre so the whole box stays inside the image, not just its
+  // centre point (the window-level drag can report coordinates off-canvas)
+  const cx = Math.max(origBox.w / 2, Math.min(1 - origBox.w / 2, origBox.cx + dx));
+  const cy = Math.max(origBox.h / 2, Math.min(1 - origBox.h / 2, origBox.cy + dy));
+  boxes[selected] = { ...origBox, cx, cy };
   moved = true;
   draw();
 }
 
 function resizeBox(p) {
+  p = clampToImage(p);
   const b = origBox;
   const left = (b.cx - b.w / 2) * imgW;
   const right = (b.cx + b.w / 2) * imgW;
@@ -333,6 +400,11 @@ function resizeBox(p) {
   if (handle.includes('e')) x2 = p.x;
   if (handle.includes('n')) y1 = p.y;
   if (handle.includes('s')) y2 = p.y;
+  // keep every edge within the image
+  x1 = Math.max(0, Math.min(imgW, x1));
+  x2 = Math.max(0, Math.min(imgW, x2));
+  y1 = Math.max(0, Math.min(imgH, y1));
+  y2 = Math.max(0, Math.min(imgH, y2));
   if (x2 < x1) [x1, x2] = [x2, x1];
   if (y2 < y1) [y1, y2] = [y2, y1];
 
@@ -550,13 +622,15 @@ function menuRow(label, keys) {
   return row;
 }
 
-const APP_SHORTCUT_ORDER = ['app_prev', 'app_next', 'app_del', 'app_drop', 'app_undo', 'app_redo', 'app_save', 'app_ch_box', 'app_sel_box', 'app_sel_points', 'app_escape', 'app_show_hide', 'app_refresh_images_list', 'app_refresh_image'];
+const APP_SHORTCUT_ORDER = ['app_prev', 'app_next', 'app_del', 'app_drop', 'app_undo', 'app_redo', 'app_save', 'app_ch_box', 'app_sel_box', 'app_sel_points', 'app_escape', 'app_show_hide', 'app_fix_box', 'app_force_draw', 'app_refresh_images_list', 'app_refresh_image'];
 
 function renderShortcutErrors() {
   const box = el('shortcutErrors');
   box.innerHTML = '';
   const dismissed = JSON.parse(sessionStorage.getItem('dismissedShortcutErrors') || '[]');
-  const visible = shortcutErrors.filter((msg) => !dismissed.includes(msg));
+  // messages are self-describing ("'shortcuts.txt': ..." / "'hooks/x.yaml': ...")
+  const all = shortcutErrors.concat(hookErrors);
+  const visible = all.filter((msg) => !dismissed.includes(msg));
   if (!visible.length) {
     box.classList.add('hidden');
     return;
@@ -565,7 +639,7 @@ function renderShortcutErrors() {
   const banner = document.createElement('div');
   banner.className = 'shortcut-errors-banner';
   const text = document.createElement('span');
-  text.textContent = 'shortcuts.txt: ' + visible.join(' | ');
+  text.textContent = visible.join(' | ');
   const close = document.createElement('button');
   close.className = 'shortcut-errors-dismiss';
   close.textContent = '\u00d7';
@@ -634,7 +708,17 @@ function populateClasses() {
 
 async function loadConfig(startIdx = 0, opts = {}) {
   const cfg0 = await (await fetch('/api/config')).json();
+  debugMode = !!cfg0.debug;
+  if (debugMode) console.log('[ybe] debug mode on — verbose logging enabled (--debug)');
   const cfg = opts.skipFilterRestore ? cfg0 : await maybeRestoreFilter(cfg0);
+  dbg('config loaded', {
+    data_yaml: cfg.data_yaml, dataset_path: cfg.dataset_path,
+    images: (cfg.images || []).length, splits: (cfg.splits || []).map((s) => s.name),
+    classes: cfg.classes, active_split: cfg.active_split,
+    filters: cfg.filters, active_filter: cfg.active_filter, filter_error: cfg.filter_error,
+    actions: cfg.actions, hooks: cfg.hooks, hook_errors: cfg.hook_errors,
+    readonly: cfg.readonly, debug: cfg.debug,
+  });
   images = cfg.images || [];
   splits = cfg.splits || [];
   filters = cfg.filters || [];
@@ -657,6 +741,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
   actionShortcuts = cfg.action_shortcuts || {};
   appShortcuts = cfg.shortcuts || {};
   shortcutErrors = cfg.shortcut_errors || [];
+  hookErrors = cfg.hook_errors || [];
   hooksByName = new Set(cfg.hooks || []);
   userActions = new Set(cfg.actions || []);
   renderShortcutErrors();
@@ -686,7 +771,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
     renderSidePanel();
     renderTagBar();
   }
-  runHook('on_app_hook_images_list_loaded');
+  runHook('on_images_list_loaded');
 }
 
 // The active filter (and the split it was selected with) live in the server's
@@ -766,6 +851,9 @@ function loadImage(i) {
   autoSaveTimer = null;
   updateNav();
   updateHistoryButtons();
+  const entry = images[currentIndex];
+  dbg('loadImage', { index: currentIndex, of: images.length,
+    image: entry ? `${entry.split}/${entry.name}` : null });
 
   Promise.all([
     fetch('/api/labels/' + currentIndex).then((r) => r.json()),
@@ -777,7 +865,9 @@ function loadImage(i) {
     imageEl.src = '/api/image/' + currentIndex;
     rememberLastImage();
     renderTagBar();
-    runHook('on_app_hook_image_loaded');
+    dbg('loadImage resolved', { index: currentIndex, boxes: boxes.length,
+      tags: imageTags.length, src: imageEl.src });
+    runHook('on_image_loaded');
   });
 }
 
@@ -822,7 +912,8 @@ async function resumeLastImage(cfg) {
 async function go(delta) {
   if (currentIndex < 0) return;
   const next = currentIndex + delta;
-  if (next < 0 || next >= images.length) return;
+  if (next < 0 || next >= images.length) { dbg('go blocked', { delta, next, of: images.length }); return; }
+  dbg('go', { delta, from: currentIndex, to: next, dirty });
   if (dirty) {
     if (autoSave) {
       if (!(await flushAutoSave())) return; // stay put if the save failed
@@ -832,7 +923,7 @@ async function go(delta) {
   }
   // navigation hooks run on the image being left; they capture its index before
   // loadImage advances currentIndex
-  runHook(delta < 0 ? 'on_app_hook_prev' : 'on_app_hook_next');
+  runHook(delta < 0 ? 'on_prev' : 'on_next');
   loadImage(next);
 }
 
@@ -912,11 +1003,14 @@ async function saveImageTags() {
     });
     const data = await res.json();
     if (res.ok && data.ok) {
+      dbg('tags saved', { index: currentIndex, count: data.count, tags: imageTags });
       setTagStatus(`Saved ${data.count} tag(s)`);
     } else {
+      dbgWarn('tag save failed', { status: res.status, error: data.error });
       setTagStatus('Tag save failed: ' + (data.error || res.status));
     }
   } catch (err) {
+    dbgWarn('tag save error', err);
     setTagStatus('Tag save failed: ' + err.message);
   }
   renderTagBar();
@@ -1011,6 +1105,7 @@ function undo() {
   markDirty();
   syncClassSelect(-1);
   updateHistoryButtons();
+  dbg('undo', { boxes: boxes.length, undo: undoStack.length, redo: redoStack.length });
   draw();
 }
 
@@ -1023,20 +1118,32 @@ function redo() {
   markDirty();
   syncClassSelect(-1);
   updateHistoryButtons();
+  dbg('redo', { boxes: boxes.length, undo: undoStack.length, redo: redoStack.length });
   draw();
 }
 
 function deleteSelected() {
   if (selected >= 0) {
     pushUndo();
+    dbg('box deleted', { index: selected, box: boxes[selected], remaining: boxes.length - 1 });
     boxes.splice(selected, 1);
     selected = -1;
     justDrawn = false;
     markDirty();
     draw();
     updateHistoryButtons();
-    runHook('on_app_hook_box_deleted');
+    runHook('on_box_deleted');
   }
+}
+
+// Fix / unfix the selected box. A fixed box ignores dragging (moving and
+// resizing) but can still be clicked / selected and deleted. The flag is
+// transient UI state: it is never saved and is cleared when the image changes.
+function toggleFixSelected() {
+  if (readonly || selected < 0) return;
+  boxes[selected].fixed = !boxes[selected].fixed;
+  draw();
+  updateSidePanelState();
 }
 
 // Mark the labels as changed and, when auto-save is on, queue a save.
@@ -1066,8 +1173,10 @@ async function save() {
   if (currentIndex < 0) return false;
   const status = el('status');
   // a failing before_save hook cancels the write
-  if (!(await runHook('on_app_hook_before_save'))) {
-    status.textContent = 'Save aborted by on_app_hook_before_save';
+  dbg('save requested', { index: currentIndex, boxes: boxes.length });
+  if (!(await runHook('on_before_save'))) {
+    dbgWarn('save aborted by on_before_save hook');
+    status.textContent = 'Save aborted by on_before_save';
     return false;
   }
   status.textContent = 'Saving…';
@@ -1082,14 +1191,17 @@ async function save() {
     if (res.ok && data.ok) {
       dirty = false;
       ok = true;
+      dbg('save ok', { index: currentIndex, count: data.count });
       status.textContent = `Saved ${data.count} box(es)`;
       setTimeout(() => { status.textContent = ''; }, 2000);
       updateHistoryButtons();
-      runHook('on_app_hook_after_save');
+      runHook('on_after_save');
     } else {
+      dbgWarn('save failed', { status: res.status, error: data.error });
       status.textContent = 'Save failed: ' + (data.error || res.status);
     }
   } catch (err) {
+    dbgWarn('save error', err);
     status.textContent = 'Save failed: ' + err.message;
   }
   updateHistoryButtons();
@@ -1108,13 +1220,16 @@ async function setDataYaml() {
     });
     const data = await res.json();
     if (res.ok && data.ok) {
+      dbg('dataset loaded', { path: yamlPath });
       status.textContent = 'Loaded';
       await loadConfig();
       setTimeout(() => { status.textContent = ''; }, 2000);
     } else {
+      dbgWarn('dataset load failed', { status: res.status, error: data.error });
       status.textContent = data.error || 'Invalid data.yaml';
     }
   } catch (err) {
+    dbgWarn('dataset load error', err);
     status.textContent = 'Error: ' + err.message;
   }
 }
@@ -1130,12 +1245,15 @@ async function setSplit(split, resumeOk = false) {
     });
     const data = await res.json();
     if (res.ok && data.ok) {
+      dbg('split changed', { split: split || null });
       status.textContent = '';
       await loadConfig(0, { noResume: !resumeOk });
     } else {
+      dbgWarn('split switch failed', { status: res.status, error: data.error });
       status.textContent = data.error || 'Split switch failed';
     }
   } catch (err) {
+    dbgWarn('split switch error', err);
     status.textContent = 'Error: ' + err.message;
   }
 }
@@ -1151,13 +1269,17 @@ async function setFilter(name) {
     });
     const data = await res.json();
     if (res.ok && data.ok) {
+      dbg('filter changed', { filter: name || null,
+        images: (data.images || []).length, filter_error: data.filter_error });
       status.textContent = '';
       await loadConfig(0, { noResume: true, skipFilterRestore: true });
     } else {
+      dbgWarn('filter failed', { status: res.status, error: data.error });
       status.textContent = data.error || 'Filter failed';
       populateFilterSelect(); // revert the select to the active filter
     }
   } catch (err) {
+    dbgWarn('filter error', err);
     status.textContent = 'Error: ' + err.message;
     populateFilterSelect();
   }
@@ -1207,10 +1329,14 @@ async function runAction(name, opts = {}) {
   const ask = opts.confirm !== false;
   const depth = opts.depth || 0;
   const isHook = !!opts.hook;
-  if (!name || currentIndex < 0 || !images[currentIndex]) return false;
+  if (!name || currentIndex < 0 || !images[currentIndex]) {
+    dbg('runAction skipped', { name, currentIndex });
+    return false;
+  }
   const target = `${images[currentIndex].split}/${images[currentIndex].name}`;
   if (ask && !confirm(`Run action "${name}" on ${target}?`)) return false;
   setActionButtonsDisabled(true);
+  dbg(`run ${isHook ? 'hook' : 'action'} "${name}"`, { target, index: currentIndex, depth });
   try {
     const res = await fetch('/api/actions/run', {
       method: 'POST',
@@ -1218,6 +1344,7 @@ async function runAction(name, opts = {}) {
       body: JSON.stringify({ action: name, idx: currentIndex }),
     });
     const data = await res.json();
+    dbg(`"${name}" response`, data);
     if (!data.ok) {
       // failures always use the modal
       showActionResult(data);
@@ -1234,6 +1361,7 @@ async function runAction(name, opts = {}) {
     // error report it, show a message and stop the chain.
     return await runAfterSuccessChain(data.after_success || [], depth, isHook);
   } catch (err) {
+    dbgWarn(`"${name}" request error`, err);
     showActionResult({ ok: false, action: name, error: 'Error: ' + err.message });
     return false;
   } finally {
@@ -1246,8 +1374,9 @@ async function runAction(name, opts = {}) {
 // after_success refreshes the image list, which would fire it again).
 async function runHook(name) {
   if (!hooksByName.has(name) || currentIndex < 0) return true;
-  if (hookInFlight.has(name)) return true;
+  if (hookInFlight.has(name)) { dbg(`hook ${name} skipped (already running)`); return true; }
   hookInFlight.add(name);
+  dbg(`hook ${name} fired`);
   try {
     return await runAction(name, { confirm: false, hook: true });
   } finally {
@@ -1257,6 +1386,7 @@ async function runHook(name) {
 
 // Run an after_success chain: app actions or other (non-hook) actions.
 async function runAfterSuccessChain(chain, depth, isHook) {
+  dbg('after_success chain', chain);
   for (const name of chain) {
     try {
       await runAfterSuccess(name, depth, isHook);
@@ -1276,12 +1406,14 @@ async function runAfterSuccess(name, depth, isHook) {
     throw new Error(`"${name}" is an event hook; hooks cannot run from after_success`);
   }
   if (APP_SHORTCUT_HANDLERS[name]) {
+    dbg(`after_success -> app action ${name}`);
     return runAppAction(name);
   }
   if (userActions.has(name)) {
     if (depth >= MAX_CASCADE_DEPTH) {
       throw new Error(`action cascade exceeded ${MAX_CASCADE_DEPTH} levels`);
     }
+    dbg(`after_success -> action ${name} (depth ${depth + 1})`);
     const ok = await runAction(name, { confirm: false, depth: depth + 1, hook: isHook });
     if (!ok) throw new Error(`action "${name}" failed`);
     return true;
@@ -1336,7 +1468,7 @@ function openClassPicker(x, y) {
         draw();
         // choosing the class of a just-drawn box completes the creation, it is
         // not a separate edit
-        if (!wasJustDrawn) runHook('on_app_hook_box_edited');
+        if (!wasJustDrawn) runHook('on_box_edited');
       }
       closeClassPicker();
     });
@@ -1454,6 +1586,12 @@ function renderSidePanel() {
     const ptW = mkPoint('w');
     const ptH = mkPoint('h');
 
+    const fix = document.createElement('button');
+    fix.type = 'button';
+    fix.className = 'box-row-ctl box-row-fix';
+    fix.textContent = 'F';
+    fix.title = 'Fix / unfix this box (F) — fixed boxes ignore dragging';
+
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'box-row-ctl box-row-del danger';
@@ -1462,7 +1600,7 @@ function renderSidePanel() {
 
     const top = document.createElement('div');
     top.className = 'box-row-top';
-    top.append(idx, cls, del);
+    top.append(idx, cls, fix, del);
 
     const bottom = document.createElement('div');
     bottom.className = 'box-row-bottom';
@@ -1483,7 +1621,7 @@ function renderSidePanel() {
       draw();
       updateHistoryButtons();
       renderSidePanel();
-      runHook('on_app_hook_box_edited');
+      runHook('on_box_edited');
     });
     [ptCx, ptCy, ptW, ptH].forEach((inp) => {
       inp.addEventListener('input', () => {
@@ -1505,7 +1643,7 @@ function renderSidePanel() {
         delete inp.dataset.dirty;
         if (wasEdited) {
           scheduleAutoSave();
-          runHook('on_app_hook_box_edited');
+          runHook('on_box_edited');
         }
       });
       inp.addEventListener('focus', () => {
@@ -1518,6 +1656,13 @@ function renderSidePanel() {
           draw();
         }
       });
+    });
+    fix.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (readonly) return;
+      boxes[i].fixed = !boxes[i].fixed;
+      draw();
+      updateSidePanelState();
     });
     del.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1535,7 +1680,7 @@ function renderSidePanel() {
       draw();
       updateHistoryButtons();
       renderSidePanel();
-      runHook('on_app_hook_box_deleted');
+      runHook('on_box_deleted');
     });
 
     list.appendChild(row);
@@ -1552,7 +1697,13 @@ function updateSidePanelState() {
     if (!b) return;
     const on = i === selected && !readonly;
     row.classList.toggle('selected', i === selected);
+    row.classList.toggle('fixed', !!b.fixed);
     row.querySelector('.box-row-idx').textContent = i;
+    const fixBtn = row.querySelector('.box-row-fix');
+    if (fixBtn) {
+      fixBtn.classList.toggle('active', !!b.fixed);
+      fixBtn.title = b.fixed ? 'Unfix this box (F)' : 'Fix this box (F)';
+    }
     row.querySelectorAll('.box-row-ctl').forEach((ctl) => { ctl.disabled = !on; });
     setFieldValue(row.querySelector('.box-row-class'), String(b.class));
     setFieldValue(row.querySelector('.box-row-cx'), String(fmtNum(b.cx)));
@@ -1580,6 +1731,21 @@ canvas.addEventListener('mousedown', (e) => {
   if (!imgW || !imgH || readonly) return;
   const p = canvasPos(e);
   mouse = p;
+
+  // modifier held (app_force_draw): always start a new box, whatever is under
+  // the cursor — lets you draw inside / on top of an existing box.
+  if (forceDrawActive(e)) {
+    mode = 'drawing';
+    selected = -1;
+    justDrawn = false;
+    moved = false;
+    start = p;
+    syncClassSelect(-1);
+    dirty = true;
+    draw();
+    return;
+  }
+
   const hit = hitTest(p);
 
   if (hit.type === 'delete') {
@@ -1591,7 +1757,7 @@ canvas.addEventListener('mousedown', (e) => {
     markDirty();
     draw();
     updateHistoryButtons();
-    runHook('on_app_hook_box_deleted');
+    runHook('on_box_deleted');
     return;
   }
 
@@ -1614,7 +1780,7 @@ canvas.addEventListener('mousedown', (e) => {
     moved = false;
     dragStart = p;
     origBox = { ...boxes[selected] };
-  } else if (hit.type === 'box') {
+  } else if (hit.type === 'box' && !boxes[hit.index].fixed) {
     mode = 'moving';
     selected = hit.index;
     justDrawn = false;
@@ -1622,8 +1788,10 @@ canvas.addEventListener('mousedown', (e) => {
     dragStart = p;
     origBox = { ...boxes[selected] };
   } else {
+    // empty space, or a fixed box: a plain click selects a fixed box (so it
+    // can be unfixed), a drag draws a new box on top of it.
     mode = 'drawing';
-    selected = -1;
+    selected = hit.type === 'box' ? hit.index : -1;
     justDrawn = false;
     moved = false;
     start = p;
@@ -1633,22 +1801,30 @@ canvas.addEventListener('mousedown', (e) => {
   draw();
 });
 
-canvas.addEventListener('mousemove', (e) => {
-  mouse = canvasPos(e);
+// Listen on window (not just the canvas) so a drag that leaves the image still
+// tracks the cursor and completes on release instead of losing the box.
+window.addEventListener('mousemove', (e) => {
+  const p = canvasPos(e);
   if (mode === 'drawing' && start) {
+    mouse = clampToImage(p);
     draw();
-  } else if (mode === 'moving' && origBox) {
-    moveBox(mouse);
-  } else if (mode === 'resizing' && origBox) {
-    resizeBox(mouse);
+  } else {
+    mouse = p;
+    if (mode === 'moving' && origBox) {
+      moveBox(mouse);
+    } else if (mode === 'resizing' && origBox) {
+      resizeBox(mouse);
+    } else {
+      updateCursor(p);
+    }
   }
 });
 
-canvas.addEventListener('mouseup', (e) => {
+window.addEventListener('mouseup', (e) => {
   const edited = (mode === 'moving' || mode === 'resizing') && moved;
   let created = false;
   if (mode === 'drawing' && start) {
-    const r = normRect(start, mouse || start);
+    const r = normRect(start, clampToImage(mouse || start));
     if (r.w >= 3 && r.h >= 3) {
       const nb = toNorm(r);
       nb.class = defaultClass;
@@ -1656,6 +1832,7 @@ canvas.addEventListener('mouseup', (e) => {
       selected = boxes.length - 1;
       justDrawn = true;
       created = true;
+      dbg('box created', { box: nb, total: boxes.length });
       openClassPicker(e.clientX, e.clientY);
     }
   }
@@ -1665,21 +1842,15 @@ canvas.addEventListener('mouseup', (e) => {
   dragStart = null;
   origBox = null;
   draw();
+  updateCursor(canvasPos(e));
   updateHistoryButtons();
   if (created) {
     scheduleAutoSave();
-    runHook('on_app_hook_box_created');
+    runHook('on_box_created');
   } else if (edited) {
+    dbg('box edited', { index: selected, box: boxes[selected] });
     scheduleAutoSave();
-    runHook('on_app_hook_box_edited');
-  }
-});
-
-canvas.addEventListener('mouseleave', () => {
-  if (mode === 'drawing') {
-    mode = 'idle';
-    start = null;
-    draw();
+    runHook('on_box_edited');
   }
 });
 
@@ -1752,7 +1923,7 @@ if (classSelectEl) {
       markDirty();
       draw();
       updateHistoryButtons();
-      runHook('on_app_hook_box_edited');
+      runHook('on_box_edited');
     } else {
       defaultClass = v;
     }
@@ -1775,7 +1946,7 @@ const APP_SHORTCUT_HANDLERS = {
       syncClassSelect(-1);
       draw();
       updateHistoryButtons();
-      runHook('on_app_hook_box_deleted');
+      runHook('on_box_deleted');
     } else if (mode === 'drawing') {
       mode = 'idle';
       start = null;
@@ -1814,10 +1985,20 @@ const APP_SHORTCUT_HANDLERS = {
     boxesVisible = !boxesVisible;
     draw();
   },
+  app_fix_box: (e) => {
+    if (readonly || selected < 0) return;
+    e.preventDefault();
+    toggleFixSelected();
+  },
+  // app_force_draw is a held modifier, not a keydown action: it is matched on
+  // canvas mousedown (see forceDrawActive), so this handler is intentionally a
+  // no-op. It exists so the binding can be validated and shown in the bar.
+  app_force_draw: () => {},
   // Re-scan the image folders and stay on the same index (clamped); used e.g.
   // after a user action deleted/added image files. Targeted — no full reload.
   app_refresh_images_list: async (e) => {
     e.preventDefault();
+    dbg('rescan images list', { was: images.length, index: currentIndex });
     try {
       const res = await fetch('/api/images/rescan', { method: 'POST' });
       const data = await res.json();
@@ -1828,6 +2009,8 @@ const APP_SHORTCUT_HANDLERS = {
       images = data.images || [];
       activeSplit = data.active_split || null;
       if (data.active_filter !== undefined) activeFilter = data.active_filter || null;
+      dbg('rescan done', { now: images.length, active_split: activeSplit,
+        active_filter: activeFilter, filter_error: data.filter_error });
       populateSplitSelect();
       populateFilterSelect();
       if (data.filter_error) showTransientFilterMessage(data.filter_error);
@@ -1847,7 +2030,7 @@ const APP_SHORTCUT_HANDLERS = {
       }
       const idx = Math.max(0, Math.min(currentIndex, images.length - 1));
       loadImage(idx);
-      runHook('on_app_hook_images_list_loaded');
+      runHook('on_images_list_loaded');
     } catch (err) {
       console.error('[app_refresh_images_list] failed:', err);
     }
@@ -1856,8 +2039,9 @@ const APP_SHORTCUT_HANDLERS = {
   // external editor wrote a new version of the file.
   app_refresh_image: (e) => {
     e.preventDefault();
-    if (currentIndex < 0) return;
+    if (currentIndex < 0) { dbg('refresh image skipped (no image)'); return; }
     imageEl.src = '/api/image/' + currentIndex + '?_=' + Date.now();
+    dbg('refresh image', { index: currentIndex, src: imageEl.src });
   },
 };
 
@@ -1921,6 +2105,7 @@ function escDeactivateRow(e) {
 
 function dispatchAppShortcut(e) {
   for (const name of APP_SHORTCUT_ORDER) {
+    if (name === 'app_force_draw') continue; // modifier-only, matched on mousedown
     const info = appShortcuts[name];
     if (info && shortcutMatches(e, info.shortcut)) {
       runAppAction(name, e).catch((err) => console.error(`[shortcut] ${name}:`, err));
@@ -1990,6 +2175,11 @@ function runActionForShortcut(e) {
 el('taggingSw').checked = localStorage.getItem('taggingEnabled') === '1';
 el('autoSaveSw').checked = localStorage.getItem('autoSave') === '1';
 autoSave = el('autoSaveSw').checked;
+
+// With --debug these surface any error that would otherwise only show in the
+// browser console; without it they are no-ops.
+window.addEventListener('error', (e) => dbgWarn('uncaught error', e.error || e.message));
+window.addEventListener('unhandledrejection', (e) => dbgWarn('unhandled rejection', e.reason));
 
 loadConfig();
 initSidePanel();

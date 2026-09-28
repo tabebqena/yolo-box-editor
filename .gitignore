@@ -1,6 +1,7 @@
 # --- local / personal files: never tracked ---
 .recent_data_yamls.json
 actions/*.a.yaml
+hooks/*.a.yaml
 filters/*.a.py
 scripts/*.a.py
 shortcuts.a.txt

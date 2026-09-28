@@ -28,9 +28,17 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   box is drawn.
 - **Hide / show boxes**: press `.` to toggle the box overlay, so you can inspect
   the raw photo underneath (works in read-only mode too; boxes stay intact).
+  Hidden boxes ignore the mouse, so an unseen box can never be moved or deleted.
 - **Draw & edit boxes on the canvas**: drag to draw, click to select, drag
   inside to move, drag any of the 8 handles to resize, click the `/` on a box
-  to change its class.
+  to change its class. To draw a new box inside / on top of an existing one,
+  hold the force-draw modifier (default `Ctrl`) and drag — it is configurable
+  via `app_force_draw`.
+- **Fix boxes**: press `F` (or the row's `F` button) to fix the selected box.
+  A fixed box is drawn with a dashed grey outline and no handles: it ignores
+  dragging (moving / resizing) but can still be clicked, selected and deleted,
+  which lets you protect it while drawing inside it. Fixing is transient — it
+  is never saved and is cleared when the image changes.
 - **Boxes panel** (right edge, `Boxes` toggle): one row per box, each with its
   class dropdown, `cx cy w h` numeric inputs and a `×` delete button. Controls
   are disabled until the row — or its box on the canvas — is *selected*;
@@ -54,14 +62,15 @@ read [TUTORIAL.md](TUTORIAL.md) first.
 - **User actions**: custom commands defined in the `actions/` folder, one YAML
   file per action, run on the current image (with a confirmation) and show
   stdout / stderr / exit code in a popup. `{IMAGE_PATH}`, `{LABEL_PATH}`,
-  `{DATASET_PATH}`, `{DATA_YAML_PATH}` and `{IMAGE_INDEX}` are substituted and
-  shell-quoted — see
+  `{DATASET_PATH}`, `{DATA_YAML_PATH}`, `{IMAGE_INDEX}` and `{APP_DIR}` are
+  substituted and shell-quoted — see
   [User actions](#user-actions). App updates overwrite the shipped files; keep
   personal actions in `actions/*.a.yaml` (see below), which are read after the
   others and win on name clashes.
-- **Event hooks**: actions named `on_app_hook_*` run on app events instead of a
-  button — e.g. `on_app_hook_after_save` or `on_app_hook_box_created`. See
-  [Hooks](#hooks).
+- **Event hooks**: YAML files in the `hooks/` folder, named `on_<event>.yaml`,
+  run on app events instead of a button — e.g. `on_after_save` or
+  `on_box_created`. See [Hooks](#hooks). Steps run with the working directory
+  set to the app's folder (where `app.py` lives), so they can reach `scripts/`.
 - **Configurable shortcuts**: bind keys in `shortcuts.txt` with
   `ACTION_NAME <SHORTCUT> label`. Every app action and your action names
   can be bound; invalid names are rejected with a dismissible banner.
@@ -75,7 +84,7 @@ read [TUTORIAL.md](TUTORIAL.md) first.
 
 ## Keyboard shortcuts & app actions
 
-The 14 built-in app actions are defined in `app.py` (`APP_ACTIONS`) and
+The 16 built-in app actions are defined in `app.py` (`APP_ACTIONS`) and
 implemented in `static/app.js`. Rebind them in `shortcuts.txt` (or
 `shortcuts.a.txt`); the names themselves are fixed. They are also the valid
 values for an action's `after_success` (see [User actions](#user-actions)) —
@@ -94,7 +103,9 @@ they are **not** valid in `steps`, which are shell commands.
 | `app_sel_box` | `Shift` | select next box (resumes from the last active one after `Esc`) |
 | `app_sel_points` | `Tab` | cycle box-row controls: class → cx → cy → w → h |
 | `app_escape` | `Esc` | deactivate the focused row control |
-| `app_show_hide` | `.` | toggle the box overlay on the image |
+| `app_show_hide` | `.` | toggle the box overlay on the image (hidden boxes ignore the mouse) |
+| `app_fix_box` | `F` | fix / unfix the selected box (transient: never saved, reset on image change) |
+| `app_force_draw` | `Ctrl` | held modifier, not a key: hold it and drag to always draw a new box (configurable, e.g. `<Alt>`) |
 | `app_refresh_images_list` | — | re-scan the image folders; stay on the same index (clamped) |
 | `app_refresh_image` | — | re-fetch the current image (cache-busted) |
 
@@ -102,9 +113,15 @@ they are **not** valid in `steps`, which are shell commands.
 bind them in `shortcuts.a.txt` (e.g. `app_refresh_image <F5>`) or call them
 from a YAML action's `after_success`.
 
-Editing actions (`app_del`, `app_save`, `app_undo`, `app_redo`, `app_ch_box`)
-do nothing in read-only mode; navigation, `app_drop` and `app_show_hide` still
-work.
+`app_force_draw` is special: its binding is a *modifier* (`Ctrl`, `Alt`,
+`Shift`, `Meta`, or a `+`-joined combination), not a key. `Ctrl`/`Meta` are the
+Linux-safe defaults — many window managers swallow `Alt`+drag — and `Shift` is
+already used for selecting. A fixed box ignores drag/move/resize while
+remaining clickable; a drag on it starts a new box, just like `app_force_draw`.
+
+Editing actions (`app_del`, `app_save`, `app_undo`, `app_redo`, `app_ch_box`,
+`app_fix_box`) do nothing in read-only mode; navigation, `app_drop` and
+`app_show_hide` still work.
 
 `Alt+1`…`Alt+9` toggles the tag at that 1-based position in `tags.yaml`; it is
 built in, not an `app_*` action.
@@ -122,10 +139,17 @@ cd yolo-box-editor
 pip install -r requirements.txt
 python app.py --data /path/to/data.yaml
 python app.py --data /path/to/data.yaml --readonly   # viewer only
+python app.py --data /path/to/data.yaml --debug      # verbose browser console
 ```
 
 Open <http://127.0.0.1:5000>. You can also leave out `--data` and paste the
 `data.yaml` path into the settings bar, then click *Load data.yaml*.
+
+`--debug` writes verbose messages to the **browser console** (prefixed `[ybe]`):
+the loaded config, image loads, saves, tag writes, user actions / `after_success`
+chains, hook runs, rescans and box edits. It also surfaces uncaught errors and
+unhandled promise rejections. It is reported to the UI through `/api/config`
+(`debug:`), so no server restart is needed to see the flag reflected on reload.
 
 ## data.yaml format
 
@@ -195,6 +219,7 @@ Placeholders (leave them unquoted):
 | `{DATASET_PATH}`  | root path of the loaded dataset                              |
 | `{DATA_YAML_PATH}`| path of the loaded data.yaml                                 |
 | `{IMAGE_INDEX}`   | 1-based position of the current image (matches the counter)  |
+| `{APP_DIR}`       | folder holding `app.py` (use it to reach `{APP_DIR}/scripts/…`) |
 
 Files ending in `.a.yaml` are *yours*: they are read after the shipped files,
 win on a name clash (matched by action name, so `name:` can retarget an
@@ -219,32 +244,48 @@ chain into another action (a cascade is capped at 8 levels). Useful app actions:
   e.g. after an external editor saved a new version. Image responses are served
   with `Cache-Control: no-store`, so you never see a stale frame.
 
-Event hooks (`on_app_hook_*`) may **not** appear in `after_success` — they are
+Event hooks (`on_*`) may **not** appear in `after_success` — they are
 event-driven only. `after_success` entries take no arguments.
 
 ## Hooks
 
-An action whose name starts with `on_app_hook_` is an **event hook**: instead of
-a toolbar button it runs when the matching app event happens. They are otherwise
-ordinary actions — same `actions/` YAML file, same `steps` / `after_success`
-and same placeholders. A successful hook reports in the **bottom status bar**
-(auto-hides after a few seconds); a failed hook opens the result **modal**. They
-are opt-in: no file, no hook.
+An **event hook** is a YAML file in the `hooks/` folder (not `actions/`) that
+runs when the app fires an event, instead of a toolbar button. Hooks use the
+same `steps` / `after_success` and the same placeholders as actions; steps run
+with the working directory set to the app's folder, so they can call scripts as
+`python scripts/<name>.py` or `python {APP_DIR}/scripts/<name>.py`. A successful
+hook reports in the **bottom status bar** (auto-hides after a few seconds); a
+failed hook opens the result **modal**. They are opt-in: no file, no hook.
 
-| Hook | Fired when |
-| ---- | ---------- |
-| `on_app_hook_images_list_loaded` | the image list is (re)loaded |
-| `on_app_hook_image_loaded` | an image is opened in the editor |
-| `on_app_hook_prev` | before navigating to the previous image |
-| `on_app_hook_next` | before navigating to the next image |
-| `on_app_hook_before_save` | just before labels are written — a failure **aborts the save** |
-| `on_app_hook_after_save` | after a successful label write |
-| `on_app_hook_box_created` | a box was drawn |
-| `on_app_hook_box_deleted` | a box was removed |
-| `on_app_hook_box_edited` | a box was moved / resized / reclassed (committed edits) |
+The event comes from the **file name**: `on_<event>.yaml`. If the file name does
+not name a known event, the top-level `event_name:` key is used as a fallback.
+A file that defines `steps` but names no known event is reported as an error;
+`hooks/example.yaml` (a comments-only template) is ignored silently. Set
+`active: false` to skip a hook without deleting it. Personal hooks are named
+`hooks/*.a.yaml`, are read last, win on an event clash and are git-ignored.
+
+| Hook file | Fired when |
+| --------- | ---------- |
+| `on_images_list_loaded.yaml` | the image list is (re)loaded |
+| `on_image_loaded.yaml` | an image is opened in the editor |
+| `on_prev.yaml` | before navigating to the previous image |
+| `on_next.yaml` | before navigating to the next image |
+| `on_before_save.yaml` | just before labels are written — a failure **aborts the save** |
+| `on_after_save.yaml` | after a successful label write |
+| `on_box_created.yaml` | a box was drawn |
+| `on_box_deleted.yaml` | a box was removed |
+| `on_box_edited.yaml` | a box was moved / resized / reclassed (committed edits) |
 
 ```yaml
-# actions/on_app_hook_after_save.yaml — run a script after every save
+# hooks/on_after_save.yaml — run a script (from scripts/) after every save
+steps:
+  - python {APP_DIR}/scripts/helper.py {DATA_YAML_PATH} {IMAGE_PATH} {LABEL_PATH}
+```
+
+```yaml
+# hooks/after-save-copy.yaml — event_name: fallback when the name does not
+# encode an event; active: false would skip it
+event_name: after_save
 steps:
   - touch {DATASET_PATH}/saved.log
 ```

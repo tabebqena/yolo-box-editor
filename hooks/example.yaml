@@ -1,0 +1,56 @@
+# yolo-box-editor event hooks: one YAML file per hook, in this hooks/ dir.
+#
+# A hook runs when the app fires an event — it is not a toolbar button and
+# cannot be bound to a key. The event is taken from the FILE NAME:
+#
+#     on_<event>.yaml
+#
+# so `on_after_save.yaml` runs after every successful label write. When the
+# file name does not name a known event, the `event_name:` key is used as a
+# fallback. If neither names a known event, the file is reported as an error.
+#
+# This example file is comments only and defines nothing: templates with no
+# `steps` and no `after_success` are ignored silently, so it shows no error.
+#
+# Known events (the <event> part of the file name):
+#
+#   on_images_list_loaded   image list loaded / rescanned
+#   on_image_loaded         an image opened in the editor
+#   on_prev                 before navigating to the previous image
+#   on_next                 before navigating to the next image
+#   on_before_save          before labels are written (a failure aborts the save)
+#   on_after_save           after a successful label write
+#   on_box_created          a box was drawn
+#   on_box_deleted          a box was removed
+#   on_box_edited           a box was moved / resized / reclassed
+#
+# Format (2-space indentation, lines starting with # are ignored):
+#
+#   steps:                  # shell commands, run in order; execution stops
+#     - touch {DATASET_PATH}/saved.log   # at the first failure
+#   after_success:          # optional, run client-side after all steps
+#     - app_refresh_image   # succeed (stop at first error). Entries may be
+#                           # app actions (app_*) or other actions.
+#
+# Optional keys:
+#
+#   event_name: after_save  # fallback when the file name names no known event
+#   active: false           # ignore this hook without deleting it
+#
+# Placeholders (do NOT quote them; the app shell-quotes each value for you):
+#   {IMAGE_PATH}     path of the current image
+#   {LABEL_PATH}     path of the current image's label file (may not exist yet)
+#   {DATASET_PATH}   root path of the loaded dataset
+#   {DATA_YAML_PATH} path of the loaded data.yaml
+#   {IMAGE_INDEX}    1-based position of the current image in the list
+#   {APP_DIR}        the folder holding app.py, so `{APP_DIR}/scripts/x.py`
+#                    resolves from anywhere (steps also run with the working
+#                    directory set to that folder)
+#
+# Example: hooks/on_after_save.yaml
+#   steps:
+#     - python {APP_DIR}/scripts/helper.py {DATA_YAML_PATH} {IMAGE_PATH} {LABEL_PATH}
+#
+# Personal hooks: files ending in `.a.yaml` are read after the shipped ones,
+# win on an event clash, and are never shipped/overwritten (they are
+# git-ignored).
