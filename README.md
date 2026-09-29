@@ -61,6 +61,11 @@ read [TUTORIAL.md](TUTORIAL.md) first.
 - **Read-only mode**: pass `--readonly` (or tick the topbar switch) to browse as
   a pure viewer; drawing, editing and saving stop, and label writes are also
   rejected server-side. The switch is locked on when started with `--readonly`.
+- **Concurrent-use warning**: one running instance keeps a single dataset/view
+  state, so it is meant for one user at a time. While more than one tab, browser
+  or machine is connected, every client shows a dismissible *"Another user is
+  using this app"* banner; it is only a warning — nothing is blocked, and
+  simultaneous edits can still overwrite each other.
 - **User actions**: custom commands defined in the `actions/` folder, one YAML
   file per action, run on the current image (with a confirmation) and show
   stdout / stderr / exit code in a popup. `steps` may mix shell commands with

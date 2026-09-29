@@ -29,6 +29,8 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import uuid
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
@@ -121,6 +123,14 @@ STATE = {
 # entry: uid -> execution state (see _begin_execution / _advance_execution). The
 # backend owns the whole chain, so it also owns the run's {PIPE_PATH} file.
 EXECUTIONS = {}
+
+# Connected clients, for the multi-tab / multi-client presence warning: a client
+# id (kept per browser tab by the UI) -> last-seen monotonic timestamp. A client
+# that stops pinging /api/presence for PRESENCE_TTL seconds is considered gone.
+# Presence is informational only: it never blocks or changes any other route.
+CLIENTS = {}
+CLIENTS_LOCK = threading.Lock()
+PRESENCE_TTL = 15  # seconds
 
 
 # --------------------------------------------------------------------------- #
@@ -1097,6 +1107,14 @@ def _entry(idx):
     return images[idx]
 
 
+def _prune_clients(now=None):
+    """Forget clients that have not pinged `/api/presence` within PRESENCE_TTL."""
+    now = time.monotonic() if now is None else now
+    for cid in [c for c, seen in CLIENTS.items() if now - seen > PRESENCE_TTL]:
+        CLIENTS.pop(cid, None)
+    return len(CLIENTS)
+
+
 # --------------------------------------------------------------------------- #
 # routes
 # --------------------------------------------------------------------------- #
@@ -1141,6 +1159,30 @@ def api_config():
             ],
         }
     )
+
+
+@app.route("/api/presence", methods=["POST"])
+def api_presence():
+    """Track connected clients so the UI can warn about concurrent users.
+
+    Body `{cid}` registers or refreshes a client; `{cid, "bye": true}` removes it
+    (sent via `navigator.sendBeacon` when a page unloads). `count` is the number
+    of clients seen within PRESENCE_TTL seconds; the UI warns while it is > 1.
+    Presence never blocks any other request.
+    """
+    data = request.get_json(silent=True) or {}
+    cid = (data.get("cid") or "").strip()
+    if not cid:
+        return jsonify({"ok": False, "error": "client id is required"}), 400
+
+    now = time.monotonic()
+    with CLIENTS_LOCK:
+        if data.get("bye"):
+            CLIENTS.pop(cid, None)
+        else:
+            CLIENTS[cid] = now
+        count = _prune_clients(now)
+    return jsonify({"ok": True, "count": count, "others": max(0, count - 1)})
 
 
 @app.route("/api/data", methods=["POST"])

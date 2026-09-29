@@ -85,6 +85,24 @@ select, input {
   padding: 0 7px;
   cursor: pointer;
 }
+.presence-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: #4a3d12;
+  color: var(--yellow);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.presence-dismiss {
+  margin-left: auto;
+  background: none;
+  border: 1px solid #b89b3a;
+  color: var(--yellow);
+  padding: 0 7px;
+  cursor: pointer;
+}
 .topbar .topbar-end {
   margin-left: auto;
   display: flex;

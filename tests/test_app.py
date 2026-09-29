@@ -9,6 +9,7 @@ constant to disposable paths under tmp_path, and STATE is reset per test.
 """
 
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -57,6 +58,7 @@ def clean_state(tmp_path, monkeypatch):
     ybe.STATE.clear()
     ybe.STATE.update(DEFAULT_STATE)
     ybe.EXECUTIONS.clear()
+    ybe.CLIENTS.clear()
     return tmp_path
 
 
@@ -1475,3 +1477,54 @@ def test_api_image_uses_filtered_index(clean_state, tmp_path):
     assert [e["name"] for e in cfg["images"]] == ["b.jpg"]
     assert client.get("/api/image/0").status_code == 200
     assert client.get("/api/image/1").status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+# routes: presence (multi-tab / multi-client warning)
+# --------------------------------------------------------------------------- #
+def test_presence_single_client(clean_state):
+    client = ybe.app.test_client()
+    data = client.post("/api/presence", json={"cid": "a"}).get_json()
+    assert data == {"ok": True, "count": 1, "others": 0}
+
+
+def test_presence_counts_multiple_clients(clean_state):
+    first = ybe.app.test_client()
+    second = ybe.app.test_client()
+    first.post("/api/presence", json={"cid": "a"})
+    data = second.post("/api/presence", json={"cid": "b"}).get_json()
+    assert data["count"] == 2
+    assert data["others"] == 1
+
+
+def test_presence_same_cid_stays_one_client(clean_state):
+    client = ybe.app.test_client()
+    client.post("/api/presence", json={"cid": "a"})
+    data = client.post("/api/presence", json={"cid": "a"}).get_json()
+    assert data["count"] == 1
+
+
+def test_presence_bye_removes_client(clean_state):
+    client = ybe.app.test_client()
+    client.post("/api/presence", json={"cid": "a"})
+    client.post("/api/presence", json={"cid": "b"})
+    data = client.post("/api/presence", json={"cid": "a", "bye": True}).get_json()
+    assert data["count"] == 1
+    assert "a" not in ybe.CLIENTS
+    assert "b" in ybe.CLIENTS
+
+
+def test_presence_prunes_stale_clients(clean_state):
+    ybe.CLIENTS["old"] = time.monotonic() - (ybe.PRESENCE_TTL + 1)
+    client = ybe.app.test_client()
+    data = client.post("/api/presence", json={"cid": "new"}).get_json()
+    assert data["count"] == 1
+    assert "old" not in ybe.CLIENTS
+    assert "new" in ybe.CLIENTS
+
+
+def test_presence_requires_client_id(clean_state):
+    client = ybe.app.test_client()
+    resp = client.post("/api/presence", json={})
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False

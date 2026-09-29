@@ -50,6 +50,22 @@ let resumeSplitTried = false; // guard: resumeLastImage switches split at most o
 const LAST_IMAGE_KEY = 'ybe_last_image'; // localStorage key: last image reached
 const VIEW_KEY = 'ybe_view';             // localStorage key: last split + filter per dataset
 const SHOW_BOXES_KEY = 'ybe_show_boxes'; // localStorage key: box overlay shown/hidden
+const CLIENT_ID_KEY = 'ybe_client_id';   // sessionStorage key: this tab's presence id
+
+// One id per tab, so the server can count concurrent clients (see /api/presence).
+// sessionStorage keeps it across reloads but not across tabs; fall back to a
+// random id when storage or crypto is unavailable.
+const CLIENT_ID = (() => {
+  let id = null;
+  try { id = sessionStorage.getItem(CLIENT_ID_KEY); } catch (e) { /* storage unavailable */ }
+  if (!id) {
+    id = (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    try { sessionStorage.setItem(CLIENT_ID_KEY, id); } catch (e) { /* ignore */ }
+  }
+  return id;
+})();
 
 // Verbose logging, enabled by `python app.py --debug` (exposed via /api/config).
 // Writes to the browser console so the whole client flow can be traced.
@@ -653,12 +669,82 @@ function renderShortcutErrors() {
   box.appendChild(banner);
 }
 
+// --------------------------------------------------------------------------- //
+// Concurrent-client warning: ping /api/presence and show a dismissible message
+// while more than one client is using the app. Informational only; it never
+// blocks editing. The server is the source of truth so different browsers and
+// machines are counted too.
+// --------------------------------------------------------------------------- //
+const PRESENCE_INTERVAL = 5000; // ms between presence pings
+let presenceTimer = null;
+let presenceDismissed = false;
+
+function renderPresenceWarning(count) {
+  const box = el('presenceWarning');
+  if (!box) return;
+  if (count <= 1) {
+    // overlap is over: hidden, and the warning may show again on a later overlap
+    presenceDismissed = false;
+    box.classList.add('hidden');
+    return;
+  }
+  if (presenceDismissed) return;
+  if (!box.dataset.rendered) {
+    box.innerHTML = '';
+    const banner = document.createElement('div');
+    banner.className = 'presence-banner';
+    const text = document.createElement('span');
+    text.textContent = 'Another user is using this app. Your changes may overwrite theirs.';
+    const close = document.createElement('button');
+    close.className = 'presence-dismiss';
+    close.textContent = '\u00d7';
+    close.title = 'Hide this warning';
+    close.addEventListener('click', () => {
+      presenceDismissed = true;
+      box.classList.add('hidden');
+    });
+    banner.append(text, close);
+    box.appendChild(banner);
+    box.dataset.rendered = '1';
+  }
+  box.classList.remove('hidden');
+}
+
+async function pingPresence(bye = false) {
+  try {
+    const res = await fetch('/api/presence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cid: CLIENT_ID, bye }),
+      keepalive: bye,
+    });
+    const data = await res.json();
+    dbg('presence', { count: data.count, bye });
+    if (!bye) renderPresenceWarning(data.count || 0);
+  } catch (e) { /* presence is best-effort */ }
+}
+
+function startPresence() {
+  pingPresence();
+  clearInterval(presenceTimer);
+  presenceTimer = setInterval(pingPresence, PRESENCE_INTERVAL);
+  // background tabs get their timers throttled; ping again as soon as we are visible
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') pingPresence();
+  });
+  window.addEventListener('pagehide', () => {
+    const body = JSON.stringify({ cid: CLIENT_ID, bye: true });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon('/api/presence', new Blob([body], { type: 'application/json' }));
+    }
+  });
+}
+
 function renderShortcuts() {
   const wrap = el('shortcutItems');
   const menu = el('shortcutsMenu');
   wrap.innerHTML = '';
   menu.innerHTML = '';
-
   APP_SHORTCUT_ORDER.forEach((name) => {
     const info = appShortcuts[name];
     if (!info) return;
@@ -2197,3 +2283,4 @@ window.addEventListener('unhandledrejection', (e) => dbgWarn('unhandled rejectio
 
 loadConfig();
 initSidePanel();
+startPresence();

@@ -8,6 +8,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Concurrent-client warning**: the UI pings the new `POST /api/presence`
+  route and, while more than one tab, browser or machine is using a running
+  instance, shows a dismissible banner ("Another user is using this app. Your
+  changes may overwrite theirs."). It is informational only — nothing is blocked
+  and all existing behavior is unchanged. A client that stops pinging for 15 s is
+  considered gone (e.g. a closed tab), and a page unload sends a best-effort
+  removal via `navigator.sendBeacon`.
 - **`{PIPE_PATH}` action/hook placeholder**: a per-run scratch file that every
   step and every action reached through `after_success` can read and write to
   pass data between each other. It is created in the system temp dir (empty) at
