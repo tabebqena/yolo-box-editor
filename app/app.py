@@ -367,26 +367,6 @@ def _restore_view(data_yaml):
 # --------------------------------------------------------------------------- #
 # actions/ (user-configurable shell actions, one YAML file per action)
 # --------------------------------------------------------------------------- #
-ACTIONS_DOC = (
-    "Each action is a YAML file in the actions/ directory: an optional "
-    "top-level `name:` (defaults to the file name), a `steps` list and an "
-    "optional `after_success` list, run in order and stopping at the first "
-    "failure. Both lists accept the same entries: an `app_*` name runs in the "
-    "UI, a `backend_*` built-in action (e.g. `backend_rescan_images`) runs "
-    "inline on the server, `action_<Name>` runs another (non-hook) action "
-    "inline, and anything else is a shell command. Shipped files live in the "
-    "app's actions/ folder and yours in <home>/actions/; yours are read last and "
-    "win on a name clash. Placeholders are substituted with shell-quoted values: "
-    "{IMAGE_PATH}, {LABEL_PATH}, {DATASET_PATH}, {DATA_YAML_PATH}, {IMAGE_INDEX}, "
-    "{APP_DIR}, {HOME_DIR}, {APP_SCRIPT_DIR}, {USER_SCRIPT_DIR}, {PIPE_PATH}. "
-    "Scripts can be reached either explicitly ({USER_SCRIPT_DIR}/helper.py for "
-    "yours, {APP_SCRIPT_DIR}/helper.py for the shipped ones) or relatively "
-    "(`scripts/helper.py`, since the run's working directory is the user "
-    "folder). Event hooks live in the "
-    "hooks/ directory and cannot be bound."
-)
-
-
 def _read_text_lines(path):
     try:
         with open(path, encoding="utf-8") as f:
@@ -507,18 +487,6 @@ def load_actions():
                 "after_success": data["after_success"],
             }
     return list(merged.values())
-
-
-HOOKS_DOC = (
-    "Each hook is a YAML file in the hooks/ directory, named `on_<event>.yaml` "
-    "(the file name picks the event). When the file name does not resolve to a "
-    "known event, the top-level `event_name:` key is used instead. A hook with "
-    "`active: false` is ignored. Hooks use the same `steps` / `after_success` "
-    "as actions and the same placeholders, but run on app events instead of a "
-    "button. Shipped files live in the app's hooks/ folder and yours in "
-    "<home>/hooks/ (read last, win on an event clash). "
-    "Available events: " + ", ".join(HOOK_EVENTS) + "."
-)
 
 
 def _hook_event(path, data):
@@ -777,17 +745,6 @@ def finish_execution(state):
         remove_pipe(state.get("pipe_path"))
 
 
-SHORTCUTS_FILE_DOC = (
-    "Each non-empty, non-comment line is  ACTION_NAME  <SHORTCUT>  label. "
-    "SHORTCUT is wrapped in angle brackets: a key with optional +joined "
-    "modifiers (Ctrl, Alt, Shift, Meta). The label after the '>' is free text. "
-    "ACTION_NAME must be an app action (app_*) or an action from the actions/ "
-    "folder (hooks cannot be bound). Entries are merged from the shipped "
-    "app/shortcuts.txt then the user's <home>/shortcuts.txt (which wins on a "
-    "name clash)."
-)
-
-
 def _line_comment(line):
     """Whole-line comments only; labels may contain '#'."""
     return line.startswith("#")
@@ -852,18 +809,6 @@ def split_shortcuts(shortcuts):
 # --------------------------------------------------------------------------- #
 # filters/ (one Python script per filter; narrows the loaded image list)
 # --------------------------------------------------------------------------- #
-FILTERS_DOC = (
-    "Each filter is a Python script in the filters/ directory (name = file name "
-    "without .py). Filters are chainable: the app runs each one as "
-    "`python <script> <data.yaml> <split> <input_pipe> <output_pipe>`, where "
-    "<split> is train/val/test or an empty string for all splits. The input pipe "
-    "holds one absolute image path per line (the active split's images); the "
-    "script writes the paths it keeps to the output pipe, one per line, and that "
-    "becomes the next filter's input. Ships in app/filters/, yours live in "
-    "<home>/filters/ (read last, win on a name clash)."
-)
-
-
 def _filter_files(dirpath):
     """Sorted `.py` paths in `dirpath`."""
     if not os.path.isdir(dirpath):
