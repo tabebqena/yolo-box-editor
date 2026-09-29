@@ -8,6 +8,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`{PIPE_PATH}` action/hook placeholder**: a per-run scratch file that every
+  step and every action reached through `after_success` can read and write to
+  pass data between each other. It is created in the system temp dir (empty) at
+  the start of a run and deleted by the app once the whole run — steps plus the
+  `after_success` chain — has finished, success or failure. Pass the new
+  `--keep-pipe` flag to keep the file after each run (useful for debugging).
+  New `POST /api/actions/pipe/cleanup` route; the run's path is reported by
+  `/api/actions/run` as `pipe_path` and only pipe-dir paths are reused/deleted.
 - **Resume the previous session on start**: running `python app.py` without
   `--data` reopens the dataset last used (the newest entry of
   `.recent_data_yamls.json` that still exists); pass the new `--no-resume` flag

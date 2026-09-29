@@ -34,6 +34,7 @@ DEFAULT_STATE = {
     "classes": [],
     "readonly": False,
     "debug": False,
+    "keep_pipe": False,
 }
 
 
@@ -52,6 +53,7 @@ def clean_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "FILTERS_DIR", str(tmp_path / "filters"))
     monkeypatch.setattr(ybe, "SHORTCUTS_FILE", str(tmp_path / "shortcuts.txt"))
     monkeypatch.setattr(ybe, "SHORTCUTS_ADD_FILE", str(tmp_path / "shortcuts.a.txt"))
+    monkeypatch.setattr(ybe, "PIPE_DIR", str(tmp_path / "pipes"))
     ybe.STATE.clear()
     ybe.STATE.update(DEFAULT_STATE)
     return tmp_path
@@ -991,6 +993,89 @@ def test_api_action_run_sets_cwd_to_app_dir(clean_state, tmp_path):
     ).get_json()
     assert payload["ok"] is True
     assert ybe.BASE_DIR in payload["stdout"]
+
+
+def test_api_action_run_pipe_path_is_a_file(clean_state, tmp_path):
+    write_action(
+        tmp_path,
+        "Pipe.yaml",
+        "steps:\n  - echo hello > {PIPE_PATH}\n  - cat {PIPE_PATH}\n",
+    )
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    payload = client.post("/api/actions/run", json={"action": "Pipe", "idx": 0}).get_json()
+    assert payload["ok"] is True
+    assert "{PIPE_PATH}" not in payload["command"]
+    pipe = payload["pipe_path"]
+    assert ybe.is_pipe_path(pipe)
+    assert Path(pipe).is_file()
+    assert "hello" in payload["stdout"]
+    # the server keeps the file: the client deletes it when the run ends
+    assert Path(pipe).is_file()
+
+
+def test_api_action_run_reuses_forwarded_pipe_path(clean_state, tmp_path):
+    write_action(tmp_path, "Write.yaml", "steps:\n  - echo one > {PIPE_PATH}\n")
+    write_action(tmp_path, "Read.yaml", "steps:\n  - cat {PIPE_PATH}\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    first = client.post("/api/actions/run", json={"action": "Write", "idx": 0}).get_json()
+    pipe = first["pipe_path"]
+    second = client.post(
+        "/api/actions/run", json={"action": "Read", "idx": 0, "pipe_path": pipe}
+    ).get_json()
+    assert second["ok"] is True
+    assert second["pipe_path"] == pipe
+    assert "one" in second["stdout"]
+
+
+def test_api_action_run_ignores_foreign_pipe_path(clean_state, tmp_path):
+    write_action(tmp_path, "Write.yaml", "steps:\n  - echo x > {PIPE_PATH}\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    payload = client.post(
+        "/api/actions/run",
+        json={"action": "Write", "idx": 0, "pipe_path": "/etc/passwd"},
+    ).get_json()
+    assert payload["ok"] is True
+    assert payload["pipe_path"] != "/etc/passwd"
+    assert ybe.is_pipe_path(payload["pipe_path"])
+
+
+def test_pipe_cleanup_removes_file(clean_state, tmp_path):
+    write_action(tmp_path, "Write.yaml", "steps:\n  - echo x > {PIPE_PATH}\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    pipe = client.post(
+        "/api/actions/run", json={"action": "Write", "idx": 0}
+    ).get_json()["pipe_path"]
+    assert Path(pipe).is_file()
+    resp = client.post("/api/actions/pipe/cleanup", json={"pipe_path": pipe})
+    assert resp.get_json() == {"ok": True, "removed": True}
+    assert not Path(pipe).exists()
+
+
+def test_pipe_cleanup_keep_pipe_keeps_file(clean_state, tmp_path):
+    ybe.STATE["keep_pipe"] = True
+    write_action(tmp_path, "Write.yaml", "steps:\n  - echo x > {PIPE_PATH}\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    pipe = client.post(
+        "/api/actions/run", json={"action": "Write", "idx": 0}
+    ).get_json()["pipe_path"]
+    resp = client.post("/api/actions/pipe/cleanup", json={"pipe_path": pipe})
+    assert resp.get_json() == {"ok": True, "kept": True}
+    assert Path(pipe).is_file()
+
+
+def test_pipe_cleanup_ignores_foreign_path(clean_state, tmp_path):
+    victim = tmp_path / "victim.txt"
+    victim.write_text("keep me", encoding="utf-8")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    resp = client.post("/api/actions/pipe/cleanup", json={"pipe_path": str(victim)})
+    assert resp.get_json() == {"ok": True, "removed": False}
+    assert victim.read_text(encoding="utf-8") == "keep me"
 
 
 # --------------------------------------------------------------------------- #

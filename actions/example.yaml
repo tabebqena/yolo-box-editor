@@ -29,6 +29,9 @@
 #   {APP_DIR}        the folder holding app.py, so `{APP_DIR}/scripts/x.py`
 #                    resolves from anywhere (steps also run with the working
 #                    directory set to that folder)
+#   {PIPE_PATH}      a per-run scratch file shared by every step and by the
+#                    actions in `after_success`, so they can pass data on; it is
+#                    deleted when the run ends (use --keep-pipe to keep it)
 #
 # App actions usable in after_success (see README for the full list):
 #   app_refresh_images_list   re-scan the image folders (stay on same index)

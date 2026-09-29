@@ -5,7 +5,7 @@
 A small Flask-served web app for labelling images in
 [YOLO](https://docs.ultralytics.com/datasets/detect/) format.
 
-Version **0.6.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
+Version **0.8.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
 non-commercial-use condition, no warranty on usage) · new to labelling?
 read [TUTORIAL.md](TUTORIAL.md) first.
 
@@ -64,8 +64,8 @@ read [TUTORIAL.md](TUTORIAL.md) first.
 - **User actions**: custom commands defined in the `actions/` folder, one YAML
   file per action, run on the current image (with a confirmation) and show
   stdout / stderr / exit code in a popup. `{IMAGE_PATH}`, `{LABEL_PATH}`,
-  `{DATASET_PATH}`, `{DATA_YAML_PATH}`, `{IMAGE_INDEX}` and `{APP_DIR}` are
-  substituted and shell-quoted — see
+  `{DATASET_PATH}`, `{DATA_YAML_PATH}`, `{IMAGE_INDEX}`, `{APP_DIR}` and
+  `{PIPE_PATH}` are substituted and shell-quoted — see
   [User actions](#user-actions). App updates overwrite the shipped files; keep
   personal actions in `actions/*.a.yaml` (see below), which are read after the
   others and win on name clashes.
@@ -143,6 +143,7 @@ python app.py --data /path/to/data.yaml
 python app.py --data /path/to/data.yaml --readonly   # viewer only
 python app.py --data /path/to/data.yaml --debug      # verbose browser console
 python app.py --no-resume                            # settings screen, no auto-open
+python app.py --data /path/to/data.yaml --keep-pipe  # keep each run's {PIPE_PATH} file
 ```
 
 Open <http://127.0.0.1:5000>. You can also leave out `--data` and paste the
@@ -226,6 +227,14 @@ Placeholders (leave them unquoted):
 | `{DATA_YAML_PATH}`| path of the loaded data.yaml                                 |
 | `{IMAGE_INDEX}`   | 1-based position of the current image (matches the counter)  |
 | `{APP_DIR}`       | folder holding `app.py` (use it to reach `{APP_DIR}/scripts/…`) |
+| `{PIPE_PATH}`     | path of the run's scratch file (see below; may be empty if the temp file could not be created) |
+
+`{PIPE_PATH}` is a per-run scratch file: it starts empty and every step of the
+run — plus every action reached through `after_success` — shares the same file,
+so steps can hand data to each other (e.g. `printf '%s\n' {IMAGE_PATH} > {PIPE_PATH}`,
+then a later step or chained action reads it back). The app deletes it when the
+whole run (steps + `after_success` chain) has finished, whether it succeeded or
+failed. Pass `--keep-pipe` to keep the file instead, e.g. for debugging.
 
 Files ending in `.a.yaml` are *yours*: they are read after the shipped files,
 win on a name clash (matched by action name, so `name:` can retarget an

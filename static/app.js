@@ -1379,12 +1379,15 @@ function setHookStatus(msg) {
 }
 
 // Run one user action (or event hook) on the current image. `confirm: false`
-// skips the confirmation prompt — hooks run automatically. Returns true when
-// the action succeeded (or there was nothing to run), false on failure.
+// skips the confirmation prompt — hooks run automatically. `pipePath` is the
+// {PIPE_PATH} file of an ongoing run, forwarded to after_success actions so
+// they share the same scratch file. Returns true when the action succeeded (or
+// there was nothing to run), false on failure.
 async function runAction(name, opts = {}) {
   const ask = opts.confirm !== false;
   const depth = opts.depth || 0;
   const isHook = !!opts.hook;
+  const pipePath = opts.pipePath || null;
   if (!name || currentIndex < 0 || !images[currentIndex]) {
     dbg('runAction skipped', { name, currentIndex });
     return false;
@@ -1393,13 +1396,17 @@ async function runAction(name, opts = {}) {
   if (ask && !confirm(`Run action "${name}" on ${target}?`)) return false;
   setActionButtonsDisabled(true);
   dbg(`run ${isHook ? 'hook' : 'action'} "${name}"`, { target, index: currentIndex, depth });
+  let activePipe = pipePath;
   try {
+    const body = { action: name, idx: currentIndex };
+    if (pipePath) body.pipe_path = pipePath;
     const res = await fetch('/api/actions/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: name, idx: currentIndex }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
+    activePipe = data.pipe_path || pipePath;
     dbg(`"${name}" response`, data);
     if (!data.ok) {
       // failures always use the modal
@@ -1415,13 +1422,29 @@ async function runAction(name, opts = {}) {
     // YAML actions may return an after_success chain to integrate with the app
     // (app_refresh_* or another action). Run it one after another; on the first
     // error report it, show a message and stop the chain.
-    return await runAfterSuccessChain(data.after_success || [], depth, isHook);
+    return await runAfterSuccessChain(data.after_success || [], depth, isHook, activePipe);
   } catch (err) {
     dbgWarn(`"${name}" request error`, err);
     showActionResult({ ok: false, action: name, error: 'Error: ' + err.message });
     return false;
   } finally {
     setActionButtonsDisabled(readonly);
+    // only the top-level run owns the {PIPE_PATH} file: delete it once the whole
+    // after_success chain has finished (the server honours --keep-pipe)
+    if (depth === 0 && activePipe) await cleanupPipe(activePipe);
+  }
+}
+
+// Ask the server to drop a run's {PIPE_PATH} file (no-op with --keep-pipe).
+async function cleanupPipe(pipePath) {
+  try {
+    await fetch('/api/actions/pipe/cleanup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pipe_path: pipePath }),
+    });
+  } catch (err) {
+    dbgWarn('pipe cleanup failed', err);
   }
 }
 
@@ -1441,11 +1464,11 @@ async function runHook(name) {
 }
 
 // Run an after_success chain: app actions or other (non-hook) actions.
-async function runAfterSuccessChain(chain, depth, isHook) {
+async function runAfterSuccessChain(chain, depth, isHook, pipePath) {
   dbg('after_success chain', chain);
   for (const name of chain) {
     try {
-      await runAfterSuccess(name, depth, isHook);
+      await runAfterSuccess(name, depth, isHook, pipePath);
     } catch (err) {
       const msg = `after_success "${name}" failed: ${err.message}`;
       console.error(msg, err);
@@ -1456,7 +1479,7 @@ async function runAfterSuccessChain(chain, depth, isHook) {
   return true;
 }
 
-async function runAfterSuccess(name, depth, isHook) {
+async function runAfterSuccess(name, depth, isHook, pipePath) {
   // hooks are event-driven only: they cannot be triggered from after_success
   if (hooksByName.has(name)) {
     throw new Error(`"${name}" is an event hook; hooks cannot run from after_success`);
@@ -1470,7 +1493,12 @@ async function runAfterSuccess(name, depth, isHook) {
       throw new Error(`action cascade exceeded ${MAX_CASCADE_DEPTH} levels`);
     }
     dbg(`after_success -> action ${name} (depth ${depth + 1})`);
-    const ok = await runAction(name, { confirm: false, depth: depth + 1, hook: isHook });
+    const ok = await runAction(name, {
+      confirm: false,
+      depth: depth + 1,
+      hook: isHook,
+      pipePath,
+    });
     if (!ok) throw new Error(`action "${name}" failed`);
     return true;
   }

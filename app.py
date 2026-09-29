@@ -28,6 +28,7 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
@@ -41,6 +42,8 @@ HOOKS_DIR = os.path.join(BASE_DIR, "hooks")  # one YAML file per event hook
 FILTERS_DIR = os.path.join(BASE_DIR, "filters")  # one Python script per filter
 SHORTCUTS_FILE = os.path.join(BASE_DIR, "shortcuts.txt")
 SHORTCUTS_ADD_FILE = os.path.join(BASE_DIR, "shortcuts.a.txt")  # user overrides, never shipped
+# Per-run {PIPE_PATH} files live in the system temp dir (never in the repo).
+PIPE_DIR = os.path.join(tempfile.gettempdir(), "yolo-box-editor-pipes")
 
 # Built-in app actions; may be rebound in shortcuts.txt but cannot be renamed.
 APP_ACTIONS = {
@@ -106,6 +109,7 @@ STATE = {
     "classes": [],  # resolved class names from data.yaml `names`
     "readonly": False,
     "debug": False,  # --debug: the UI logs verbose messages to the browser console
+    "keep_pipe": False,  # --keep-pipe: do not delete the {PIPE_PATH} file after a run
 }
 
 
@@ -244,8 +248,8 @@ ACTIONS_DOC = (
     "ending in `.a.yaml` are the user's own (never shipped) and win on a name "
     "clash. Placeholders are substituted with shell-quoted values: "
     "{IMAGE_PATH}, {LABEL_PATH}, {DATASET_PATH}, {DATA_YAML_PATH}, "
-    "{IMAGE_INDEX}, {APP_DIR}. Event hooks live in the hooks/ directory and "
-    "cannot be bound or used in after_success."
+    "{IMAGE_INDEX}, {APP_DIR}, {PIPE_PATH}. Event hooks live in the hooks/ "
+    "directory and cannot be bound or used in after_success."
 )
 
 
@@ -449,6 +453,48 @@ def build_command(template, values):
     for key, val in values.items():
         cmd = cmd.replace("{" + key + "}", shlex.quote(val))
     return cmd
+
+
+def create_pipe():
+    """Create an empty per-run pipe file; return its path (None when it fails).
+
+    The file backs the `{PIPE_PATH}` placeholder: every step of a run (and the
+    actions in its `after_success` chain) can read/write it to pass data on.
+    """
+    try:
+        os.makedirs(PIPE_DIR, exist_ok=True)
+        fd, path = tempfile.mkstemp(prefix="pipe_", suffix=".txt", dir=PIPE_DIR)
+    except OSError:
+        return None
+    os.close(fd)
+    return path
+
+
+def is_pipe_path(path):
+    """True when `path` is a pipe file we are allowed to reuse or delete.
+
+    Only paths inside PIPE_DIR qualify, so a client cannot use the cleanup route
+    to delete arbitrary files.
+    """
+    if not path:
+        return False
+    base = os.path.abspath(PIPE_DIR)
+    target = os.path.abspath(path)
+    try:
+        return os.path.commonpath([base, target]) == base
+    except ValueError:
+        return False
+
+
+def remove_pipe(path):
+    """Delete a pipe file; ignore a missing/mismatched one."""
+    if not is_pipe_path(path):
+        return False
+    try:
+        os.remove(path)
+        return True
+    except OSError:
+        return False
 
 
 SHORTCUTS_FILE_DOC = (
@@ -1091,6 +1137,12 @@ def api_action_run():
     if action is None:
         return jsonify({"ok": False, "error": f"unknown action: {name}"}), 400
 
+    # One pipe file per top-level run: reuse the one forwarded by the client when
+    # this request is an after_success step of an ongoing run, else create it.
+    pipe_path = (data.get("pipe_path") or "").strip()
+    if not is_pipe_path(pipe_path):
+        pipe_path = create_pipe()
+
     values = {
         "IMAGE_PATH": os.path.join(split["images_dir"], entry["name"]),
         "LABEL_PATH": label_path(entry),
@@ -1101,6 +1153,8 @@ def api_action_run():
         # the folder holding app.py, so steps can reach scripts/ and other files
         # the same way regardless of the directory the server was started from
         "APP_DIR": BASE_DIR,
+        # scratch file shared by every step and after_success action of this run
+        "PIPE_PATH": pipe_path or "",
     }
     steps = action.get("steps") if isinstance(action.get("steps"), list) else []
     commands = [build_command(s, values) for s in steps]
@@ -1118,9 +1172,21 @@ def api_action_run():
                 cwd=BASE_DIR,
             )
         except subprocess.TimeoutExpired:
-            return jsonify({"ok": False, "error": "command timed out"}), 500
+            return (
+                jsonify({"ok": False, "error": "command timed out", "pipe_path": pipe_path}),
+                500,
+            )
         except OSError as exc:
-            return jsonify({"ok": False, "error": f"could not run command: {exc}"}), 500
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "error": f"could not run command: {exc}",
+                        "pipe_path": pipe_path,
+                    }
+                ),
+                500,
+            )
         if proc.stdout.strip():
             stdout_parts.append(f"$ {command}\n{proc.stdout.rstrip()}")
         if proc.stderr.strip():
@@ -1136,11 +1202,27 @@ def api_action_run():
         "exit_code": exit_code,
         "stdout": "\n".join(stdout_parts),
         "stderr": "\n".join(stderr_parts),
+        "pipe_path": pipe_path,
     }
     if ok:
         if action.get("after_success"):
             payload["after_success"] = action["after_success"]
     return jsonify(payload)
+
+
+@app.route("/api/actions/pipe/cleanup", methods=["POST"])
+def api_pipe_cleanup():
+    """Delete the run's `{PIPE_PATH}` file once its execution has ended.
+
+    The client calls this for the top-level action/hook only, after its whole
+    `after_success` chain has run. `--keep-pipe` makes this a no-op so the file
+    can be inspected. A path outside the pipe dir is ignored.
+    """
+    data = request.get_json(silent=True) or {}
+    path = (data.get("pipe_path") or "").strip()
+    if STATE["keep_pipe"]:
+        return jsonify({"ok": True, "kept": True})
+    return jsonify({"ok": True, "removed": remove_pipe(path)})
 
 
 @app.route("/api/image/<int:idx>")
@@ -1272,10 +1354,16 @@ def main():
         action="store_true",
         help="start on the settings screen instead of reopening the last dataset",
     )
+    parser.add_argument(
+        "--keep-pipe",
+        action="store_true",
+        help="keep the {PIPE_PATH} file after each action/hook run instead of deleting it",
+    )
     args = parser.parse_args()
 
     STATE["readonly"] = args.readonly
     STATE["debug"] = args.debug
+    STATE["keep_pipe"] = args.keep_pipe
 
     if args.data:
         _load_dataset(args.data)
