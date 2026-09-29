@@ -342,17 +342,6 @@ button.action .btn-shortcut {
   font-size: 10px;
 }
 
-.boxcount {
-  font-size: 12px;
-  color: var(--muted);
-  background: #1a1b21;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 2px 10px;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
 .tagbar {
   display: flex;
   align-items: center;

@@ -26,6 +26,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
     a **single bottom row**; the filename label was removed.
   - The add-tag control is now a small `+` button that reveals the input on
     demand, and a `…` button appears when the tag badges overflow the row.
+  - The redundant box-count badge was removed from the bottom bar (the count
+    stays in the Boxes panel header).
 
 ### Added
 

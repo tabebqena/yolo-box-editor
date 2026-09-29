@@ -267,8 +267,6 @@ function draw() {
     ctx.drawImage(imageEl, 0, 0);
   }
 
-  updateBoxCount();
-
   // a coordinate input highlight only survives while that input keeps focus
   const f = document.activeElement;
   if (editingPoint && (!f || f.dataset.name !== editingPoint.name)) editingPoint = null;
@@ -614,12 +612,6 @@ function openSettingsModal() {
 
 function closeSettingsModal() {
   el('settingsModal').classList.add('hidden');
-}
-
-function updateBoxCount() {
-  el('boxCount').textContent = boxes.length
-    ? `${boxes.length} box${boxes.length === 1 ? '' : 'es'}`
-    : '0 boxes';
 }
 
 function populateSplitSelect() {
