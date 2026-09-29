@@ -87,10 +87,11 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   can be bound; invalid names are rejected with a dismissible notification. Your
   `shortcuts.txt` lives in the user folder and is read after the shipped one.
 - **Tags** (opt-in via the Settings `Tags` switch): the tag controls in the bottom bar
-  shows the dataset's tags as clickable badges — click to toggle a tag on the
-  current image, `+ Add tag` appends a brand-new name to `tags.yaml`, and
-  `Alt+1..9` toggles the matching tag by number. Active badges look different
-  from inactive ones. See [Tags](#tags) below.
+  show the dataset's tags as clickable badges — click to toggle a tag on the
+  current image, the small `+` button reveals an input whose new name is
+  appended to `tags.yaml`, and `Alt+1..9` toggles the matching tag by number.
+  Active badges look different from inactive ones, and a `…` button appears when
+  the badges are too wide for the row. See [Tags](#tags) below.
 
 ## Keyboard shortcuts & app actions
 
@@ -456,10 +457,13 @@ opt-in: flip the **Tags** switch in **Settings** to show the tag controls in the
   is not; clicking toggles it and writes the image's tag file immediately. Tags
   that exist only on an image (not in `tags.yaml`) are shown as active badges
   too.
-- **Add a tag**: type a name in the box and click `+ Add tag` (or press
-  `Enter`). If the name is not yet in `tags.yaml` it is appended there first,
-  then attached to the image; existing names are attached without duplication.
-  Removing a tag from an image never deletes it from `tags.yaml`.
+- **Add a tag**: click the small `+` button to reveal the input, type a name and
+  press `Enter` (or click the `✓`). If the name is not yet in `tags.yaml` it is
+  appended there first, then attached to the image; existing names are attached
+  without duplication. Removing a tag from an image never deletes it from
+  `tags.yaml`.
+- **Overflow**: when the badges are wider than the row, a `…` button appears;
+  clicking it wraps the tags onto more lines (click again to collapse).
 - **Keyboard**: `Alt+1` … `Alt+9` toggle the tag at that 1-based position in
   `tags.yaml`. Using the shortcut also turns tagging on so the bar is visible.
 - Tag writes are blocked in read-only mode.

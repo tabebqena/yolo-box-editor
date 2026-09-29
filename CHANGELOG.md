@@ -24,6 +24,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   - Status toasts now appear at the **bottom center**.
   - The tag controls and the image nav / Undo / Redo / Save controls now share
     a **single bottom row**; the filename label was removed.
+  - The add-tag control is now a small `+` button that reveals the input on
+    demand, and a `…` button appears when the tag badges overflow the row.
 
 ### Added
 

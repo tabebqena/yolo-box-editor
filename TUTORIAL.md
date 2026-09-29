@@ -191,11 +191,14 @@ mark, say, "night", "indoor" or "hard". They are separate from YOLO classes.
 2. The dataset's tags appear as **badges**. Green = the tag is on this image;
    grey = it is not. **Click a badge** to toggle it — the image's tag file is
    saved straight away.
-3. To make a new tag, type its name in the box and click **+ Add tag** (or press
-   `Enter`). New names are also written to `tags.yaml`, the dataset's list of
-   available tags, so they reappear for other images.
+3. To make a new tag, click the small **+** button to reveal the input, type its
+   name and press `Enter` (or click **✓**). New names are also written to
+   `tags.yaml`, the dataset's list of available tags, so they reappear for other
+   images.
 4. **`Alt+1` … `Alt+9`** toggles the 1st, 2nd, … tag from `tags.yaml` — the
    numbers shown on the badges. This also switches tagging on for you.
+5. If the badges are wider than the row, a **…** button appears — click it to
+   wrap them onto more lines, and click again to collapse.
 
 Tags are stored as one name per line in a `tags/` folder beside `labels/`
 (`tags/train/photo_01.txt` for `images/train/photo_01.jpg`). Removing a tag from

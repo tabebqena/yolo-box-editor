@@ -298,7 +298,7 @@ select, input {
   flex: 1 1 auto;
   min-width: 0;
   flex-wrap: nowrap;
-  overflow-x: auto;
+  overflow: hidden;
 }
 .imagebar .tagbar-add { flex: 0 0 auto; }
 
@@ -411,10 +411,24 @@ button.action .btn-shortcut {
 .tagbar-add {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex: 0 0 auto;
 }
 .tagbar .tag-input { width: 180px; padding: 4px 8px; }
+.tag-add-btn {
+  padding: 3px 8px;
+  font-size: 13px;
+  line-height: 1.1;
+  min-width: 0;
+}
+.tag-expand {
+  flex: 0 0 auto;
+  padding: 2px 9px;
+  font-size: 13px;
+  line-height: 1.1;
+}
+.imagebar .tagbar.expanded { flex-wrap: wrap; overflow: visible; }
+.imagebar .tagbar.expanded .tag-badges { flex-wrap: wrap; overflow-x: visible; }
 
 .kbd-item {
   display: inline-flex;

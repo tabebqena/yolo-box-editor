@@ -1257,11 +1257,30 @@ function tagBadge(name, active, num) {
   return b;
 }
 
+// Show the (…) button when the tag badges are wider than the row. Expanding
+// lets them wrap onto more lines (the bottom row grows on demand).
+function applyTagOverflow() {
+  const bar = el('tagBar');
+  const badges = el('tagBadges');
+  const btn = el('tagExpandBtn');
+  if (!bar || !badges || !btn || bar.classList.contains('hidden')) return;
+  if (bar.classList.contains('expanded')) {
+    btn.classList.remove('hidden');
+    return;
+  }
+  const overflow = badges.scrollWidth > badges.clientWidth + 1;
+  btn.classList.toggle('hidden', !overflow);
+}
+
 function renderTagBar() {
   const bar = el('tagBar');
   const show = taggingEnabled && datasetLoaded && currentIndex >= 0;
   bar.classList.toggle('hidden', !show);
-  if (!show) return;
+  if (!show) {
+    bar.classList.remove('expanded');
+    el('tagExpandBtn').classList.add('hidden');
+    return;
+  }
 
   const wrap = el('tagBadges');
   wrap.innerHTML = '';
@@ -1279,6 +1298,7 @@ function renderTagBar() {
   });
 
   el('tagInput').disabled = readonly;
+  el('tagSubmitBtn').disabled = readonly;
   el('addTagBtn').disabled = readonly;
   el('tagHint').classList.toggle('hidden', availableTags.length === 0);
 
@@ -1289,6 +1309,9 @@ function renderTagBar() {
     opt.value = t;
     dl.appendChild(opt);
   });
+
+  // measure after the badges are laid out
+  requestAnimationFrame(applyTagOverflow);
 }
 
 async function saveImageTags() {
@@ -1342,6 +1365,18 @@ async function removeTag(name) {
   imageTags = imageTags.filter((t) => t !== name);
   await saveImageTags();
   setTagStatus(`Tag "${name}" removed`);
+}
+
+function openTagInput() {
+  if (readonly) return;
+  el('tagInput').classList.remove('hidden');
+  el('tagSubmitBtn').classList.remove('hidden');
+  el('tagInput').focus();
+}
+
+function closeTagInput() {
+  el('tagInput').classList.add('hidden');
+  el('tagSubmitBtn').classList.add('hidden');
 }
 
 function addTagFromInput() {
@@ -2211,13 +2246,31 @@ el('autoSaveSw').addEventListener('change', (e) => {
   else clearTimeout(autoSaveTimer);
 });
 
-el('addTagBtn').addEventListener('click', addTagFromInput);
+el('addTagBtn').addEventListener('click', () => {
+  if (el('tagInput').classList.contains('hidden')) openTagInput();
+  else closeTagInput();
+});
+el('tagSubmitBtn').addEventListener('click', () => {
+  addTagFromInput();
+  closeTagInput();
+});
+el('tagExpandBtn').addEventListener('click', () => {
+  const bar = el('tagBar');
+  const expanded = bar.classList.toggle('expanded');
+  el('tagExpandBtn').title = expanded ? 'Show fewer tags' : 'Show all tags';
+  applyTagOverflow();
+});
 el('tagInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !readonly) {
     e.preventDefault();
     addTagFromInput();
+    closeTagInput();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    closeTagInput();
   }
 });
+window.addEventListener('resize', applyTagOverflow);
 
 const classSelectEl = el('classSelect');
 if (classSelectEl) {

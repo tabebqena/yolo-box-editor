@@ -18,11 +18,13 @@
           <span class="tagbar-title">Tags</span>
           <span id="tagHint" class="tagbar-hint hidden">Alt+1..9 toggles</span>
           <div id="tagBadges" class="tag-badges"></div>
+          <button id="tagExpandBtn" class="tag-expand hidden" title="Show all tags">&#8230;</button>
           <div class="tagbar-add">
-            <input id="tagInput" class="tag-input" type="text" placeholder="add a tag…"
+            <input id="tagInput" class="tag-input hidden" type="text" placeholder="add a tag…"
                    list="tagSuggestions" maxlength="64">
             <datalist id="tagSuggestions"></datalist>
-            <button id="addTagBtn" type="button" title="Add tag to the image (new names are written to tags.yaml)">+ Add tag</button>
+            <button id="tagSubmitBtn" type="button" class="tag-add-btn hidden" title="Add the tag (Enter)">&#10003;</button>
+            <button id="addTagBtn" type="button" class="tag-add-btn" title="Add a tag">+</button>
           </div>
         </div>
         <div class="imagebar-nav">
