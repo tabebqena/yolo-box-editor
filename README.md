@@ -5,7 +5,7 @@
 A small Flask-served web app for labelling images in
 [YOLO](https://docs.ultralytics.com/datasets/detect/) format.
 
-Version **0.10.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
+Version **1.1.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
 non-commercial-use condition, no warranty on usage) · new to labelling?
 read [TUTORIAL.md](TUTORIAL.md) first.
 
@@ -145,10 +145,27 @@ with `+`.
 
 ## Run
 
+On Linux, `install.sh` sets up an isolated virtual environment and installs the
+requirements:
+
 ```bash
 git clone git@github.com:tabebqena/yolo-box-editor.git
 cd yolo-box-editor
-pip install -r requirements.txt
+bash install.sh              # creates ./.venv and installs requirements.txt
+bash install.sh --link       # also adds a `yolo-box-editor` command to ~/.local/bin
+```
+
+Then run the app:
+
+```bash
+.venv/bin/python app.py --data /path/to/data.yaml   # after install.sh
+yolo-box-editor --data /path/to/data.yaml           # if installed with --link
+```
+
+If you prefer to manage Python yourself, `pip install -r requirements.txt`
+and run `python app.py`:
+
+```bash
 python app.py --data /path/to/data.yaml
 python app.py --data /path/to/data.yaml --readonly   # viewer only
 python app.py --data /path/to/data.yaml --debug      # verbose browser console
