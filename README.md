@@ -16,7 +16,7 @@ read [TUTORIAL.md](TUTORIAL.md) first.
 - **Recent list**: the last 10 opened `data.yaml` paths are remembered in
   `.recent_data_yamls.json` in your user folder; reopen one from the *Recent…*
   dropdown or type a new path. Starting with a plain run (no `--data`) reopens
-  the last dataset automatically — pass `--no-resume` to get the settings screen
+  the last dataset automatically — pass `--no-resume` to get the Settings dialog
   instead.
 - **Browse** across `train` / `val` / `test` with Prev/Next buttons or the
   `→` / `←` arrow keys; the current image is shown as `<split>/<filename>`.
@@ -41,7 +41,7 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   dragging (moving / resizing) but can still be clicked, selected and deleted,
   which lets you protect it while drawing inside it. Fixing is transient — it
   is never saved and is cleared when the image changes.
-- **Boxes panel** (right edge, `Boxes` toggle): one row per box, each with its
+- **Boxes panel** (left column, `Panel` toggle): one row per box, each with its
   class dropdown, `cx cy w h` numeric inputs and a `×` delete button. Controls
   are disabled until the row — or its box on the canvas — is *selected*;
   selecting another box or pressing `Esc` disables them again. Typing clamps
@@ -208,7 +208,7 @@ and run `python app/app.py`:
 python app/app.py --data /path/to/data.yaml
 python app/app.py --data /path/to/data.yaml --readonly   # viewer only
 python app/app.py --data /path/to/data.yaml --debug      # verbose browser console
-python app/app.py --no-resume                            # settings screen, no auto-open
+python app/app.py --no-resume                            # Settings dialog, no auto-open
 python app/app.py --data /path/to/data.yaml --keep-pipe  # keep each run's {PIPE_PATH} file
 python app/app.py --data /path/to/data.yaml --keep-filter-pipes  # keep filter-chain pipe files
 python app/app.py --data /path/to/data.yaml --home ./my-user-files  # custom user folder
@@ -261,7 +261,7 @@ Coordinates are normalized to `0..1` relative to the image dimensions.
 ## User actions
 
 Each action is one YAML file in your `actions/` folder (inside your user folder),
-shown as a button in the right-hand panel. The action's name is its top-level `name:` key,
+shown as a button in the left column. The action's name is its top-level `name:` key,
 or the file name without extension when omitted. A shipped `actions/example.yaml`
 template is ignored until you give it steps.
 
@@ -467,9 +467,9 @@ opt-in: flip the **Tags** switch in **Settings** to show a tag bar below the ima
 ## Filters
 
 A **filter** narrows the loaded image list to the images a script returns.
-**Filters are chainable**: the `Filters` button in the right-hand panel (below
-`Split`) appears once a `data.yaml` is loaded and opens a modal with a stack of
-selects (up to 8).
+**Filters are chainable**: the applied filter names show in the left column
+(below `Split`) with a `…` button that opens a modal with a stack of selects (up
+to 8), once a `data.yaml` is loaded.
 Pick a filter in each select and they run **top to bottom** — each one receives
 the previous one's result, applies its own logic, and passes its result on. The
 last filter's output is exactly what the app shows (count, Prev/Next, the counter

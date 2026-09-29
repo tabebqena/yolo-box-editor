@@ -36,6 +36,16 @@ notifications.
 6. Docs/tests/version: README, TUTORIAL, CHANGELOG, `VERSION` 2.2.0; update
    `tests/test_app.py::test_index_serves_page`.
 
+## Follow-up (2026-09-30): collapse everything into a left column
+- Remove the full-width top bar; all controls live in a single left column.
+- Order: app label + settings + bell + `Panel` button (always-visible header
+  row) / dataset dirname / sep / split / sep / applied filter names in one line
+  + `…` (opens the filter modal) / sep / actions (first few + `…` expander) /
+  sep / boxes.
+- `#sidePanelToggle` renamed to `Panel`; collapses the body only, keeps header.
+- Column is resizable from its right edge.
+- Toasts moved to the middle-bottom of the screen.
+
 ## Status
 - [x] Implemented (2026-09-30)
 - Deferred: none

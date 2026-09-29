@@ -7,17 +7,66 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">YOLO Box Editor</div>
+  <div class="app">
+    <aside id="sidebar" class="sidebar">
+      <div id="sidebarResizer" class="sidebar-resizer" title="Drag to resize the panel"></div>
 
-    <div class="topbar-end">
-      <button id="notifBtn" class="icon-btn" title="Notifications" aria-label="Notifications"
-              aria-haspopup="true" aria-expanded="false">
-        <span aria-hidden="true">&#128276;</span>
-        <span id="notifBadge" class="notif-badge hidden">0</span>
-      </button>
-      <button id="settingsBtn" title="Settings: view options, dataset, shortcuts">&#9881; Settings</button>
-      <button id="sidePanelToggle" class="hidden" title="Show / hide the boxes panel">Boxes</button>
+      <div class="sidebar-head">
+        <div class="brand">YOLO Box Editor</div>
+        <div class="sidebar-head-actions">
+          <button id="settingsBtn" class="icon-btn" title="Settings: view options, dataset, shortcuts">&#9881;</button>
+          <button id="notifBtn" class="icon-btn" title="Notifications" aria-label="Notifications"
+                  aria-haspopup="true" aria-expanded="false">
+            <span aria-hidden="true">&#128276;</span>
+            <span id="notifBadge" class="notif-badge hidden">0</span>
+          </button>
+          <button id="sidePanelToggle" title="Hide / show the side panel">Panel</button>
+        </div>
+      </div>
+
+      <div class="sidebar-body">
+        <div class="sidebar-section dataset-line">
+          <span class="sidebar-label">Dataset</span>
+          <span id="datasetPath" class="dataset-path" title=""></span>
+        </div>
+
+        <div class="sidebar-sep"></div>
+
+        <div class="sidebar-section splitbox">
+          <label for="splitSelect">Split</label>
+          <select id="splitSelect" title="Work on one split, or all splits together"></select>
+        </div>
+
+        <div class="sidebar-sep"></div>
+
+        <div id="filterBox" class="sidebar-section filterbox hidden">
+          <span class="sidebar-label">Filters</span>
+          <div class="filter-row">
+            <span id="filterSummary" class="filter-summary">No filter</span>
+            <button id="filtersBtn" class="filter-more" title="Edit filter chain">&#8230;</button>
+          </div>
+        </div>
+
+        <div class="sidebar-sep"></div>
+
+        <div class="sidebar-section actionbox">
+          <span class="sidebar-label">Actions</span>
+          <div class="action-row">
+            <div id="actionBtns" class="action-btns"></div>
+            <button id="actionsExpandBtn" class="actions-expand hidden" title="Show all actions">&#8230;</button>
+          </div>
+        </div>
+
+        <div class="sidebar-sep"></div>
+
+        <div class="sidebar-section boxes-section">
+          <div class="boxes-head">
+            <span class="sidebar-label">Boxes</span>
+            <span id="sidePanelCount" class="side-panel-count">0</span>
+          </div>
+          <div id="boxList" class="box-list"></div>
+        </div>
+      </div>
 
       <div id="notifPanel" class="notif-panel hidden">
         <div class="notif-panel-head">
@@ -26,70 +75,42 @@
         </div>
         <div id="notifList" class="notif-list"></div>
       </div>
-    </div>
-  </header>
-
-  <div class="middle">
-    <main class="canvas-wrap">
-      <canvas id="canvas"></canvas>
-    </main>
-
-    <aside id="sidePanel" class="side-panel">
-      <div id="sidePanelResizer" class="side-panel-resizer" title="Drag to resize the panel"></div>
-      <div class="side-panel-head">
-        <span class="side-panel-title">Boxes</span>
-        <span id="sidePanelCount" class="side-panel-count">0</span>
-        <button id="sidePanelClose" class="side-panel-close" title="Hide panel">&#10005;</button>
-      </div>
-
-      <div class="side-panel-controls">
-        <div class="splitbox">
-          <label for="splitSelect">Split</label>
-          <select id="splitSelect" title="Work on one split, or all splits together"></select>
-        </div>
-
-        <div id="filterBox" class="filterbox hidden">
-          <label for="filtersBtn">Filters</label>
-          <button id="filtersBtn" class="filter-btn" title="Chain filters from filters/ to narrow the image list">No filter</button>
-        </div>
-
-        <div class="actionbox">
-          <span class="action-label" title="Run a user action from actions.yaml on the current image">Actions</span>
-          <div id="actionBtns" class="action-btns"></div>
-        </div>
-      </div>
-
-      <div id="boxList" class="box-list"></div>
     </aside>
+
+    <div class="app-main">
+      <main class="canvas-wrap">
+        <canvas id="canvas"></canvas>
+      </main>
+
+      <section id="tagBar" class="tagbar hidden">
+        <span class="tagbar-title">Tags</span>
+        <span id="tagHint" class="tagbar-hint hidden">Alt+1..9 toggles</span>
+        <div id="tagBadges" class="tag-badges"></div>
+        <div class="tagbar-add">
+          <input id="tagInput" class="tag-input" type="text" placeholder="add a tag…"
+                 list="tagSuggestions" maxlength="64">
+          <datalist id="tagSuggestions"></datalist>
+          <button id="addTagBtn" type="button" title="Add tag to the image (new names are written to tags.yaml)">+ Add tag</button>
+        </div>
+      </section>
+
+      <section class="imagebar">
+        <span id="filename" class="filename"></span>
+        <div class="imagebar-nav">
+          <button id="prevBtn" title="Previous (←)">&#9664; Prev</button>
+          <input id="counter" class="counter" type="text" inputmode="numeric"
+                 title="Current image — type a number and press Enter to jump" value="0 / 0">
+          <button id="nextBtn" title="Next (→)">Next &#9654;</button>
+        </div>
+        <div class="imagebar-right">
+          <span id="boxCount" class="boxcount"></span>
+          <button id="undoBtn" title="Undo (Z)">Undo</button>
+          <button id="redoBtn" title="Redo (Y)">Redo</button>
+          <button id="saveBtn" class="primary" title="Save (S)">Save</button>
+        </div>
+      </section>
+    </div>
   </div>
-
-  <section id="tagBar" class="tagbar hidden">
-    <span class="tagbar-title">Tags</span>
-    <span id="tagHint" class="tagbar-hint hidden">Alt+1..9 toggles</span>
-    <div id="tagBadges" class="tag-badges"></div>
-    <div class="tagbar-add">
-      <input id="tagInput" class="tag-input" type="text" placeholder="add a tag…"
-             list="tagSuggestions" maxlength="64">
-      <datalist id="tagSuggestions"></datalist>
-      <button id="addTagBtn" type="button" title="Add tag to the image (new names are written to tags.yaml)">+ Add tag</button>
-    </div>
-  </section>
-
-  <section class="imagebar">
-    <span id="filename" class="filename"></span>
-    <div class="imagebar-nav">
-      <button id="prevBtn" title="Previous (←)">&#9664; Prev</button>
-      <input id="counter" class="counter" type="text" inputmode="numeric"
-             title="Current image — type a number and press Enter to jump" value="0 / 0">
-      <button id="nextBtn" title="Next (→)">Next &#9654;</button>
-    </div>
-    <div class="imagebar-right">
-      <span id="boxCount" class="boxcount"></span>
-      <button id="undoBtn" title="Undo (Z)">Undo</button>
-      <button id="redoBtn" title="Redo (Y)">Redo</button>
-      <button id="saveBtn" class="primary" title="Save (S)">Save</button>
-    </div>
-  </section>
 
   <div id="classPicker" class="class-picker hidden"></div>
 
@@ -127,7 +148,6 @@
           </label>
           <div class="settings-actions">
             <button id="setDataBtn">Load data.yaml</button>
-            <span id="datasetPath" class="hint"></span>
           </div>
         </section>
 

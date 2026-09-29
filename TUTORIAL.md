@@ -82,19 +82,19 @@ canvas.
 
 ## 4. The screen at a glance
 
-- **Top bar** — brand, a notifications bell, **⚙ Settings**, and the _Boxes_
-  panel toggle. Everything is kept out of the way so the image gets the space.
+- **Left column** — everything except the image, top to bottom: the app label
+  with the **⚙ Settings**, notifications bell and **Panel** toggle; the dataset
+  name; separators; the _Split_ picker; the applied _Filter_ names with a `…`
+  button that opens the filter modal; the per-dataset action buttons (a few,
+  with a `…` to show the rest); and finally the _Boxes_ list for the current
+  image (one row per box with its class dropdown, `cx cy w h` number inputs and
+  a `×`). The header row is always visible; the **Panel** toggle collapses the
+  rest, and the column width can be dragged from its right edge.
 - **Middle** — the picture (canvas).
-- **Right panel** — a _Split_ picker, the _Filters_ button and the per-dataset
-  action buttons, then the _Boxes_ list for the current image: one row per box
-  with its class dropdown, `cx cy w h` number inputs and a `×`.
 - **Bottom bar** — image navigation (Prev / Next, counter, filename) and
   Undo / Redo / Save.
 - **Settings** (⚙) — the _Read-only_, _Tags_ and _Auto-save_ switches, the
   dataset field and a **Show all shortcuts** button opening the full shortcut list.
-
-The panel can be shown/hidden with the **Boxes** button in the top bar, and its
-width can be dragged from its left edge.
 
 ## 5. Your first box
 
@@ -104,7 +104,7 @@ width can be dragged from its left edge.
    (or press its number). Done: a green box with the class label appears.
 
 The new box is automatically *selected*: it is yellow on the canvas, and its row
-in the right panel is **active** (controls enabled).
+in the left panel is **active** (controls enabled).
 
 > **Drawing on top of an existing box?** A normal drag inside a box grabs and
 > moves that box. Hold the force-draw modifier (default **`Ctrl`**) and drag to

@@ -600,7 +600,6 @@ async function jumpToImage(text) {
 }
 
 function applyDatasetVisibility() {
-  el('sidePanelToggle').classList.toggle('hidden', !datasetLoaded);
   // filters need a dataset to receive, so only show them once one is loaded
   el('filterBox').classList.toggle('hidden', !datasetLoaded);
 }
@@ -650,12 +649,20 @@ function filterSummary() {
 }
 
 function updateFilterButton() {
+  const summary = filterSummary();
+  const label = el('filterSummary');
   const btn = el('filtersBtn');
-  btn.textContent = filterSummary();
-  btn.title = activeFilters.length
-    ? `Filters: ${filterSummary()} (click to edit)`
-    : 'Chain filters from filters/ to narrow the image list';
-  btn.disabled = filters.length === 0;
+  if (label) {
+    label.textContent = summary;
+    label.classList.toggle('filter-none', activeFilters.length === 0);
+    label.title = activeFilters.length ? `Filters: ${summary}` : 'No filter';
+  }
+  if (btn) {
+    btn.title = filters.length
+      ? 'Edit the filter chain'
+      : 'No filters found in filters/';
+    btn.disabled = filters.length === 0;
+  }
 }
 
 function populateFilterModal() {
@@ -719,9 +726,29 @@ function populateRecent(paths) {
   sel.value = '';
 }
 
+const ACTIONS_VISIBLE = 3;
+let actionsExpanded = false;
+
+// Show only the first ACTIONS_VISIBLE action buttons; reveal the rest when the
+// expand button (…) is toggled.
+function applyActionOverflow() {
+  const box = el('actionBtns');
+  const expand = el('actionsExpandBtn');
+  if (!box || !expand) return;
+  const items = Array.from(box.querySelectorAll('button.action'));
+  const overflow = items.length > ACTIONS_VISIBLE;
+  expand.classList.toggle('hidden', !overflow);
+  box.classList.toggle('expanded', actionsExpanded);
+  items.forEach((b, i) => {
+    b.classList.toggle('hidden', overflow && !actionsExpanded && i >= ACTIONS_VISIBLE);
+  });
+  expand.title = actionsExpanded ? 'Show fewer actions' : 'Show all actions';
+}
+
 function populateActions(names) {
   const box = el('actionBtns');
   box.innerHTML = '';
+  actionsExpanded = false;
   (names || []).forEach((n) => {
     const btn = document.createElement('button');
     btn.className = 'action';
@@ -737,6 +764,7 @@ function populateActions(names) {
     btn.addEventListener('click', () => runAction(n));
     box.appendChild(btn);
   });
+  applyActionOverflow();
 }
 
 function setActionButtonsDisabled(disabled) {
@@ -930,7 +958,12 @@ async function loadConfig(startIdx = 0, opts = {}) {
   datasetLoaded = !!cfg.data_yaml;
   el('dataYaml').value = cfg.data_yaml || '';
   currentDataYaml = cfg.data_yaml || '';
-  el('datasetPath').textContent = cfg.dataset_path ? `dataset: ${cfg.dataset_path}` : '';
+  {
+    const dsPath = cfg.dataset_path || cfg.data_yaml || '';
+    const dsName = dsPath ? dsPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() : '';
+    el('datasetPath').textContent = dsName || 'No dataset';
+    el('datasetPath').title = dsPath || 'No dataset loaded';
+  }
   readonly = !!cfg.readonly;
   applyDatasetVisibility();
   if (!datasetLoaded && !settingsAutoOpened) {
@@ -1711,7 +1744,7 @@ function closeClassPicker() {
 }
 
 // ------------------------------------------------------------------------- //
-// boxes side panel (right edge, hideable)
+// left sidebar: resizable, collapsible body (the header row stays visible)
 // ------------------------------------------------------------------------- //
 let sidePanelOpen = true;
 
@@ -1719,32 +1752,33 @@ function fmtNum(v) {
   return Math.round(v * 10000) / 10000;
 }
 
-const SIDE_PANEL_MIN = 220;
-const SIDE_PANEL_MAX = 720;
-const SIDE_PANEL_W_KEY = 'ybe_side_panel_w';
+const SIDEBAR_MIN = 220;
+const SIDEBAR_MAX = 720;
+const SIDEBAR_W_KEY = 'ybe_side_panel_w';
 
 function applySidePanelWidth(w) {
-  const clamped = Math.min(SIDE_PANEL_MAX, Math.max(SIDE_PANEL_MIN, Math.round(w)));
-  el('sidePanel').style.setProperty('--side-panel-w', clamped + 'px');
+  const clamped = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Math.round(w)));
+  el('sidebar').style.setProperty('--sidebar-w', clamped + 'px');
   return clamped;
 }
 
 function initSidePanelResizer() {
-  const handle = el('sidePanelResizer');
+  const handle = el('sidebarResizer');
   if (!handle) return;
   let dragging = false;
   let pending = null;
   const onMove = (e) => {
     if (!dragging) return;
     e.preventDefault();
-    pending = applySidePanelWidth(window.innerWidth - e.clientX);
+    const left = el('sidebar').getBoundingClientRect().left;
+    pending = applySidePanelWidth(e.clientX - left);
   };
   const onUp = () => {
     if (!dragging) return;
     dragging = false;
     handle.classList.remove('active');
     document.body.style.cursor = '';
-    if (pending !== null) localStorage.setItem(SIDE_PANEL_W_KEY, String(pending));
+    if (pending !== null) localStorage.setItem(SIDEBAR_W_KEY, String(pending));
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
   };
@@ -1762,17 +1796,16 @@ function initSidePanelResizer() {
 function initSidePanel() {
   sidePanelOpen = localStorage.getItem('sidePanelOpen') !== '0';
   toggleSidePanel(sidePanelOpen);
-  const saved = parseInt(localStorage.getItem(SIDE_PANEL_W_KEY) || '', 10);
+  const saved = parseInt(localStorage.getItem(SIDEBAR_W_KEY) || '', 10);
   if (saved) applySidePanelWidth(saved);
   el('sidePanelToggle').addEventListener('click', () => toggleSidePanel());
-  el('sidePanelClose').addEventListener('click', () => toggleSidePanel(false));
   initSidePanelResizer();
 }
 
 function toggleSidePanel(show) {
   const open = show !== undefined ? !!show : !sidePanelOpen;
   sidePanelOpen = open;
-  el('sidePanel').classList.toggle('hidden', !open);
+  el('sidebar').classList.toggle('collapsed', !open);
   el('sidePanelToggle').classList.toggle('active', open);
   localStorage.setItem('sidePanelOpen', open ? '1' : '0');
 }
@@ -2113,6 +2146,10 @@ el('saveBtn').addEventListener('click', () => save());
 el('undoBtn').addEventListener('click', undo);
 el('redoBtn').addEventListener('click', redo);
 el('setDataBtn').addEventListener('click', setDataYaml);
+el('actionsExpandBtn').addEventListener('click', () => {
+  actionsExpanded = !actionsExpanded;
+  applyActionOverflow();
+});
 el('settingsBtn').addEventListener('click', openSettingsModal);
 el('settingsModalClose').addEventListener('click', closeSettingsModal);
 el('settingsModal').addEventListener('click', (e) => {
@@ -2378,8 +2415,8 @@ function tabCycleRow(e) {
   // a box is selected (by canvas click, row click or Shift) but focus is
   // elsewhere: Tab starts cycling its row from the class select
   if (selected >= 0 && !readonly) {
-    const panel = el('sidePanel');
-    if (panel && !panel.classList.contains('hidden')) {
+    const panel = el('boxList');
+    if (panel && !el('sidebar').classList.contains('collapsed')) {
       const row = panel.querySelector(`.box-row[data-index="${selected}"]`);
       const first = row && row.querySelector('.box-row-class');
       if (first && !first.disabled) {
