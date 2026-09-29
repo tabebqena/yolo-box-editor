@@ -74,8 +74,9 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   built-in app actions and other actions (referenced as `action_<Name>`); the
   backend runs the queue and pauses for the UI at each app action. `{IMAGE_PATH}`,
   `{LABEL_PATH}`, `{DATASET_PATH}`, `{DATA_YAML_PATH}`, `{IMAGE_INDEX}`,
-  `{APP_DIR}`, `{HOME_DIR}` and `{PIPE_PATH}` are substituted and shell-quoted —
-  see [User actions](#user-actions). App updates only replace the shipped `app/`
+  `{APP_DIR}`, `{HOME_DIR}`, `{APP_SCRIPT_DIR}`, `{USER_SCRIPT_DIR}` and
+  `{PIPE_PATH}` are substituted and shell-quoted — see
+  [User actions](#user-actions). App updates only replace the shipped `app/`
   folder, so your files in the user folder are never touched.
 - **Event hooks**: YAML files in your `hooks/` folder, named `on_<event>.yaml`,
   run on app events instead of a button — e.g. `on_after_save` or
@@ -291,13 +292,16 @@ Placeholders (leave them unquoted):
 | `{IMAGE_INDEX}`   | 1-based position of the current image (matches the counter)  |
 | `{APP_DIR}`       | shipped code folder (use it to reach `{APP_DIR}/scripts/…`)  |
 | `{HOME_DIR}`      | your user folder (the working directory of every run)        |
+| `{APP_SCRIPT_DIR}`| shipped helper scripts (`app/scripts/`)                      |
+| `{USER_SCRIPT_DIR}`| your helper scripts (`<home>/scripts/`)                     |
 | `{PIPE_PATH}`     | path of the run's scratch file (see below; may be empty if the temp file could not be created) |
 
-Every step runs with the working directory set to `{HOME_DIR}` (logged to the
-server console before each command), so **your own scripts are just
-`scripts/helper.py`** (relative) and the shipped ones are
-`{APP_DIR}/scripts/helper.py`. The same paths are exported to each command as
-`YBE_HOME`, `YBE_APP_DIR`, `YBE_USER_SCRIPT_DIR` and `YBE_APP_SCRIPT_DIR`.
+Reach a script **explicitly** with `{USER_SCRIPT_DIR}/helper.py` (yours) or
+`{APP_SCRIPT_DIR}/helper.py` (shipped). Because every step runs with the working
+directory set to `{HOME_DIR}` (logged to the server console before each command),
+`scripts/helper.py` also works **relatively** for your own scripts. The same
+paths are exported to each command as `YBE_HOME`, `YBE_APP_DIR`,
+`YBE_USER_SCRIPT_DIR` and `YBE_APP_SCRIPT_DIR`.
 
 `{PIPE_PATH}` is a per-run scratch file: it starts empty and every step of the
 run — plus every action reached through `after_success` — shares the same file,
@@ -313,11 +317,12 @@ Your actions live in `<home>/actions/` and are read after the shipped
 files are never touched. A file with neither `steps` nor `after_success` is
 ignored — `app/actions/example.yaml` is such a template.
 
-Helper programs called by those steps live in your `<home>/scripts/` folder —
-since the run's working directory is your user folder, call them as
-`scripts/helper.py`. The shipped `app/scripts/example.py` is a comments-only
-template, reached as `{APP_DIR}/scripts/example.py`. The app does not scan
-either folder — a script runs only when a `steps` command names it.
+Helper programs called by those steps live in your `<home>/scripts/` folder:
+call them explicitly as `{USER_SCRIPT_DIR}/helper.py`, or relatively as
+`scripts/helper.py` (the run's working directory is your user folder). The
+shipped `app/scripts/example.py` is a comments-only template, reached as
+`{APP_SCRIPT_DIR}/example.py`. The app does not scan either folder — a script
+runs only when a `steps` command names it.
 
 `after_success` uses the same entries as `steps` (see above) and runs after them.
 The backend drives the whole run: it executes the server-side entries itself and
@@ -360,10 +365,11 @@ only); a bare `on_*` entry is just a shell command. Entries take no arguments.
 
 An **event hook** is a YAML file in your `hooks/` folder (not `actions/`) that
 runs when the app fires an event, instead of a toolbar button. Hooks use the
-same `steps` / `after_success` and the same placeholders as actions; steps run
-with the working directory set to your user folder, so call scripts as
-`python scripts/<name>.py` (yours) or `python {APP_DIR}/scripts/<name>.py`
-(shipped). A successful hook reports in the **bottom status bar** (auto-hides
+same `steps` / `after_success` and the same placeholders as actions; call scripts
+explicitly as `python {USER_SCRIPT_DIR}/<name>.py` (yours) or
+`python {APP_SCRIPT_DIR}/<name>.py` (shipped), or relatively as
+`python scripts/<name>.py` (steps run with the working directory set to your user
+folder). A successful hook reports in the **bottom status bar** (auto-hides
 after a few seconds); a failed hook opens the result **modal**. They are opt-in:
 no file, no hook.
 
@@ -389,7 +395,7 @@ A file that defines `steps` but names no known event is reported as an error;
 ```yaml
 # <home>/hooks/on_after_save.yaml — run a script after every save
 steps:
-  - python scripts/helper.py {DATA_YAML_PATH} {IMAGE_PATH} {LABEL_PATH}
+  - python {USER_SCRIPT_DIR}/helper.py {DATA_YAML_PATH} {IMAGE_PATH} {LABEL_PATH}
 ```
 
 ```yaml

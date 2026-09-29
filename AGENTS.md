@@ -43,12 +43,14 @@ hand-rolled — no PyYAML at runtime. User files live in `YBX_HOME` (below).
     - UI: Filters button opens a modal with up to 8 stacked selects, run top-to-bottom (`app/static/app.js`).
     - Scratch pipe dir is deleted after each run; `--keep-filter-pipes` keeps it (CLI).
   - `scripts/*.py` — helpers named by action `steps`; the app never scans them.
-    Shipped helpers sit in `{APP_DIR}/scripts/`; yours are reached relatively as
-    `scripts/…` (cwd is `YBX_HOME`).
+    Reach them explicitly with `{USER_SCRIPT_DIR}/…` (yours) or
+    `{APP_SCRIPT_DIR}/…` (shipped), or relatively as `scripts/…` (cwd is
+    `YBX_HOME`).
   - `shortcuts.txt` — `ACTION_NAME <KEY> label`.
 - Commands and filters run with `cwd=YBX_HOME` (logged per run) and receive
   `YBE_HOME`, `YBE_APP_DIR`, `YBE_APP_SCRIPT_DIR`, `YBE_USER_SCRIPT_DIR`;
-  placeholders are `{APP_DIR}` and `{HOME_DIR}`.
+  placeholders include `{APP_DIR}`, `{HOME_DIR}`, `{APP_SCRIPT_DIR}` and
+  `{USER_SCRIPT_DIR}`.
 - `app/VERSION` and `CHANGELOG.md` (Keep a Changelog); `README.md` /
   `TUTORIAL.md` are user-facing docs.
 

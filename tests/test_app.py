@@ -1126,15 +1126,17 @@ def test_api_action_run_sets_cwd_to_home(clean_state, tmp_path):
     assert payload["cwd"] == str(clean_state)
 
 
-def test_api_action_run_substitutes_home_dir_and_env(clean_state, tmp_path):
-    # user scripts are reached relatively (cwd is the home) and via YBE_* env;
-    # shipped helpers via {APP_DIR}/scripts
+def test_api_action_run_substitutes_home_and_script_dirs(clean_state, tmp_path):
+    # script dirs are exposed explicitly as placeholders and as YBE_* env vars,
+    # and are also reachable relatively (cwd is the home)
     write_hook(
         tmp_path,
         "on_after_save.yaml",
         "steps:\n"
         "  - pwd\n"
         "  - echo {HOME_DIR}\n"
+        "  - echo {USER_SCRIPT_DIR}\n"
+        "  - echo {APP_SCRIPT_DIR}\n"
         "  - echo $YBE_USER_SCRIPT_DIR\n"
         "  - echo $YBE_APP_SCRIPT_DIR\n",
     )

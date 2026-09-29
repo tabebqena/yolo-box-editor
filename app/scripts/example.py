@@ -8,14 +8,15 @@ it, e.g.:
 
     # <home>/actions/MyAction.yaml
     steps:
-      - python scripts/helper.py {DATA_YAML_PATH} {IMAGE_PATH} {LABEL_PATH}
+      - python {USER_SCRIPT_DIR}/helper.py {DATA_YAML_PATH} {IMAGE_PATH} {LABEL_PATH}
 
 The placeholders ({IMAGE_PATH}, {LABEL_PATH}, {DATASET_PATH}, {DATA_YAML_PATH},
-{IMAGE_INDEX}, {APP_DIR}, {HOME_DIR}) are substituted and shell-quoted by the app
-before the command runs; the single tool output is shown in the result popup. See
-the README "User actions" section for the placeholder list. Steps run with the
-working directory set to your user folder, so `scripts/helper.py` is relative to
-it (shipped helpers are `{APP_DIR}/scripts/...`).
+{IMAGE_INDEX}, {APP_DIR}, {HOME_DIR}, {APP_SCRIPT_DIR}, {USER_SCRIPT_DIR}) are
+substituted and shell-quoted by the app before the command runs; the single tool
+output is shown in the result popup. See the README "User actions" section for
+the placeholder list. Steps run with the working directory set to your user
+folder, so `scripts/helper.py` also works relatively (shipped helpers are
+`{APP_SCRIPT_DIR}/...`).
 
 This example file is comments only and does nothing. Copy it to a new <Name>.py
 in <home>/scripts/ to add a script, or write your own.

@@ -378,10 +378,11 @@ ACTIONS_DOC = (
     "app's actions/ folder and yours in <home>/actions/; yours are read last and "
     "win on a name clash. Placeholders are substituted with shell-quoted values: "
     "{IMAGE_PATH}, {LABEL_PATH}, {DATASET_PATH}, {DATA_YAML_PATH}, {IMAGE_INDEX}, "
-    "{APP_DIR}, {HOME_DIR}, {PIPE_PATH}. User files are reachable by their "
-    "relative path (the run's working directory is the user folder, e.g. "
-    "`scripts/helper.py`); shipped helpers live under {APP_DIR}/scripts/. "
-    "Event hooks live in the "
+    "{APP_DIR}, {HOME_DIR}, {APP_SCRIPT_DIR}, {USER_SCRIPT_DIR}, {PIPE_PATH}. "
+    "Scripts can be reached either explicitly ({USER_SCRIPT_DIR}/helper.py for "
+    "yours, {APP_SCRIPT_DIR}/helper.py for the shipped ones) or relatively "
+    "(`scripts/helper.py`, since the run's working directory is the user "
+    "folder). Event hooks live in the "
     "hooks/ directory and cannot be bound."
 )
 
@@ -1630,10 +1631,12 @@ def api_action_run():
         "DATASET_PATH": STATE["dataset_path"] or "",
         "DATA_YAML_PATH": STATE["data_yaml"] or "",
         "IMAGE_INDEX": str(position or 0),
-        # the folder holding app.py (shipped files); your own files are reached
-        # by their relative path (cwd is HOME_DIR), shipped ones via APP_DIR
+        # the folder holding app.py (shipped files); script folders are exposed
+        # both explicitly and relatively (cwd is HOME_DIR, so scripts/… works)
         "APP_DIR": BASE_DIR,
         "HOME_DIR": YBX_HOME,
+        "APP_SCRIPT_DIR": APP_SCRIPT_DIR,
+        "USER_SCRIPT_DIR": USER_SCRIPT_DIR,
         # scratch file shared by every step and after_success action of this run
         "PIPE_PATH": pipe_path or "",
     }

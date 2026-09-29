@@ -33,7 +33,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - `--home <dir>` flag and the `YBX_HOME` environment variable.
-- `{HOME_DIR}` placeholder and per-run `cwd` in the action result payload.
+- `{HOME_DIR}`, `{APP_SCRIPT_DIR}` and `{USER_SCRIPT_DIR}` placeholders and
+  per-run `cwd` in the action result payload. Scripts can be reached explicitly
+  (`{USER_SCRIPT_DIR}/…`, `{APP_SCRIPT_DIR}/…`) or relatively (`scripts/…`).
 - `app/` layout keeps the shipped files in one relocatable directory, ready for
   the upcoming `ybx.sh` installer (Task 2).
 
