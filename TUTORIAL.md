@@ -76,22 +76,25 @@ canvas.
 
 > Prefer pointing mouse only? Just run `python app/app.py` — it reopens the dataset
 > you used last, so you land right back where you left off. On a first run (or
-> with `--no-resume`) paste the `data.yaml` path into the text field and click
-> **Load data.yaml**. The field disappears after loading; use **Change dataset**
-> (top right) to pick another one.
+> with `--no-resume`) the **Settings** dialog opens: paste the `data.yaml` path
+> and click **Load data.yaml**. Reopen it any time with the **⚙ Settings** button
+> (top right) to switch datasets or change view options.
 
 ## 4. The screen at a glance
 
-- **Top bar** — brand, split picker, user action buttons, _Read-only_ switch,
-  _Tags_ switch, _Change dataset_, _Boxes_ panel toggle.
+- **Top bar** — brand, a notifications bell, **⚙ Settings**, and the _Boxes_
+  panel toggle. Everything is kept out of the way so the image gets the space.
 - **Middle** — the picture (canvas).
-- **Right panel** — the _Boxes_ list for the current image: one row per box
+- **Right panel** — a _Split_ picker, the _Filters_ button and the per-dataset
+  action buttons, then the _Boxes_ list for the current image: one row per box
   with its class dropdown, `cx cy w h` number inputs and a `×`.
-- **Bottom bars** — image navigation (Prev / Next, counter, filename), then
-  Undo / Redo / Save, then the shortcuts bar (shows the live shortcut→action
-  mapping).
+- **Bottom bar** — image navigation (Prev / Next, counter, filename) and
+  Undo / Redo / Save.
+- **Settings** (⚙) — the _Read-only_, _Tags_ and _Auto-save_ switches, the
+  dataset field and a **Show all shortcuts** button opening the full shortcut list.
 
-The panel can be shown/hidden with the **Boxes** button in the top bar.
+The panel can be shown/hidden with the **Boxes** button in the top bar, and its
+width can be dragged from its left edge.
 
 ## 5. Your first box
 
@@ -174,16 +177,16 @@ to survive a refresh.
 
 ## 9. Read-only mode
 
-To browse without any chance of damaging labels, tick **Read-only** in the top
-bar (or start with `python app/app.py --data … --readonly`). Drawing, editing and
-saving stop working; boxes still display.
+To browse without any chance of damaging labels, tick **Read-only** in
+**Settings** (or start with `python app/app.py --data … --readonly`). Drawing,
+editing and saving stop working; boxes still display.
 
 ## 10. Tags (optional)
 
 Tags are short labels you attach to a whole image (not to a box) — useful to
 mark, say, "night", "indoor" or "hard". They are separate from YOLO classes.
 
-1. Tick **Tags** in the top bar to show the tag bar below the image.
+1. Tick **Tags** in **Settings** to show the tag bar below the image.
 2. The dataset's tags appear as **badges**. Green = the tag is on this image;
    grey = it is not. **Click a badge** to toggle it — the image's tag file is
    saved straight away.

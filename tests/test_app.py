@@ -668,8 +668,10 @@ def test_index_serves_page():
     html = client.get("/").data.decode()
     assert "id=\"canvas\"" in html
     assert "id=\"boxList\"" in html
-    assert "id=\"shortcutBar\"" in html
-    assert "id=\"hookStatusBar\"" in html
+    assert "id=\"toasts\"" in html
+    assert "id=\"settingsModal\"" in html
+    assert "id=\"settingsBtn\"" in html
+    assert "id=\"shortcutsModal\"" in html
     assert "id=\"autoSaveSw\"" in html
     assert "id=\"filtersBtn\"" in html
     assert "id=\"filterModal\"" in html

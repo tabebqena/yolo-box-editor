@@ -4,6 +4,30 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.2.0] - 2026-09-30
+
+### Changed
+
+- **More room for the image**: the UI no longer uses fixed horizontal strips
+  that resize the canvas.
+  - The top bar is now just the brand, a notifications bell and the
+    **⚙ Settings** and **Boxes** buttons.
+  - The **Split** picker, **Filters** button and per-dataset action buttons
+    moved into the right-hand panel, which now has a draggable width.
+  - The **Read-only**, **Tags** and **Auto-save** switches plus the dataset
+    field moved into a **Settings** dialog opened with the gear button (it
+    opens automatically when no dataset is loaded).
+  - The bottom shortcut bar was replaced by a **Show all shortcuts** entry in
+    Settings that opens a modal with the full list.
+
+### Added
+
+- **Toasts**: save / dataset / split / filter / tag / hook status messages are
+  now floating notifications that never affect the layout. Info and success
+  toasts auto-dismiss; errors and warnings stay until dismissed and are
+  collected behind a **bell** with an unread badge. The concurrent-use warning
+  and the `shortcuts.txt` / `hooks/` validation errors use the same system.
+
 ## [2.1.0] - 2026-09-30
 
 ### Added

@@ -76,6 +76,105 @@ function dbgWarn(...args) {
   if (debugMode) console.warn('[ybe]', ...args);
 }
 
+// ------------------------------------------------------------------------- //
+// notifications (fixed toasts + bell history; never in the layout flow)
+// ------------------------------------------------------------------------- //
+const TOAST_MAX = 5;       // at most this many toasts on screen at once
+const NOTIF_LOG_MAX = 50;  // keep this many error/warning messages for the bell
+let notifLog = [];         // [{type, msg, at}] newest first
+let notifUnread = 0;       // sticky messages seen while the bell panel is closed
+
+function updateNotifBadge() {
+  const badge = el('notifBadge');
+  if (!badge) return;
+  badge.textContent = notifUnread > 99 ? '99+' : String(notifUnread);
+  badge.classList.toggle('hidden', notifUnread <= 0);
+}
+
+function renderNotifPanel() {
+  const list = el('notifList');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!notifLog.length) {
+    const empty = document.createElement('div');
+    empty.className = 'notif-empty';
+    empty.textContent = 'No notifications.';
+    list.appendChild(empty);
+    return;
+  }
+  notifLog.forEach((n) => {
+    const row = document.createElement('div');
+    row.className = `notif-item notif-item-${n.type}`;
+    const type = document.createElement('span');
+    type.className = 'notif-item-type';
+    type.textContent = n.type;
+    const msg = document.createElement('span');
+    msg.textContent = n.msg;
+    row.append(type, msg);
+    list.appendChild(row);
+  });
+}
+
+function toggleNotifPanel(show) {
+  const panel = el('notifPanel');
+  if (!panel) return;
+  const open = show !== undefined ? !!show : panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !open);
+  el('notifBtn').setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) {
+    notifUnread = 0;
+    updateNotifBadge();
+    renderNotifPanel();
+  }
+}
+
+// type: info | success | warning | error. Errors/warnings are sticky by default:
+// they stay until dismissed and are recorded in the bell history.
+function toast(msg, opts = {}) {
+  const container = el('toasts');
+  const text = String(msg == null ? '' : msg);
+  if (!text) return;
+  const type = opts.type || 'info';
+  const sticky = opts.sticky !== undefined
+    ? !!opts.sticky
+    : (type === 'error' || type === 'warning');
+  if (type === 'error' || type === 'warning') {
+    notifLog.unshift({ type, msg: text, at: Date.now() });
+    if (notifLog.length > NOTIF_LOG_MAX) notifLog.length = NOTIF_LOG_MAX;
+    notifUnread += 1;
+    updateNotifBadge();
+    const panel = el('notifPanel');
+    if (panel && !panel.classList.contains('hidden')) renderNotifPanel();
+    if (!sticky) { notifUnread = Math.max(0, notifUnread - 1); updateNotifBadge(); }
+  }
+  if (!container) return null;
+  const node = document.createElement('div');
+  node.className = 'toast toast-' + type;
+  const body = document.createElement('div');
+  body.className = 'toast-message';
+  body.textContent = text;
+  const close = document.createElement('button');
+  close.className = 'toast-close';
+  close.textContent = '\u00d7';
+  close.title = 'Dismiss';
+  const dismiss = () => {
+    if (node._gone) return;
+    node._gone = true;
+    clearTimeout(node._t);
+    node.remove();
+    if (typeof opts.onClose === 'function') opts.onClose();
+  };
+  close.addEventListener('click', dismiss);
+  node.append(body, close);
+  container.appendChild(node);
+  while (container.children.length > TOAST_MAX) container.firstChild.remove();
+  if (!sticky) {
+    node._t = setTimeout(dismiss, opts.timeout || (type === 'success' ? 3000 : 4000));
+  }
+  dbg('toast', { type, sticky, msg: text });
+  return { node, dismiss };
+}
+
 // interaction state
 let mode = 'idle';     // idle | drawing | moving | resizing
 let start = null;      // canvas px
@@ -501,11 +600,24 @@ async function jumpToImage(text) {
 }
 
 function applyDatasetVisibility() {
-  el('settings').classList.toggle('hidden', datasetLoaded);
-  el('changeDataBtn').classList.toggle('hidden', !datasetLoaded);
   el('sidePanelToggle').classList.toggle('hidden', !datasetLoaded);
   // filters need a dataset to receive, so only show them once one is loaded
   el('filterBox').classList.toggle('hidden', !datasetLoaded);
+}
+
+let settingsAutoOpened = false;
+
+function openSettingsModal() {
+  el('settingsModal').classList.remove('hidden');
+  if (!datasetLoaded) {
+    const input = el('dataYaml');
+    input.focus();
+    input.select();
+  }
+}
+
+function closeSettingsModal() {
+  el('settingsModal').classList.add('hidden');
 }
 
 function updateBoxCount() {
@@ -632,41 +744,12 @@ function setActionButtonsDisabled(disabled) {
 }
 
 // ------------------------------------------------------------------------- //
-// shortcuts bar (bottom)
+// shortcuts (modal)
 // ------------------------------------------------------------------------- //
 function shortcutKbd(text) {
   const k = document.createElement('kbd');
   k.textContent = text;
   return k;
-}
-
-function buildKeyShortcut(keys, text) {
-  const span = document.createElement('span');
-  span.className = 'kbd-item';
-  keys.forEach((k) => span.appendChild(shortcutKbd(k)));
-  span.appendChild(document.createTextNode(' ' + text));
-  return span;
-}
-
-function buildMouseShortcut() {
-  const span = document.createElement('span');
-  span.className = 'kbd-item';
-  const drag = document.createElement('span');
-  drag.className = 'mouse-hint';
-  drag.textContent = 'drag';
-  const del = document.createElement('span');
-  del.className = 'mouse-hint';
-  del.textContent = '\u2715';
-  span.append(drag, document.createTextNode(' draw \u00b7 '), del, document.createTextNode(' delete box'));
-  return span;
-}
-
-function buildActionShortcut(name, info) {
-  const span = document.createElement('span');
-  span.className = 'kbd-item';
-  span.append(document.createTextNode(name), shortcutKbd(info.shortcut));
-  if (info.label) span.append(document.createTextNode(': ' + info.label));
-  return span;
 }
 
 function menuRow(label, keys) {
@@ -684,33 +767,25 @@ function menuRow(label, keys) {
 
 const APP_SHORTCUT_ORDER = ['app_prev', 'app_next', 'app_del', 'app_drop', 'app_undo', 'app_redo', 'app_save', 'app_ch_box', 'app_sel_box', 'app_sel_points', 'app_escape', 'app_show_hide', 'app_fix_box', 'app_force_draw', 'app_refresh_images_list', 'app_reload_images_list', 'app_refresh_image'];
 
+let shownShortcutErrors = '';
+
 function renderShortcutErrors() {
-  const box = el('shortcutErrors');
-  box.innerHTML = '';
   const dismissed = JSON.parse(sessionStorage.getItem('dismissedShortcutErrors') || '[]');
   // messages are self-describing ("'shortcuts.txt': ..." / "'hooks/x.yaml': ...")
   const all = shortcutErrors.concat(hookErrors);
   const visible = all.filter((msg) => !dismissed.includes(msg));
-  if (!visible.length) {
-    box.classList.add('hidden');
-    return;
-  }
-  box.classList.remove('hidden');
-  const banner = document.createElement('div');
-  banner.className = 'shortcut-errors-banner';
-  const text = document.createElement('span');
-  text.textContent = visible.join(' | ');
-  const close = document.createElement('button');
-  close.className = 'shortcut-errors-dismiss';
-  close.textContent = '\u00d7';
-  close.title = 'Hide this message for this session';
-  close.addEventListener('click', () => {
-    const updated = dismissed.concat(visible);
-    sessionStorage.setItem('dismissedShortcutErrors', JSON.stringify(updated));
-    box.classList.add('hidden');
+  if (!visible.length) return;
+  const msg = visible.join(' | ');
+  if (msg === shownShortcutErrors) return; // config reloads must not re-toast it
+  shownShortcutErrors = msg;
+  toast(msg, {
+    type: 'error',
+    sticky: true,
+    onClose: () => {
+      const updated = dismissed.concat(visible);
+      sessionStorage.setItem('dismissedShortcutErrors', JSON.stringify(updated));
+    },
   });
-  banner.append(text, close);
-  box.appendChild(banner);
 }
 
 // --------------------------------------------------------------------------- //
@@ -722,36 +797,24 @@ function renderShortcutErrors() {
 const PRESENCE_INTERVAL = 5000; // ms between presence pings
 let presenceTimer = null;
 let presenceDismissed = false;
+let presenceToast = null;
 
 function renderPresenceWarning(count) {
-  const box = el('presenceWarning');
-  if (!box) return;
   if (count <= 1) {
-    // overlap is over: hidden, and the warning may show again on a later overlap
+    // overlap is over: hide the toast, and warn again on a later overlap
     presenceDismissed = false;
-    box.classList.add('hidden');
+    if (presenceToast) { presenceToast.dismiss(); presenceToast = null; }
     return;
   }
-  if (presenceDismissed) return;
-  if (!box.dataset.rendered) {
-    box.innerHTML = '';
-    const banner = document.createElement('div');
-    banner.className = 'presence-banner';
-    const text = document.createElement('span');
-    text.textContent = 'Another user is using this app. It is designed for one user at a time and is not meant to be served to multiple clients, so your changes may overwrite theirs.';
-    const close = document.createElement('button');
-    close.className = 'presence-dismiss';
-    close.textContent = '\u00d7';
-    close.title = 'Hide this warning';
-    close.addEventListener('click', () => {
-      presenceDismissed = true;
-      box.classList.add('hidden');
+  if (presenceDismissed || presenceToast) return;
+  presenceToast = toast(
+    'Another user is using this app. It is designed for one user at a time and is ' +
+    'not meant to be served to multiple clients, so your changes may overwrite theirs.',
+    {
+      type: 'warning',
+      sticky: true,
+      onClose: () => { presenceDismissed = true; presenceToast = null; },
     });
-    banner.append(text, close);
-    box.appendChild(banner);
-    box.dataset.rendered = '1';
-  }
-  box.classList.remove('hidden');
 }
 
 async function pingPresence(bye = false) {
@@ -784,41 +847,49 @@ function startPresence() {
   });
 }
 
-function renderShortcuts() {
-  const wrap = el('shortcutItems');
-  const menu = el('shortcutsMenu');
-  wrap.innerHTML = '';
-  menu.innerHTML = '';
-  APP_SHORTCUT_ORDER.forEach((name) => {
-    const info = appShortcuts[name];
-    if (!info) return;
-    wrap.appendChild(buildKeyShortcut([info.shortcut], info.label));
-    menu.appendChild(menuRow(info.label, info.shortcut));
-  });
-  wrap.appendChild(buildMouseShortcut());
-  Object.entries(actionShortcuts).forEach(([name, info]) => {
-    wrap.appendChild(buildActionShortcut(name, info));
-    menu.appendChild(menuRow(`${name}: ${info.label}`.trim(), info.shortcut));
-  });
-  applyShortcutOverflow();
+function shortcutSection(title) {
+  const h = document.createElement('div');
+  h.className = 'shortcut-section';
+  h.textContent = title;
+  return h;
 }
 
-function applyShortcutOverflow() {
+function renderShortcuts() {
   const wrap = el('shortcutItems');
-  const moreBtn = el('shortcutsMoreBtn');
-  const menu = el('shortcutsMenu');
-  const items = Array.from(wrap.children);
+  if (!wrap) return;
+  wrap.innerHTML = '';
 
-  items.forEach((i) => i.classList.remove('hidden'));
-  moreBtn.classList.add('hidden');
-  menu.classList.add('hidden');
-
-  if (wrap.scrollWidth <= wrap.clientWidth) return;
-
-  moreBtn.classList.remove('hidden');
-  for (let i = items.length - 1; i >= 0 && wrap.scrollWidth > wrap.clientWidth; i--) {
-    items[i].classList.add('hidden');
+  const appNames = APP_SHORTCUT_ORDER.filter((name) => appShortcuts[name]);
+  if (appNames.length) {
+    wrap.appendChild(shortcutSection('App'));
+    appNames.forEach((name) => {
+      const info = appShortcuts[name];
+      wrap.appendChild(menuRow(info.label, info.shortcut));
+    });
   }
+  if (Object.keys(actionShortcuts).length) {
+    wrap.appendChild(shortcutSection('Actions'));
+    Object.entries(actionShortcuts).forEach(([name, info]) => {
+      wrap.appendChild(menuRow(`${name}: ${info.label}`.trim(), info.shortcut));
+    });
+  }
+  wrap.appendChild(shortcutSection('Mouse'));
+  const mouse = document.createElement('div');
+  mouse.className = 'menu-row';
+  const mlabel = document.createElement('span');
+  mlabel.className = 'menu-label';
+  mlabel.textContent = 'Drag to draw · \u2715 to delete box';
+  mouse.appendChild(mlabel);
+  wrap.appendChild(mouse);
+}
+
+function openShortcutsModal() {
+  renderShortcuts();
+  el('shortcutsModal').classList.remove('hidden');
+}
+
+function closeShortcutsModal() {
+  el('shortcutsModal').classList.add('hidden');
 }
 
 function populateClasses() {
@@ -862,6 +933,10 @@ async function loadConfig(startIdx = 0, opts = {}) {
   el('datasetPath').textContent = cfg.dataset_path ? `dataset: ${cfg.dataset_path}` : '';
   readonly = !!cfg.readonly;
   applyDatasetVisibility();
+  if (!datasetLoaded && !settingsAutoOpened) {
+    settingsAutoOpened = true;
+    openSettingsModal();
+  }
   el('readonlySw').dataset.server = cfg.readonly ? '1' : '';
   applyReadonly();
   populateClasses();
@@ -972,10 +1047,9 @@ async function maybeRestoreView(cfg) {
 }
 
 function showTransientFilterMessage(msg) {
-  const status = el('folderStatus');
-  status.textContent = msg;
-  clearTimeout(showTransientFilterMessage._t);
-  showTransientFilterMessage._t = setTimeout(() => { status.textContent = ''; }, 4000);
+  if (showTransientFilterMessage._last === msg) return; // don't re-toast on reload
+  showTransientFilterMessage._last = msg;
+  toast(msg, { type: 'error' });
 }
 
 function loadImage(i) {
@@ -1127,11 +1201,8 @@ async function go(delta) {
 // ------------------------------------------------------------------------- //
 // tagging (per-image tag bar)
 // ------------------------------------------------------------------------- //
-function setTagStatus(msg) {
-  const status = el('tagStatus');
-  status.textContent = msg;
-  clearTimeout(setTagStatus._t);
-  setTagStatus._t = setTimeout(() => { status.textContent = ''; }, 2000);
+function setTagStatus(msg, type = 'info') {
+  toast(msg, { type, timeout: type === 'error' ? undefined : 2500 });
 }
 
 function tagBadge(name, active, num) {
@@ -1204,11 +1275,11 @@ async function saveImageTags() {
       setTagStatus(`Saved ${data.count} tag(s)`);
     } else {
       dbgWarn('tag save failed', { status: res.status, error: data.error });
-      setTagStatus('Tag save failed: ' + (data.error || res.status));
+      setTagStatus('Tag save failed: ' + (data.error || res.status), 'error');
     }
   } catch (err) {
     dbgWarn('tag save error', err);
-    setTagStatus('Tag save failed: ' + err.message);
+    setTagStatus('Tag save failed: ' + err.message, 'error');
   }
   renderTagBar();
 }
@@ -1225,7 +1296,7 @@ async function addTag(name, addToDataset) {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setTagStatus('Failed to add to tags.yaml: ' + (data.error || res.status));
+      setTagStatus('Failed to add to tags.yaml: ' + (data.error || res.status), 'error');
       return;
     }
     const data = await res.json();
@@ -1352,7 +1423,7 @@ function markDirty() {
 function scheduleAutoSave() {
   if (!autoSave || readonly || currentIndex < 0) return;
   clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(() => { autoSaveTimer = null; save(); }, AUTO_SAVE_DELAY);
+  autoSaveTimer = setTimeout(() => { autoSaveTimer = null; save({ silent: true }); }, AUTO_SAVE_DELAY);
 }
 
 // Save any pending auto-save now (used before navigating away).
@@ -1362,21 +1433,20 @@ async function flushAutoSave() {
     autoSaveTimer = null;
   }
   if (!dirty || readonly) return true;
-  return save();
+  return save({ silent: true });
 }
 
 // Returns true on success, false when the write failed or a hook cancelled it.
-async function save() {
+// `silent` suppresses the success toast (used by auto-save); failures always show.
+async function save(opts = {}) {
   if (currentIndex < 0) return false;
-  const status = el('status');
   // a failing before_save hook cancels the write
   dbg('save requested', { index: currentIndex, boxes: boxes.length });
   if (!(await runHook('on_before_save'))) {
     dbgWarn('save aborted by on_before_save hook');
-    status.textContent = 'Save aborted by on_before_save';
+    toast('Save aborted by on_before_save', { type: 'error' });
     return false;
   }
-  status.textContent = 'Saving…';
   let ok = false;
   try {
     const res = await fetch('/api/labels' + keyQuery(images[currentIndex]), {
@@ -1389,17 +1459,16 @@ async function save() {
       dirty = false;
       ok = true;
       dbg('save ok', { index: currentIndex, count: data.count });
-      status.textContent = `Saved ${data.count} box(es)`;
-      setTimeout(() => { status.textContent = ''; }, 2000);
+      if (!opts.silent) toast(`Saved ${data.count} box(es)`, { type: 'success' });
       updateHistoryButtons();
       runHook('on_after_save');
     } else {
       dbgWarn('save failed', { status: res.status, error: data.error });
-      status.textContent = 'Save failed: ' + (data.error || res.status);
+      toast('Save failed: ' + (data.error || res.status), { type: 'error' });
     }
   } catch (err) {
     dbgWarn('save error', err);
-    status.textContent = 'Save failed: ' + err.message;
+    toast('Save failed: ' + err.message, { type: 'error' });
   }
   updateHistoryButtons();
   return ok;
@@ -1407,8 +1476,6 @@ async function save() {
 
 async function setDataYaml() {
   const yamlPath = el('dataYaml').value.trim();
-  const status = el('folderStatus');
-  status.textContent = 'Loading…';
   try {
     const res = await fetch('/api/data', {
       method: 'POST',
@@ -1418,22 +1485,20 @@ async function setDataYaml() {
     const data = await res.json();
     if (res.ok && data.ok) {
       dbg('dataset loaded', { path: yamlPath });
-      status.textContent = 'Loaded';
       await loadConfig();
-      setTimeout(() => { status.textContent = ''; }, 2000);
+      toast('Dataset loaded', { type: 'success' });
+      closeSettingsModal();
     } else {
       dbgWarn('dataset load failed', { status: res.status, error: data.error });
-      status.textContent = data.error || 'Invalid data.yaml';
+      toast(data.error || 'Invalid data.yaml', { type: 'error' });
     }
   } catch (err) {
     dbgWarn('dataset load error', err);
-    status.textContent = 'Error: ' + err.message;
+    toast('Error: ' + err.message, { type: 'error' });
   }
 }
 
 async function setSplit(split, resumeOk = false) {
-  const status = el('folderStatus');
-  status.textContent = 'Switching split…';
   const anchor = resumeOk ? null : captureImageAnchor(false);
   try {
     const res = await fetch('/api/split', {
@@ -1444,21 +1509,18 @@ async function setSplit(split, resumeOk = false) {
     const data = await res.json();
     if (res.ok && data.ok) {
       dbg('split changed', { split: split || null });
-      status.textContent = '';
       await loadConfig(0, resumeOk ? { noResume: false } : { noResume: true, anchor });
     } else {
       dbgWarn('split switch failed', { status: res.status, error: data.error });
-      status.textContent = data.error || 'Split switch failed';
+      toast(data.error || 'Split switch failed', { type: 'error' });
     }
   } catch (err) {
     dbgWarn('split switch error', err);
-    status.textContent = 'Error: ' + err.message;
+    toast('Error: ' + err.message, { type: 'error' });
   }
 }
 
 async function applyFilterChain(names) {
-  const status = el('folderStatus');
-  status.textContent = 'Applying filters…';
   const anchor = captureImageAnchor(false);
   try {
     const res = await fetch('/api/filter', {
@@ -1470,17 +1532,16 @@ async function applyFilterChain(names) {
     if (res.ok && data.ok) {
       dbg('filters changed', { filters: names || [],
         images: (data.images || []).length, filter_error: data.filter_error });
-      status.textContent = '';
       closeFilterModal();
       await loadConfig(0, { noResume: true, skipFilterRestore: true, anchor });
     } else {
       dbgWarn('filter failed', { status: res.status, error: data.error });
-      status.textContent = data.error || 'Filter failed';
+      toast(data.error || 'Filter failed', { type: 'error' });
       populateFilterModal(); // revert the modal to the active chain
     }
   } catch (err) {
     dbgWarn('filter error', err);
-    status.textContent = 'Error: ' + err.message;
+    toast('Error: ' + err.message, { type: 'error' });
     populateFilterModal();
   }
 }
@@ -1510,16 +1571,9 @@ function closeActionResult() {
   el('actionResult').classList.add('hidden');
 }
 
-// Event hooks report success in the bottom status bar (auto-hides); failures
-// still use the result modal.
+// Event hooks report success as a transient toast; failures still use the modal.
 function setHookStatus(msg) {
-  const bar = el('hookStatusBar');
-  const text = el('hookStatus');
-  if (!bar || !text) return;
-  text.textContent = msg;
-  bar.classList.remove('hidden');
-  clearTimeout(setHookStatus._t);
-  setHookStatus._t = setTimeout(() => { bar.classList.add('hidden'); }, 3000);
+  toast(msg, { type: 'success', timeout: 3000 });
 }
 
 // Run one user action (or event hook) on the current image. `confirm: false`
@@ -1665,11 +1719,54 @@ function fmtNum(v) {
   return Math.round(v * 10000) / 10000;
 }
 
+const SIDE_PANEL_MIN = 220;
+const SIDE_PANEL_MAX = 720;
+const SIDE_PANEL_W_KEY = 'ybe_side_panel_w';
+
+function applySidePanelWidth(w) {
+  const clamped = Math.min(SIDE_PANEL_MAX, Math.max(SIDE_PANEL_MIN, Math.round(w)));
+  el('sidePanel').style.setProperty('--side-panel-w', clamped + 'px');
+  return clamped;
+}
+
+function initSidePanelResizer() {
+  const handle = el('sidePanelResizer');
+  if (!handle) return;
+  let dragging = false;
+  let pending = null;
+  const onMove = (e) => {
+    if (!dragging) return;
+    e.preventDefault();
+    pending = applySidePanelWidth(window.innerWidth - e.clientX);
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('active');
+    document.body.style.cursor = '';
+    if (pending !== null) localStorage.setItem(SIDE_PANEL_W_KEY, String(pending));
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+  };
+  handle.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    dragging = true;
+    handle.classList.add('active');
+    try { handle.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    document.body.style.cursor = 'col-resize';
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  });
+}
+
 function initSidePanel() {
   sidePanelOpen = localStorage.getItem('sidePanelOpen') !== '0';
   toggleSidePanel(sidePanelOpen);
+  const saved = parseInt(localStorage.getItem(SIDE_PANEL_W_KEY) || '', 10);
+  if (saved) applySidePanelWidth(saved);
   el('sidePanelToggle').addEventListener('click', () => toggleSidePanel());
   el('sidePanelClose').addEventListener('click', () => toggleSidePanel(false));
+  initSidePanelResizer();
 }
 
 function toggleSidePanel(show) {
@@ -2012,21 +2109,35 @@ window.addEventListener('mouseup', (e) => {
 
 el('prevBtn').addEventListener('click', () => go(-1));
 el('nextBtn').addEventListener('click', () => go(1));
-el('saveBtn').addEventListener('click', save);
+el('saveBtn').addEventListener('click', () => save());
 el('undoBtn').addEventListener('click', undo);
 el('redoBtn').addEventListener('click', redo);
 el('setDataBtn').addEventListener('click', setDataYaml);
-el('changeDataBtn').addEventListener('click', () => {
-  datasetLoaded = false;
-  applyDatasetVisibility();
+el('settingsBtn').addEventListener('click', openSettingsModal);
+el('settingsModalClose').addEventListener('click', closeSettingsModal);
+el('settingsModal').addEventListener('click', (e) => {
+  if (e.target === el('settingsModal')) closeSettingsModal();
 });
-el('shortcutsMoreBtn').addEventListener('click', () => {
-  el('shortcutsMenu').classList.toggle('hidden');
+el('shortcutsModalBtn').addEventListener('click', openShortcutsModal);
+el('shortcutsModalClose').addEventListener('click', closeShortcutsModal);
+el('shortcutsModal').addEventListener('click', (e) => {
+  if (e.target === el('shortcutsModal')) closeShortcutsModal();
+});
+el('notifBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleNotifPanel();
+});
+el('notifClear').addEventListener('click', () => {
+  notifLog = [];
+  notifUnread = 0;
+  updateNotifBadge();
+  renderNotifPanel();
 });
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('#shortcutBar')) el('shortcutsMenu').classList.add('hidden');
+  if (!e.target.closest('#notifPanel') && !e.target.closest('#notifBtn')) {
+    toggleNotifPanel(false);
+  }
 });
-window.addEventListener('resize', applyShortcutOverflow);
 el('recentSelect').addEventListener('change', () => {
   const val = el('recentSelect').value;
   if (!val) return;
@@ -2317,8 +2428,16 @@ document.addEventListener('keydown', (e) => {
       closeFilterModal();
       return;
     }
-    if (!el('shortcutsMenu').classList.contains('hidden')) {
-      el('shortcutsMenu').classList.add('hidden');
+    if (!el('shortcutsModal').classList.contains('hidden')) {
+      closeShortcutsModal();
+      return;
+    }
+    if (!el('settingsModal').classList.contains('hidden')) {
+      closeSettingsModal();
+      return;
+    }
+    if (!el('notifPanel').classList.contains('hidden')) {
+      toggleNotifPanel(false);
       return;
     }
   }

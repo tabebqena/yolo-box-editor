@@ -10,68 +10,24 @@
   <header class="topbar">
     <div class="brand">YOLO Box Editor</div>
 
-    <div class="splitbox">
-      <label for="splitSelect">Split</label>
-      <select id="splitSelect" title="Work on one split, or all splits together"></select>
-    </div>
-
-    <div id="filterBox" class="filterbox hidden">
-      <label for="filtersBtn">Filters</label>
-      <button id="filtersBtn" class="filter-btn" title="Chain filters from filters/ to narrow the image list">No filter</button>
-    </div>
-
-    <div class="actionbox">
-      <span class="action-label" title="Run a user action from actions.yaml on the current image">Actions</span>
-      <div id="actionBtns" class="action-btns"></div>
-    </div>
-
-    <div class="actions">
-      <span id="status" class="status"></span>
-    </div>
-
     <div class="topbar-end">
-      <div class="readonlybox">
-        <label class="ro-label" for="readonlySw" title="Disable drawing and saving">
-          <input type="checkbox" id="readonlySw">
-          Read-only
-        </label>
-      </div>
-
-      <div class="taggingbox">
-        <label class="tag-label" for="taggingSw" title="Show and edit image tags below the image">
-          <input type="checkbox" id="taggingSw">
-          Tags
-        </label>
-      </div>
-
-      <div class="autosavebox">
-        <label class="as-label" for="autoSaveSw" title="Save labels automatically after each edit (no save/discard prompt when navigating)">
-          <input type="checkbox" id="autoSaveSw">
-          Auto-save
-        </label>
-      </div>
-
-      <button id="changeDataBtn" class="hidden" title="Pick a different dataset">Change dataset</button>
+      <button id="notifBtn" class="icon-btn" title="Notifications" aria-label="Notifications"
+              aria-haspopup="true" aria-expanded="false">
+        <span aria-hidden="true">&#128276;</span>
+        <span id="notifBadge" class="notif-badge hidden">0</span>
+      </button>
+      <button id="settingsBtn" title="Settings: view options, dataset, shortcuts">&#9881; Settings</button>
       <button id="sidePanelToggle" class="hidden" title="Show / hide the boxes panel">Boxes</button>
+
+      <div id="notifPanel" class="notif-panel hidden">
+        <div class="notif-panel-head">
+          <span>Notifications</span>
+          <button id="notifClear" class="notif-clear" title="Clear all notifications">Clear</button>
+        </div>
+        <div id="notifList" class="notif-list"></div>
+      </div>
     </div>
   </header>
-
-  <div id="shortcutErrors" class="shortcut-errors hidden"></div>
-
-  <div id="presenceWarning" class="hidden"></div>
-
-  <section id="settings" class="settings">
-    <label class="field" id="yamlField">
-      <span>data.yaml</span>
-      <select id="recentSelect" title="Open a recently used data.yaml">
-        <option value="">Recent…</option>
-      </select>
-      <input id="dataYaml" type="text" placeholder="/path/to/data.yaml">
-    </label>
-    <button id="setDataBtn">Load data.yaml</button>
-    <span id="folderStatus" class="status"></span>
-    <span id="datasetPath" class="hint"></span>
-  </section>
 
   <div class="middle">
     <main class="canvas-wrap">
@@ -79,10 +35,28 @@
     </main>
 
     <aside id="sidePanel" class="side-panel">
+      <div id="sidePanelResizer" class="side-panel-resizer" title="Drag to resize the panel"></div>
       <div class="side-panel-head">
         <span class="side-panel-title">Boxes</span>
         <span id="sidePanelCount" class="side-panel-count">0</span>
         <button id="sidePanelClose" class="side-panel-close" title="Hide panel">&#10005;</button>
+      </div>
+
+      <div class="side-panel-controls">
+        <div class="splitbox">
+          <label for="splitSelect">Split</label>
+          <select id="splitSelect" title="Work on one split, or all splits together"></select>
+        </div>
+
+        <div id="filterBox" class="filterbox hidden">
+          <label for="filtersBtn">Filters</label>
+          <button id="filtersBtn" class="filter-btn" title="Chain filters from filters/ to narrow the image list">No filter</button>
+        </div>
+
+        <div class="actionbox">
+          <span class="action-label" title="Run a user action from actions.yaml on the current image">Actions</span>
+          <div id="actionBtns" class="action-btns"></div>
+        </div>
       </div>
 
       <div id="boxList" class="box-list"></div>
@@ -99,7 +73,6 @@
       <datalist id="tagSuggestions"></datalist>
       <button id="addTagBtn" type="button" title="Add tag to the image (new names are written to tags.yaml)">+ Add tag</button>
     </div>
-    <span id="tagStatus" class="status"></span>
   </section>
 
   <section class="imagebar">
@@ -118,18 +91,63 @@
     </div>
   </section>
 
-  <section id="hookStatusBar" class="hook-statusbar hidden">
-    <span id="hookStatus" class="hook-status"></span>
-  </section>
-
-  <section id="shortcutBar" class="shortcuts">
-    <span class="shortcuts-title">Shortcuts</span>
-    <div id="shortcutItems" class="shortcut-items"></div>
-    <button id="shortcutsMoreBtn" class="shortcuts-more hidden" title="Show all shortcuts">&#8230;</button>
-    <div id="shortcutsMenu" class="shortcuts-menu hidden"></div>
-  </section>
-
   <div id="classPicker" class="class-picker hidden"></div>
+
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-box settings-modal">
+      <div class="modal-head">
+        <span class="modal-title">Settings</span>
+        <button id="settingsModalClose" class="modal-close" title="Close (Esc)">&#10005;</button>
+      </div>
+      <div class="settings-modal-body">
+        <section class="settings-group">
+          <h3 class="settings-group-title">View</h3>
+          <label class="settings-row" for="readonlySw" title="Disable drawing and saving">
+            <input type="checkbox" id="readonlySw">
+            <span>Read-only</span>
+          </label>
+          <label class="settings-row" for="taggingSw" title="Show and edit image tags below the image">
+            <input type="checkbox" id="taggingSw">
+            <span>Tags</span>
+          </label>
+          <label class="settings-row" for="autoSaveSw" title="Save labels automatically after each edit (no save/discard prompt when navigating)">
+            <input type="checkbox" id="autoSaveSw">
+            <span>Auto-save</span>
+          </label>
+        </section>
+
+        <section class="settings-group">
+          <h3 class="settings-group-title">Dataset</h3>
+          <label class="field" id="yamlField">
+            <span>data.yaml</span>
+            <select id="recentSelect" title="Open a recently used data.yaml">
+              <option value="">Recent…</option>
+            </select>
+            <input id="dataYaml" type="text" placeholder="/path/to/data.yaml">
+          </label>
+          <div class="settings-actions">
+            <button id="setDataBtn">Load data.yaml</button>
+            <span id="datasetPath" class="hint"></span>
+          </div>
+        </section>
+
+        <section class="settings-group">
+          <h3 class="settings-group-title">Shortcuts</h3>
+          <button id="shortcutsModalBtn" title="Show all keyboard and mouse shortcuts">Show all shortcuts</button>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="shortcutsModal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span class="modal-title">Shortcuts</span>
+        <button id="shortcutsModalClose" class="modal-close" title="Close (Esc)">&#10005;</button>
+      </div>
+      <div id="shortcutItems" class="shortcut-modal-body"></div>
+    </div>
+  </div>
 
   <div id="actionResult" class="modal hidden">
     <div class="modal-box">
@@ -157,6 +175,8 @@
       </div>
     </div>
   </div>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

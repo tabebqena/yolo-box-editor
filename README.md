@@ -53,18 +53,18 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   `Esc`).
 - **Undo / Redo / Save**: `z` undoes, `y` redoes, `s` saves — Save is enabled
   only while the image has unsaved changes.
-- **Auto-save** (topbar switch, remembered per browser): after each edit the
+- **Auto-save** (Settings → View switch, remembered per browser): after each edit the
   current image's labels are saved automatically (edits are coalesced into one
   write). While it is on, Prev/Next and the counter jump no longer ask to
   save/discard — any pending write is flushed first (navigation is kept on the
   image if that write fails).
-- **Read-only mode**: pass `--readonly` (or tick the topbar switch) to browse as
+- **Read-only mode**: pass `--readonly` (or tick the Settings switch) to browse as
   a pure viewer; drawing, editing and saving stop, and label writes are also
   rejected server-side. The switch is locked on when started with `--readonly`.
 - **Concurrent-use warning**: one running instance keeps a single dataset/view
   state, so it is meant for one user at a time. While more than one tab, browser
   or machine is connected, every client shows a dismissible *"Another user is
-  using this app"* banner; it is only a warning — nothing is blocked, and
+  using this app"* notification; it is only a warning — nothing is blocked, and
   simultaneous edits can still overwrite each other. **This app is designed to
   be used by one user at a time and is not designed to be served to multiple
   clients.**
@@ -84,9 +84,9 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   directory set to your user folder (logged to the server console).
 - **Configurable shortcuts**: bind keys in `shortcuts.txt` with
   `ACTION_NAME <SHORTCUT> label`. Every app action and your action names
-  can be bound; invalid names are rejected with a dismissible banner. Your
+  can be bound; invalid names are rejected with a dismissible notification. Your
   `shortcuts.txt` lives in the user folder and is read after the shipped one.
-- **Tags** (opt-in via the topbar `Tags` switch): a tag bar below the image
+- **Tags** (opt-in via the Settings `Tags` switch): a tag bar below the image
   shows the dataset's tags as clickable badges — click to toggle a tag on the
   current image, `+ Add tag` appends a brand-new name to `tags.yaml`, and
   `Alt+1..9` toggles the matching tag by number. Active badges look different
@@ -215,10 +215,11 @@ python app/app.py --data /path/to/data.yaml --home ./my-user-files  # custom use
 ```
 
 Open <http://127.0.0.1:5000>. You can also leave out `--data` and paste the
-`data.yaml` path into the settings bar, then click *Load data.yaml* — or just
-run `python app/app.py`, which reopens the dataset you used last (add `--no-resume`
-to start on the settings screen instead). The dataset, split, filter chain, last
-image and topbar switches are all restored, so the app comes back as you left it.
+`data.yaml` path into the **Settings** dialog (the gear button), then click
+*Load data.yaml* — or just run `python app/app.py`, which reopens the dataset you
+used last (add `--no-resume` to start with the Settings dialog instead). The
+dataset, split, filter chain, last image and view switches are all restored, so
+the app comes back as you left it.
 
 `--debug` writes verbose messages to the **browser console** (prefixed `[ybe]`):
 the loaded config, image loads, saves, tag writes, user actions / `after_success`
@@ -260,7 +261,7 @@ Coordinates are normalized to `0..1` relative to the image dimensions.
 ## User actions
 
 Each action is one YAML file in your `actions/` folder (inside your user folder),
-shown as a button in the topbar. The action's name is its top-level `name:` key,
+shown as a button in the right-hand panel. The action's name is its top-level `name:` key,
 or the file name without extension when omitted. A shipped `actions/example.yaml`
 template is ignored until you give it steps.
 
@@ -388,8 +389,8 @@ same `steps` / `after_success` and the same placeholders as actions; call script
 explicitly as `python {USER_SCRIPT_DIR}/<name>.py` (yours) or
 `python {APP_SCRIPT_DIR}/<name>.py` (shipped), or relatively as
 `python scripts/<name>.py` (steps run with the working directory set to your user
-folder). A successful hook reports in the **bottom status bar** (auto-hides
-after a few seconds); a failed hook opens the result **modal**. They are opt-in:
+folder). A successful hook reports as a **toast** (auto-hides after a few
+seconds); a failed hook opens the result **modal**. They are opt-in:
 no file, no hook.
 
 The event comes from the **file name**: `on_<event>.yaml`. If the file name does
@@ -433,7 +434,7 @@ hook are skipped.
 ## Tags
 
 YOLO has no canonical tagging scheme, so this app defines a minimal one. It is
-opt-in: flip the topbar **Tags** switch to show a tag bar below the image.
+opt-in: flip the **Tags** switch in **Settings** to show a tag bar below the image.
 
 - **`tags.yaml`** lives next to `data.yaml` and holds the dataset's available
   tags under a single key:
@@ -466,8 +467,9 @@ opt-in: flip the topbar **Tags** switch to show a tag bar below the image.
 ## Filters
 
 A **filter** narrows the loaded image list to the images a script returns.
-**Filters are chainable**: the topbar `Filters` button (next to `Split`) appears
-once a `data.yaml` is loaded and opens a modal with a stack of selects (up to 8).
+**Filters are chainable**: the `Filters` button in the right-hand panel (below
+`Split`) appears once a `data.yaml` is loaded and opens a modal with a stack of
+selects (up to 8).
 Pick a filter in each select and they run **top to bottom** — each one receives
 the previous one's result, applies its own logic, and passes its result on. The
 last filter's output is exactly what the app shows (count, Prev/Next, the counter
