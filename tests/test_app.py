@@ -40,7 +40,7 @@ def test_configure_home_repoints_user_dirs(clean_state, tmp_path):
     ybe.configure_home(str(target))
     assert ybe.YBX_HOME == str(target)
     assert ybe.USER_ACTIONS_DIR == str(target / "actions")
-    assert ybe.USER_SCRIPTS_DIR == str(target / "scripts")
+    assert ybe.USER_SCRIPT_DIR == str(target / "scripts")
     assert ybe.RECENT_FILE == str(target / ".recent_data_yamls.json")
 
 
@@ -87,8 +87,8 @@ def clean_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "hooks"))
     monkeypatch.setattr(ybe, "FILTERS_DIR", str(tmp_path / "app-filters"))
     monkeypatch.setattr(ybe, "USER_FILTERS_DIR", str(tmp_path / "filters"))
-    monkeypatch.setattr(ybe, "SCRIPTS_DIR", str(tmp_path / "app-scripts"))
-    monkeypatch.setattr(ybe, "USER_SCRIPTS_DIR", str(tmp_path / "scripts"))
+    monkeypatch.setattr(ybe, "APP_SCRIPT_DIR", str(tmp_path / "app-scripts"))
+    monkeypatch.setattr(ybe, "USER_SCRIPT_DIR", str(tmp_path / "scripts"))
     monkeypatch.setattr(ybe, "SHORTCUTS_FILE", str(tmp_path / "app-shortcuts.txt"))
     monkeypatch.setattr(ybe, "USER_SHORTCUTS_FILE", str(tmp_path / "shortcuts.txt"))
     monkeypatch.setattr(ybe, "PIPE_DIR", str(tmp_path / "pipes"))
@@ -1126,11 +1126,17 @@ def test_api_action_run_sets_cwd_to_home(clean_state, tmp_path):
     assert payload["cwd"] == str(clean_state)
 
 
-def test_api_action_run_substitutes_scripts_and_home_dir(clean_state, tmp_path):
+def test_api_action_run_substitutes_home_dir_and_env(clean_state, tmp_path):
+    # user scripts are reached relatively (cwd is the home) and via YBE_* env;
+    # shipped helpers via {APP_DIR}/scripts
     write_hook(
         tmp_path,
         "on_after_save.yaml",
-        "steps:\n  - echo {SCRIPTS_DIR}\n  - echo {HOME_DIR}\n",
+        "steps:\n"
+        "  - pwd\n"
+        "  - echo {HOME_DIR}\n"
+        "  - echo $YBE_USER_SCRIPT_DIR\n"
+        "  - echo $YBE_APP_SCRIPT_DIR\n",
     )
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
@@ -1138,8 +1144,9 @@ def test_api_action_run_substitutes_scripts_and_home_dir(clean_state, tmp_path):
         "/api/actions/run", json={"action": "on_after_save", "target": "train/a.jpg"}
     ).get_json()
     assert payload["ok"] is True
-    assert ybe.USER_SCRIPTS_DIR in payload["stdout"]
     assert ybe.YBX_HOME in payload["stdout"]
+    assert ybe.USER_SCRIPT_DIR in payload["stdout"]
+    assert ybe.APP_SCRIPT_DIR in payload["stdout"]
 
 
 def test_run_command_logs_cwd(clean_state, capsys):

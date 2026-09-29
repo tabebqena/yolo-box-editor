@@ -23,9 +23,11 @@ hand-rolled — no PyYAML at runtime. User files live in `YBX_HOME` (below).
 - `app/app.py` — CLI entry `main()`; module globals `BASE_DIR` (the shipped
   `app/` folder), `YBX_HOME` (the user folder), `STATE` (in-memory dataset
   state), and path constants: shipped `ACTIONS_DIR`, `HOOKS_DIR`, `FILTERS_DIR`,
-  `SCRIPTS_DIR`, `SHORTCUTS_FILE`; user `USER_ACTIONS_DIR`, `USER_HOOKS_DIR`,
-  `USER_FILTERS_DIR`, `USER_SCRIPTS_DIR`, `USER_SHORTCUTS_FILE`; state
-  `RECENT_FILE`, `VIEW_FILE`.
+  `APP_SCRIPT_DIR`, `SHORTCUTS_FILE`; user `USER_ACTIONS_DIR`, `USER_HOOKS_DIR`,
+  `USER_FILTERS_DIR`, `USER_SCRIPT_DIR`, `USER_SHORTCUTS_FILE`; state
+  `RECENT_FILE`, `VIEW_FILE`. There is deliberately no `SCRIPTS_DIR` symbol:
+  scripts are reached relatively (`scripts/…`, since cwd is the home) or as
+  `{APP_DIR}/scripts/…`.
 - `YBX_HOME` resolution: `--home <dir>` > `$YBX_HOME` > the parent of `app.py`.
   A clone and an install therefore behave the same; the folders are created at
   startup and the path is logged (`[ybe] user dir: …`).
@@ -41,11 +43,12 @@ hand-rolled — no PyYAML at runtime. User files live in `YBX_HOME` (below).
     - UI: Filters button opens a modal with up to 8 stacked selects, run top-to-bottom (`app/static/app.js`).
     - Scratch pipe dir is deleted after each run; `--keep-filter-pipes` keeps it (CLI).
   - `scripts/*.py` — helpers named by action `steps`; the app never scans them.
-    Shipped helpers sit in `{APP_DIR}/scripts/`, yours in `{SCRIPTS_DIR}/`.
+    Shipped helpers sit in `{APP_DIR}/scripts/`; yours are reached relatively as
+    `scripts/…` (cwd is `YBX_HOME`).
   - `shortcuts.txt` — `ACTION_NAME <KEY> label`.
 - Commands and filters run with `cwd=YBX_HOME` (logged per run) and receive
-  `YBE_HOME`, `YBE_APP_DIR`, `YBE_SCRIPTS_DIR`; placeholders include
-  `{APP_DIR}`, `{SCRIPTS_DIR}`, `{HOME_DIR}`.
+  `YBE_HOME`, `YBE_APP_DIR`, `YBE_APP_SCRIPT_DIR`, `YBE_USER_SCRIPT_DIR`;
+  placeholders are `{APP_DIR}` and `{HOME_DIR}`.
 - `app/VERSION` and `CHANGELOG.md` (Keep a Changelog); `README.md` /
   `TUTORIAL.md` are user-facing docs.
 

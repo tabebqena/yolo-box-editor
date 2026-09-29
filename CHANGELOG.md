@@ -23,17 +23,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   and drop the `.a` suffix (`actions/Archive.a.yaml` -> `actions/Archive.yaml`).
   User files are still read after the shipped ones and win on a name clash.
 - **Run working directory is now the user folder** (breaking), logged before
-  each command/filter. Previously it was the app folder. Use `{APP_DIR}` for the
-  shipped helpers and the new `{SCRIPTS_DIR}` for your own; `{HOME_DIR}` is the
-  user folder. Commands also receive `YBE_HOME`, `YBE_APP_DIR` and
-  `YBE_SCRIPTS_DIR` in their environment.
+  each command/filter. Previously it was the app folder. Your own helpers are
+  reached relatively as `scripts/…`; the shipped ones as `{APP_DIR}/scripts/…`;
+  `{HOME_DIR}` is the user folder. Commands also receive `YBE_HOME`,
+  `YBE_APP_DIR`, `YBE_APP_SCRIPT_DIR` and `YBE_USER_SCRIPT_DIR` in their
+  environment.
 - `.recent_data_yamls.json` and `.view_state.json` now live in the user folder.
 
 ### Added
 
 - `--home <dir>` flag and the `YBX_HOME` environment variable.
-- `{SCRIPTS_DIR}` and `{HOME_DIR}` placeholders; per-run `cwd` in the action
-  result payload.
+- `{HOME_DIR}` placeholder and per-run `cwd` in the action result payload.
 - `app/` layout keeps the shipped files in one relocatable directory, ready for
   the upcoming `ybx.sh` installer (Task 2).
 

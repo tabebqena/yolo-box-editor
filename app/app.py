@@ -60,14 +60,14 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 ACTIONS_DIR = os.path.join(BASE_DIR, "actions")  # one YAML file per action
 HOOKS_DIR = os.path.join(BASE_DIR, "hooks")  # one YAML file per event hook
 FILTERS_DIR = os.path.join(BASE_DIR, "filters")  # one Python script per filter
-SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")  # helper programs for steps
+APP_SCRIPT_DIR = os.path.join(BASE_DIR, "scripts")  # shipped helper programs
 SHORTCUTS_FILE = os.path.join(BASE_DIR, "shortcuts.txt")
 
 # User files (inside YBX_HOME); read after the built-ins and win on a clash.
 USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
 USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
 USER_FILTERS_DIR = os.path.join(YBX_HOME, "filters")
-USER_SCRIPTS_DIR = os.path.join(YBX_HOME, "scripts")
+USER_SCRIPT_DIR = os.path.join(YBX_HOME, "scripts")
 USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
 RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
 VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")  # active split/filter per dataset
@@ -81,12 +81,12 @@ FILTER_PIPES_DIR = os.path.join(tempfile.gettempdir(), "yolo-box-editor-filter-p
 def configure_home(path):
     """Point the user folders at `path` (the `--home` override)."""
     global YBX_HOME, USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR
-    global USER_SCRIPTS_DIR, USER_SHORTCUTS_FILE, RECENT_FILE, VIEW_FILE
+    global USER_SCRIPT_DIR, USER_SHORTCUTS_FILE, RECENT_FILE, VIEW_FILE
     YBX_HOME = os.path.abspath(os.path.expanduser(path))
     USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
     USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
     USER_FILTERS_DIR = os.path.join(YBX_HOME, "filters")
-    USER_SCRIPTS_DIR = os.path.join(YBX_HOME, "scripts")
+    USER_SCRIPT_DIR = os.path.join(YBX_HOME, "scripts")
     USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
     RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
     VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")
@@ -94,7 +94,7 @@ def configure_home(path):
 
 def ensure_user_dirs():
     """Create the user folders when missing, so the home is usable right away."""
-    for dirpath in (USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR, USER_SCRIPTS_DIR):
+    for dirpath in (USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR, USER_SCRIPT_DIR):
         try:
             os.makedirs(dirpath, exist_ok=True)
         except OSError:
@@ -378,7 +378,10 @@ ACTIONS_DOC = (
     "app's actions/ folder and yours in <home>/actions/; yours are read last and "
     "win on a name clash. Placeholders are substituted with shell-quoted values: "
     "{IMAGE_PATH}, {LABEL_PATH}, {DATASET_PATH}, {DATA_YAML_PATH}, {IMAGE_INDEX}, "
-    "{APP_DIR}, {SCRIPTS_DIR}, {HOME_DIR}, {PIPE_PATH}. Event hooks live in the "
+    "{APP_DIR}, {HOME_DIR}, {PIPE_PATH}. User files are reachable by their "
+    "relative path (the run's working directory is the user folder, e.g. "
+    "`scripts/helper.py`); shipped helpers live under {APP_DIR}/scripts/. "
+    "Event hooks live in the "
     "hooks/ directory and cannot be bound."
 )
 
@@ -635,7 +638,8 @@ def _subprocess_env():
     env = os.environ.copy()
     env["YBE_HOME"] = YBX_HOME
     env["YBE_APP_DIR"] = BASE_DIR
-    env["YBE_SCRIPTS_DIR"] = USER_SCRIPTS_DIR
+    env["YBE_APP_SCRIPT_DIR"] = APP_SCRIPT_DIR
+    env["YBE_USER_SCRIPT_DIR"] = USER_SCRIPT_DIR
     return env
 
 
@@ -644,8 +648,8 @@ def _run_command(state, command):
 
     Returns "ok", "failed", "timeout" or "error"; `state["exit_code"]` holds the
     failing command's code on "failed". Runs with cwd=YBX_HOME (logged), so
-    relative paths land in the user folder; use {APP_DIR}/{SCRIPTS_DIR} to reach
-    shipped and user scripts explicitly.
+    relative paths land in the user folder (`scripts/…` is yours); reach shipped
+    helpers with {APP_DIR}/scripts/… explicitly.
     """
     print(f"[ybe] command: cwd={YBX_HOME} cmd={command}", file=sys.stderr)
     try:
@@ -1626,10 +1630,9 @@ def api_action_run():
         "DATASET_PATH": STATE["dataset_path"] or "",
         "DATA_YAML_PATH": STATE["data_yaml"] or "",
         "IMAGE_INDEX": str(position or 0),
-        # the folder holding app.py (shipped files) and the user root; reach
-        # built-in helpers with {APP_DIR}/scripts/… and yours with {SCRIPTS_DIR}/…
+        # the folder holding app.py (shipped files); your own files are reached
+        # by their relative path (cwd is HOME_DIR), shipped ones via APP_DIR
         "APP_DIR": BASE_DIR,
-        "SCRIPTS_DIR": USER_SCRIPTS_DIR,
         "HOME_DIR": YBX_HOME,
         # scratch file shared by every step and after_success action of this run
         "PIPE_PATH": pipe_path or "",
