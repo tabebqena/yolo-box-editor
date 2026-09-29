@@ -28,8 +28,10 @@ is the entire backend; the UI is plain `templates/index.html` + `static/app.js` 
     optional `name`).
   - `hooks/on_<event>.yaml` — event taken from the filename, else `event_name:`;
     `active: false` skips it.
-  - `filters/*.py` — run as `python filters/<Name>.py <data.yaml> <split>`; must
-    print one `split/name` per line (`split` is `""` for All splits).
+  - Filters:
+    - Contract: python filters/<Name>.py <data.yaml> <split> <in_pipe> <out_pipe>; input holds the active split's absolute paths, output feeds the next filter (app.py:906 run_filter_chain).
+    - UI: Filters button opens a modal with up to 8 stacked selects, run top-to-bottom (static/app.js:549).
+    - Scratch pipe dir is deleted after each run; --keep-filter-pipes keeps it (app.py, CLI)..
   - `scripts/*.py` — helpers named by action `steps`; the app never scans them.
   - `shortcuts.txt` / `shortcuts.a.txt` — `ACTION_NAME <KEY> label`.
 - `VERSION` and `CHANGELOG.md` (Keep a Changelog); `README.md` / `TUTORIAL.md`
