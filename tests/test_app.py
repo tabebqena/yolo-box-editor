@@ -1062,6 +1062,52 @@ def test_api_action_run_pauses_at_client_action(clean_state, tmp_path):
     assert not Path(pipe).exists()
 
 
+def test_api_action_run_steps_can_mix_client_action(clean_state, tmp_path):
+    write_action(
+        tmp_path,
+        "Root.yaml",
+        "steps:\n  - echo before\n  - app_refresh_image\n  - echo after\n",
+    )
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    first = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    assert first["ok"] is True
+    assert first["client_action"] == "app_refresh_image"
+    # execution stopped before the step after the client action
+    assert "before" in first["stdout"] and "after" not in first["stdout"]
+    done = client.post(
+        "/api/actions/run", json={"uid": first["uid"], "result": {"ok": True}}
+    ).get_json()
+    assert done["ok"] is True
+    assert "after" in done["stdout"]
+
+
+def test_api_action_run_steps_can_chain_action(clean_state, tmp_path):
+    write_action(tmp_path, "Sub.yaml", "steps:\n  - echo sub\n")
+    write_action(tmp_path, "Root.yaml", "steps:\n  - echo root\n  - Sub\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    assert payload["ok"] is True
+    assert "root" in payload["stdout"] and "sub" in payload["stdout"]
+
+
+def test_api_action_run_hook_steps_can_include_client_action(clean_state, tmp_path):
+    write_hook(
+        tmp_path,
+        "on_after_save.yaml",
+        "steps:\n  - echo hooked\n  - app_refresh_image\n",
+    )
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    first = client.post(
+        "/api/actions/run", json={"action": "on_after_save", "idx": 0}
+    ).get_json()
+    assert first["ok"] is True
+    assert first["client_action"] == "app_refresh_image"
+    assert "hooked" in first["stdout"]
+
+
 def test_api_action_run_preserves_mixed_after_success_order(clean_state, tmp_path):
     root = make_dataset(tmp_path, splits=("train",), images=("a",))
     log = root / "order.log"

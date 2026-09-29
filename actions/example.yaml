@@ -7,14 +7,17 @@
 # Format (2-space indentation, lines starting with # are ignored):
 #
 #   name: Remove                # optional; defaults to the file name
-#   steps:                      # shell commands, run in order; execution
-#     - rm -f {IMAGE_PATH}      # stops at the first failure
+#   steps:                      # run in order; execution stops at the first
+#     - rm -f {IMAGE_PATH}      # failure. Entries share the syntax below.
 #     - rm -f {LABEL_PATH}
-#   after_success:              # optional, run after all steps succeeded
-#     - app_refresh_images_list # (stop at first error). Entries may be app
-#                               # actions (app_*, run in the UI) or other
-#                               # actions (run by the backend); order is kept.
+#   after_success:              # optional, runs after all steps succeeded
+#     - app_refresh_images_list
 #
+# `steps` and `after_success` accept the same entries:
+#   - an app_* name (run in the UI), or
+#   - another action name (its steps run inline here), or
+#   - anything else in `steps` = a shell command.
+# The backend runs the whole queue and pauses at each app_* entry for the UI.
 # `steps` and `after_success` may also be a single value on the key line.
 #
 # Event hooks do NOT live here: they are YAML files in the sibling hooks/ folder

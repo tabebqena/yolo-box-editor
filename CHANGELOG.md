@@ -16,13 +16,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   each run (useful for debugging). The run's path is reported by
   `/api/actions/run` as `pipe_path`.
 - **Action executions are now driven by the backend.** `/api/actions/run` runs
-  the root `steps` and then the whole `after_success` chain, executing
-  server-side (non-hook) actions itself and pausing only at a client-side
-  `app_*` entry, which it returns as `client_action` with an execution `uid`.
-  The UI runs that action and posts `{uid, result}` to resume, so a mixed
-  `after_success` list keeps its exact order while the backend still owns the
-  run (and its `{PIPE_PATH}` file). Cascades are capped at 8 actions per run;
-  hook names in `after_success` and unknown actions are rejected server-side.
+  the root `steps` and then the whole `after_success` list as one ordered queue,
+  executing server-side entries itself and pausing only at a client-side `app_*`
+  entry, which it returns as `client_action` with an execution `uid`. The UI runs
+  that action and posts `{uid, result}` to resume, so a mixed list keeps its
+  exact order while the backend still owns the run (and its `{PIPE_PATH}` file).
+  Cascades are capped at 8 actions per run; hook names in `after_success` and
+  unknown actions are rejected server-side. `PIPE_PATH` is shared by every step
+  and every server-side action of the run.
+- **`steps` and `after_success` now accept the same entries.** Besides shell
+  commands, a `steps` entry may be an `app_*` action (run in the UI, pausing the
+  run) or another (non-hook) action name (run inline, with its own steps), just
+  like `after_success` always could. A run is a single queue, so a `steps` entry
+  can stop for the UI and continue on resume.
 - **Resume the previous session on start**: running `python app.py` without
   `--data` reopens the dataset last used (the newest entry of
   `.recent_data_yamls.json` that still exists); pass the new `--no-resume` flag

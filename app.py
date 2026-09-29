@@ -249,14 +249,15 @@ def _push_recent(path):
 # --------------------------------------------------------------------------- #
 ACTIONS_DOC = (
     "Each action is a YAML file in the actions/ directory: an optional "
-    "top-level `name:` (defaults to the file name), a `steps` list of shell "
-    "commands (run in order, stopping at the first failure) and an optional "
-    "`after_success` list of app actions or other non-hook actions. Files "
-    "ending in `.a.yaml` are the user's own (never shipped) and win on a name "
-    "clash. Placeholders are substituted with shell-quoted values: "
-    "{IMAGE_PATH}, {LABEL_PATH}, {DATASET_PATH}, {DATA_YAML_PATH}, "
-    "{IMAGE_INDEX}, {APP_DIR}, {PIPE_PATH}. Event hooks live in the hooks/ "
-    "directory and cannot be bound or used in after_success."
+    "top-level `name:` (defaults to the file name), a `steps` list and an "
+    "optional `after_success` list, run in order and stopping at the first "
+    "failure. Both lists accept the same entries: an `app_*` name runs in the "
+    "UI, another (non-hook) action name runs its own steps inline, and any "
+    "other `steps` entry is a shell command. Files ending in `.a.yaml` are the "
+    "user's own (never shipped) and win on a name clash. Placeholders are "
+    "substituted with shell-quoted values: {IMAGE_PATH}, {LABEL_PATH}, "
+    "{DATASET_PATH}, {DATA_YAML_PATH}, {IMAGE_INDEX}, {APP_DIR}, {PIPE_PATH}. "
+    "Event hooks live in the hooks/ directory and cannot be bound."
 )
 
 
@@ -505,121 +506,122 @@ def remove_pipe(path):
 
 
 # --------------------------------------------------------------------------- #
-# action executions: the backend runs the whole steps + after_success chain,
-# pausing only when it reaches a client-side (app_*) entry, which it hands to
-# the UI by execution uid. The client runs it and calls back to resume.
+# action executions: `steps` and `after_success` form one ordered queue of
+# server commands and server/frontend actions. The backend runs it until it
+# reaches a frontend (app_*) entry, which it hands to the UI by execution uid;
+# the client runs it and calls back to resume. The backend owns the whole run,
+# including its {PIPE_PATH} file.
 # --------------------------------------------------------------------------- #
-def _run_commands(state, commands):
-    """Run one action's shell commands, accumulating output in `state`.
+def _run_command(state, command):
+    """Run one shell command, accumulating output in `state`.
 
-    Returns "ok", "failed", "timeout" or "error". `state["exit_code"]` holds the
+    Returns "ok", "failed", "timeout" or "error"; `state["exit_code"]` holds the
     failing command's code on "failed".
     """
-    for command in commands:
-        try:
-            proc = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=ACTION_TIMEOUT,
-                cwd=BASE_DIR,
-            )
-        except subprocess.TimeoutExpired:
-            state["stderr"].append(f"$ {command}\ntimed out")
-            return "timeout"
-        except OSError as exc:
-            state["stderr"].append(f"$ {command}\n{exc}")
-            return "error"
-        state["commands"].append(command)
-        if proc.stdout.strip():
-            state["stdout"].append(f"$ {command}\n{proc.stdout.rstrip()}")
-        if proc.stderr.strip():
-            state["stderr"].append(f"$ {command}\n{proc.stderr.rstrip()}")
-        if proc.returncode != 0:
-            state["exit_code"] = proc.returncode
-            return "failed"
+    try:
+        proc = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=ACTION_TIMEOUT,
+            cwd=BASE_DIR,
+        )
+    except subprocess.TimeoutExpired:
+        state["stderr"].append(f"$ {command}\ntimed out")
+        return "timeout"
+    except OSError as exc:
+        state["stderr"].append(f"$ {command}\n{exc}")
+        return "error"
+    state["commands"].append(command)
+    if proc.stdout.strip():
+        state["stdout"].append(f"$ {command}\n{proc.stdout.rstrip()}")
+    if proc.stderr.strip():
+        state["stderr"].append(f"$ {command}\n{proc.stderr.rstrip()}")
+    if proc.returncode != 0:
+        state["exit_code"] = proc.returncode
+        return "failed"
     return "ok"
 
 
-def _resolve_after_success(names):
-    """Split after_success entries into server actions (dicts) / app names (str).
+def _action_items(action):
+    """Expand an action into its ordered work-queue items.
 
-    Returns (entries, error): entries preserves the given order; `error` is a
-    message for the first entry that is neither an app action nor a known
-    action. Event hooks are rejected (they are event-driven only).
+    `steps` and `after_success` share one syntax:
+      - an `app_*` name                 -> ("app", name)    run in the UI
+      - a known (non-hook) action name  -> ("action", dict) run its steps inline
+      - anything else in `steps`        -> ("cmd", text)    shell command
+      - anything else in `after_success`-> an error item
     """
-    entries = []
-    for name in names:
+    actions_by_name = {a["name"]: a for a in load_actions()}
+    items = []
+    for step in action.get("steps") or []:
+        if step in APP_ACTIONS:
+            items.append(("app", step))
+        elif step in actions_by_name:
+            items.append(("action", actions_by_name[step]))
+        else:
+            items.append(("cmd", step))
+    for name in action.get("after_success") or []:
         if name in APP_ACTIONS:
-            entries.append(name)  # runs client-side; handed to the UI
-            continue
-        if is_hook_name(name):
-            return None, f'"{name}" is an event hook; hooks cannot run from after_success'
-        action = next((a for a in load_actions() if a["name"] == name), None)
-        if action is None:
-            return None, f"unknown action: {name}"
-        entries.append(action)
-    return entries, None
+            items.append(("app", name))
+        elif name in actions_by_name:
+            items.append(("action", actions_by_name[name]))
+        elif is_hook_name(name):
+            items.append(
+                ("bad", f'"{name}" is an event hook; hooks cannot run from after_success')
+            )
+        else:
+            items.append(("bad", f"unknown action: {name}"))
+    return items
 
 
 def _advance_execution(state):
-    """Run queued server actions until a client action is reached or the end.
+    """Process the queue until a frontend action is reached or the run ends.
 
     Returns (status, detail):
         ("client", name)  the named app action must run in the UI next
         ("done", None)    the whole chain finished successfully
         ("failed", None)  a command failed (see state["exit_code"])
         ("timeout", None) a command timed out
-        ("error", msg)    a bad after_success entry / cascade limit
+        ("error", msg)    an unknown action / bad after_success / cascade limit
     """
-    while state["stack"]:
-        entry = state["stack"].pop(0)
-        if isinstance(entry, str):  # an app action: pause for the client
-            return "client", entry
-        state["runs"] += 1
-        if state["runs"] > MAX_CASCADE_DEPTH:
-            return "error", f"action cascade exceeded {MAX_CASCADE_DEPTH} levels"
-        commands = [
-            build_command(s, state["values"]) for s in (entry.get("steps") or [])
-        ]
-        status = _run_commands(state, commands)
+    while state["queue"]:
+        kind, value = state["queue"].pop(0)
+        if kind == "app":  # frontend action: pause for the client
+            return "client", value
+        if kind == "bad":
+            return "error", value
+        if kind == "action":
+            state["runs"] += 1
+            if state["runs"] > MAX_CASCADE_DEPTH:
+                return "error", f"action cascade exceeded {MAX_CASCADE_DEPTH} levels"
+            state["queue"][0:0] = _action_items(value)
+            continue
+        status = _run_command(state, build_command(value, state["values"]))
         if status != "ok":
             return status, None
-        entries, error = _resolve_after_success(entry.get("after_success") or [])
-        if error:
-            return "error", error
-        state["stack"][0:0] = entries
     return "done", None
 
 
 def begin_execution(action, action_name, values, pipe_path):
-    """Start a run: execute the root action, then advance the chain.
+    """Start a run: queue the action's steps + after_success, then advance it.
 
-    Returns (state, status, detail) as `_advance_execution` does. The root's
-    after_success is only resolved after its steps succeed, matching the old
-    "stop at the first failure" behaviour.
+    Returns (state, status, detail) as `_advance_execution` does.
     """
     state = {
         "action": action_name,
         "values": values,
         "pipe_path": pipe_path,
-        "stack": [],
+        "queue": _action_items(action),
         "stdout": [],
         "stderr": [],
         "commands": [],
         "exit_code": 0,
         "runs": 1,
     }
-    commands = [build_command(s, values) for s in (action.get("steps") or [])]
-    status = _run_commands(state, commands)
-    if status != "ok":
-        return state, status, None
-    entries, error = _resolve_after_success(action.get("after_success") or [])
-    if error:
-        return state, "error", error
-    state["stack"] = entries
-    return state, *_advance_execution(state)
+    status, detail = _advance_execution(state)
+    return state, status, detail
 
 
 def finish_execution(state):

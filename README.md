@@ -5,7 +5,7 @@
 A small Flask-served web app for labelling images in
 [YOLO](https://docs.ultralytics.com/datasets/detect/) format.
 
-Version **0.8.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
+Version **0.9.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
 non-commercial-use condition, no warranty on usage) · new to labelling?
 read [TUTORIAL.md](TUTORIAL.md) first.
 
@@ -63,7 +63,9 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   rejected server-side. The switch is locked on when started with `--readonly`.
 - **User actions**: custom commands defined in the `actions/` folder, one YAML
   file per action, run on the current image (with a confirmation) and show
-  stdout / stderr / exit code in a popup. `{IMAGE_PATH}`, `{LABEL_PATH}`,
+  stdout / stderr / exit code in a popup. `steps` may mix shell commands with
+  built-in app actions and other actions (the backend runs the queue and pauses
+  for the UI at each app action). `{IMAGE_PATH}`, `{LABEL_PATH}`,
   `{DATASET_PATH}`, `{DATA_YAML_PATH}`, `{IMAGE_INDEX}`, `{APP_DIR}` and
   `{PIPE_PATH}` are substituted and shell-quoted — see
   [User actions](#user-actions). App updates overwrite the shipped files; keep
@@ -197,7 +199,7 @@ the file name without extension when omitted.
 
 ```yaml
 # actions/Remove.a.yaml — a personal action, not shipped with the repo
-steps:                  # one command per line; stop on the first failure
+steps:                  # one entry per line; stop on the first failure
   - rm -f {IMAGE_PATH}  # do NOT put quotes around {PLACEHOLDERS}; the app
   - rm -f {LABEL_PATH}  # shell-quotes them for you
 after_success:          # app actions to run, one after another
@@ -209,13 +211,25 @@ after_success:          # app actions to run, one after another
 name: EditImage
 steps:
   - gimp {IMAGE_PATH}   # open the image in an external editor
+  - app_refresh_image   # run an app action from `steps` too, then continue
 after_success:
   - app_refresh_image   # reload the file you just edited, no full refresh
 ```
 
-Each step runs in a shell with the placeholders substituted and quoted; stdout /
-stderr / exit code are shown in the popup. On the first failing step the
-remaining ones are skipped and the error is reported.
+`steps` and `after_success` share one syntax; each entry is one of:
+
+- **an `app_*` name** — a built-in app action, run in the browser (see the table
+  below);
+- **another action name** — that action runs inline, right here, with its own
+  `steps` / `after_success`;
+- **anything else in `steps`** — a shell command, run with the placeholders
+  substituted and quoted. stdout / stderr / exit code are shown in the popup.
+
+The run is a single ordered queue and stops at the first failure (the remaining
+entries are skipped and the error is reported). Since a `steps` entry that is
+exactly an app action or a known action name is treated as such, write a shell
+command that happens to be a bare word in a form the shell resolves (e.g.
+`./tool` instead of `tool`).
 
 Placeholders (leave them unquoted):
 
@@ -248,14 +262,13 @@ Helper programs called by those steps live in the `scripts/` folder (next to
 `scripts/*.a.py` are git-ignored. The app does not scan this folder — a script
 runs only when a `steps` command names it.
 
-**`after_success`** is a list of *app actions* (the same `app_*` names used for
-keyboard shortcuts) **or other non-hook actions**, run in order once every step
-succeeded. The backend drives the chain: it runs the server-side actions itself
-and pauses only when it reaches a client-side `app_*` entry, which it hands to
-the UI and waits for before continuing (so a mixed list keeps its exact order).
-On an error the chain stops, the message is shown and logged to the browser
-console. An action can therefore chain into another action (a cascade is capped
-at 8 actions per run). Useful app actions:
+`after_success` uses the same entries as `steps` (see above) and runs after them.
+The backend drives the whole run: it executes the server-side entries itself and
+pauses only when it reaches a client-side `app_*` entry, which it hands to the UI
+and waits for before continuing — so a mixed list keeps its exact order. On an
+error the run stops, the message is shown and logged to the browser console. The
+run is a single queue, so an action can chain into another action from either
+list; a cascade is capped at 8 actions per run. Useful app actions:
 
 - `app_refresh_images_list` — re-scan the image folders; the current image is
   kept **by path**, not by index, so the display survives list changes from an
@@ -265,8 +278,9 @@ at 8 actions per run). Useful app actions:
   e.g. after an external editor saved a new version. Image responses are served
   with `Cache-Control: no-store`, so you never see a stale frame.
 
-Event hooks (`on_*`) may **not** appear in `after_success` — they are
-event-driven only. `after_success` entries take no arguments.
+Event hooks (`on_*`) may **not** appear in `after_success` (they are event-driven
+only); in `steps` a name like `on_after_save` is just a shell command. Entries
+take no arguments.
 
 ## Hooks
 

@@ -26,11 +26,16 @@
 #
 # Format (2-space indentation, lines starting with # are ignored):
 #
-#   steps:                  # shell commands, run in order; execution stops
-#     - touch {DATASET_PATH}/saved.log   # at the first failure
-#   after_success:          # optional, run after all steps succeeded. Entries
-#     - app_refresh_image   # may be app actions (app_*, run in the UI) or other
-#                           # actions (run by the backend); order is kept.
+#   steps:                  # run in order; execution stops at the first
+#     - touch {DATASET_PATH}/saved.log   # failure. Entries share the syntax
+#   after_success:          # optional, runs after all steps succeeded
+#     - app_refresh_image
+#
+# `steps` and `after_success` accept the same entries:
+#   - an app_* name (run in the UI), or
+#   - another action name (its steps run inline here), or
+#   - anything else in `steps` = a shell command.
+# The backend runs the whole queue and pauses at each app_* entry for the UI.
 #
 # Optional keys:
 #
