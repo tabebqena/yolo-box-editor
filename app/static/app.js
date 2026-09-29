@@ -1770,8 +1770,8 @@ function initSidePanelResizer() {
   const onMove = (e) => {
     if (!dragging) return;
     e.preventDefault();
-    const left = el('sidebar').getBoundingClientRect().left;
-    pending = applySidePanelWidth(e.clientX - left);
+    const right = el('sidebar').getBoundingClientRect().right;
+    pending = applySidePanelWidth(right - e.clientX);
   };
   const onUp = () => {
     if (!dragging) return;

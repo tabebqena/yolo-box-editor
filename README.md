@@ -41,7 +41,7 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   dragging (moving / resizing) but can still be clicked, selected and deleted,
   which lets you protect it while drawing inside it. Fixing is transient — it
   is never saved and is cleared when the image changes.
-- **Boxes panel** (left column, `Panel` toggle): one row per box, each with its
+- **Boxes panel** (right column, `Panel` toggle): one row per box, each with its
   class dropdown, `cx cy w h` numeric inputs and a `×` delete button. Controls
   are disabled until the row — or its box on the canvas — is *selected*;
   selecting another box or pressing `Esc` disables them again. Typing clamps
@@ -261,7 +261,7 @@ Coordinates are normalized to `0..1` relative to the image dimensions.
 ## User actions
 
 Each action is one YAML file in your `actions/` folder (inside your user folder),
-shown as a button in the left column. The action's name is its top-level `name:` key,
+shown as a button in the right column. The action's name is its top-level `name:` key,
 or the file name without extension when omitted. A shipped `actions/example.yaml`
 template is ignored until you give it steps.
 
@@ -467,7 +467,7 @@ opt-in: flip the **Tags** switch in **Settings** to show a tag bar below the ima
 ## Filters
 
 A **filter** narrows the loaded image list to the images a script returns.
-**Filters are chainable**: the applied filter names show in the left column
+**Filters are chainable**: the applied filter names show in the right column
 (below `Split`) with a `…` button that opens a modal with a stack of selects (up
 to 8), once a `data.yaml` is loaded.
 Pick a filter in each select and they run **top to bottom** — each one receives

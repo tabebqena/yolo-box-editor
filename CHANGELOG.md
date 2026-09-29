@@ -9,12 +9,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - **More room for the image**: the full-width top bar is gone. Everything now
-  lives in a single collapsible **left column**, top to bottom: the app label
+  lives in a single collapsible **right column**, top to bottom: the app label
   with the **⚙ Settings**, notifications bell and **Panel** buttons (always
   visible header row), the dataset directory name, the **Split** picker, the
   applied **Filter** names with a `…` button, the per-dataset action buttons (a
   few, with a `…` expander), and the **Boxes** list. The column width is
-  draggable; **Panel** collapses the body while keeping the header row.
+  draggable; **Panel** collapses everything except the four header items and
+  shrinks the column to the header, so the image gets the horizontal space back.
   - The **Read-only**, **Tags** and **Auto-save** switches plus the dataset
     field moved into a **Settings** dialog opened with the gear button (it
     opens automatically when no dataset is loaded).

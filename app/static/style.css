@@ -74,19 +74,22 @@ select, input {
   flex: 0 0 auto;
   width: var(--sidebar-w, 300px);
   background: #1b1c23;
-  border-right: 1px solid var(--border);
+  border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
-.sidebar.collapsed { width: auto; }
+/* Collapsed: everything below the header row disappears and the column shrinks
+   to just the header, freeing horizontal space for the image. */
+.sidebar.collapsed { width: var(--sidebar-collapsed-w, 170px); }
 .sidebar.collapsed .sidebar-body { display: none; }
 .sidebar.collapsed .sidebar-resizer { display: none; }
+.sidebar.collapsed .sidebar-head { flex-wrap: wrap; }
 
 .sidebar-resizer {
   position: absolute;
   top: 0;
-  right: -3px;
+  left: -3px;
   z-index: 5;
   width: 6px;
   height: 100%;
@@ -176,7 +179,7 @@ select, input {
 .notif-panel {
   position: fixed;
   top: 44px;
-  left: 10px;
+  right: 10px;
   z-index: 70;
   width: min(380px, calc(100vw - 20px));
   max-height: 70vh;
@@ -226,7 +229,13 @@ select, input {
 .notif-item-info { border-left-color: var(--accent); }
 .notif-item-success { border-left-color: var(--green); }
 
-.brand { font-weight: 700; white-space: nowrap; }
+.brand {
+  font-weight: 700;
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .counter {
   min-width: 64px;

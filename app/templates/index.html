@@ -8,6 +8,40 @@
 </head>
 <body>
   <div class="app">
+    <div class="app-main">
+      <main class="canvas-wrap">
+        <canvas id="canvas"></canvas>
+      </main>
+
+      <section id="tagBar" class="tagbar hidden">
+        <span class="tagbar-title">Tags</span>
+        <span id="tagHint" class="tagbar-hint hidden">Alt+1..9 toggles</span>
+        <div id="tagBadges" class="tag-badges"></div>
+        <div class="tagbar-add">
+          <input id="tagInput" class="tag-input" type="text" placeholder="add a tag…"
+                 list="tagSuggestions" maxlength="64">
+          <datalist id="tagSuggestions"></datalist>
+          <button id="addTagBtn" type="button" title="Add tag to the image (new names are written to tags.yaml)">+ Add tag</button>
+        </div>
+      </section>
+
+      <section class="imagebar">
+        <span id="filename" class="filename"></span>
+        <div class="imagebar-nav">
+          <button id="prevBtn" title="Previous (←)">&#9664; Prev</button>
+          <input id="counter" class="counter" type="text" inputmode="numeric"
+                 title="Current image — type a number and press Enter to jump" value="0 / 0">
+          <button id="nextBtn" title="Next (→)">Next &#9654;</button>
+        </div>
+        <div class="imagebar-right">
+          <span id="boxCount" class="boxcount"></span>
+          <button id="undoBtn" title="Undo (Z)">Undo</button>
+          <button id="redoBtn" title="Redo (Y)">Redo</button>
+          <button id="saveBtn" class="primary" title="Save (S)">Save</button>
+        </div>
+      </section>
+    </div>
+
     <aside id="sidebar" class="sidebar">
       <div id="sidebarResizer" class="sidebar-resizer" title="Drag to resize the panel"></div>
 
@@ -76,40 +110,6 @@
         <div id="notifList" class="notif-list"></div>
       </div>
     </aside>
-
-    <div class="app-main">
-      <main class="canvas-wrap">
-        <canvas id="canvas"></canvas>
-      </main>
-
-      <section id="tagBar" class="tagbar hidden">
-        <span class="tagbar-title">Tags</span>
-        <span id="tagHint" class="tagbar-hint hidden">Alt+1..9 toggles</span>
-        <div id="tagBadges" class="tag-badges"></div>
-        <div class="tagbar-add">
-          <input id="tagInput" class="tag-input" type="text" placeholder="add a tag…"
-                 list="tagSuggestions" maxlength="64">
-          <datalist id="tagSuggestions"></datalist>
-          <button id="addTagBtn" type="button" title="Add tag to the image (new names are written to tags.yaml)">+ Add tag</button>
-        </div>
-      </section>
-
-      <section class="imagebar">
-        <span id="filename" class="filename"></span>
-        <div class="imagebar-nav">
-          <button id="prevBtn" title="Previous (←)">&#9664; Prev</button>
-          <input id="counter" class="counter" type="text" inputmode="numeric"
-                 title="Current image — type a number and press Enter to jump" value="0 / 0">
-          <button id="nextBtn" title="Next (→)">Next &#9654;</button>
-        </div>
-        <div class="imagebar-right">
-          <span id="boxCount" class="boxcount"></span>
-          <button id="undoBtn" title="Undo (Z)">Undo</button>
-          <button id="redoBtn" title="Redo (Y)">Redo</button>
-          <button id="saveBtn" class="primary" title="Save (S)">Save</button>
-        </div>
-      </section>
-    </div>
   </div>
 
   <div id="classPicker" class="class-picker hidden"></div>

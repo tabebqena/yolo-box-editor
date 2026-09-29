@@ -82,7 +82,7 @@ canvas.
 
 ## 4. The screen at a glance
 
-- **Left column** — everything except the image, top to bottom: the app label
+- **Right column** — everything except the image, top to bottom: the app label
   with the **⚙ Settings**, notifications bell and **Panel** toggle; the dataset
   name; separators; the _Split_ picker; the applied _Filter_ names with a `…`
   button that opens the filter modal; the per-dataset action buttons (a few,
@@ -104,7 +104,7 @@ canvas.
    (or press its number). Done: a green box with the class label appears.
 
 The new box is automatically *selected*: it is yellow on the canvas, and its row
-in the left panel is **active** (controls enabled).
+in the right panel is **active** (controls enabled).
 
 > **Drawing on top of an existing box?** A normal drag inside a box grabs and
 > moves that box. Hold the force-draw modifier (default **`Ctrl`**) and drag to
