@@ -144,6 +144,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The shortcuts bar's `…` button did nothing: its popup is anchored above the
+  bar but the bar clipped it with `overflow: hidden`, so the menu was rendered
+  invisibly. The bar no longer clips its popup (the shortcut list itself still
+  clips its own overflowing items).
 - Hidden boxes (`.`) no longer intercept the mouse: their invisible rectangles
   and delete / class buttons used to swallow clicks and could be moved or
   deleted while not shown.

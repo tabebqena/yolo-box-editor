@@ -322,7 +322,7 @@ button.action .btn-shortcut {
   padding: 6px 14px;
   background: #20212a;
   border-top: 1px solid var(--border);
-  overflow: hidden;
+  overflow: visible;
 }
 .shortcuts-title {
   flex: 0 0 auto;
