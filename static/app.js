@@ -694,7 +694,7 @@ function renderPresenceWarning(count) {
     const banner = document.createElement('div');
     banner.className = 'presence-banner';
     const text = document.createElement('span');
-    text.textContent = 'Another user is using this app. Your changes may overwrite theirs.';
+    text.textContent = 'Another user is using this app. It is designed for one user at a time and is not meant to be served to multiple clients, so your changes may overwrite theirs.';
     const close = document.createElement('button');
     close.className = 'presence-dismiss';
     close.textContent = '\u00d7';
