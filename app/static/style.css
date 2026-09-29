@@ -80,7 +80,6 @@ select, input {
   min-height: 0;
 }
 .sidebar.collapsed { width: auto; }
-.sidebar.collapsed .brand { display: none; }
 .sidebar.collapsed .sidebar-body { display: none; }
 .sidebar.collapsed .sidebar-resizer { display: none; }
 
@@ -108,7 +107,6 @@ select, input {
   flex: 0 0 auto;
 }
 .sidebar-head-actions {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 6px;
