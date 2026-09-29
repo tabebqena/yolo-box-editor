@@ -31,12 +31,12 @@ app_fix_box  <F>          fix/unfix selected box
 # app_force_draw is a held modifier, not a key: hold it and drag to always
 # draw a new box (even on top of / inside an existing one). Use Ctrl or Meta on
 # Linux (Alt+drag is grabbed by many window managers); Shift stays reserved for
-# selecting. Put personal remaps in shortcuts.a.txt.
+# selecting. Put personal remaps in your own shortcuts.txt (in the user folder).
 app_force_draw <Ctrl>     hold + drag = new box
 #
 # An action from actions.yaml can also be bound here, e.g.:
 # Remove       <Ctrl+Shift+R>   Delete the current image
 #
-# App updates overwrite this file. Keep your personal remaps in shortcuts.a.txt
-# (same format, next to app.py): it is read after this file and wins on a name
-# clash. It is not shipped here — you create it on your machine.
+# App updates replace only the app/ folder. Keep your personal remaps in your
+# own shortcuts.txt (in the user folder, next to app/): it is read after this
+# file and wins on a name clash. The app creates it when missing.

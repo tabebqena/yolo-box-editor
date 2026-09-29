@@ -59,13 +59,13 @@ save.
 ```bash
 git clone git@github.com:tabebqena/yolo-box-editor.git
 cd yolo-box-editor
-python app.py --data /path/to/dataset/data.yaml
+python app/app.py --data /path/to/dataset/data.yaml
 ```
 
 Open <http://127.0.0.1:5000>. You should see your first image and an empty
 canvas.
 
-> Prefer pointing mouse only? Just run `python app.py` — it reopens the dataset
+> Prefer pointing mouse only? Just run `python app/app.py` — it reopens the dataset
 > you used last, so you land right back where you left off. On a first run (or
 > with `--no-resume`) paste the `data.yaml` path into the text field and click
 > **Load data.yaml**. The field disappears after loading; use **Change dataset**
@@ -166,7 +166,7 @@ to survive a refresh.
 ## 9. Read-only mode
 
 To browse without any chance of damaging labels, tick **Read-only** in the top
-bar (or start with `python app.py --data … --readonly`). Drawing, editing and
+bar (or start with `python app/app.py --data … --readonly`). Drawing, editing and
 saving stop working; boxes still display.
 
 ## 10. Tags (optional)
@@ -205,7 +205,7 @@ an image does **not** remove it from `tags.yaml`.
 | `Ctrl`+drag    | force-draw a new box, even inside an existing one |
 | `Alt+1`…`Alt+9`| toggle tag by number (from `tags.yaml`)     |
 
-All of these are configurable — edit `shortcuts.txt` next to `app.py` (see the
+All of these are configurable — edit your `shortcuts.txt` in the user folder (see the
 README) if you prefer different keys. The `Alt+1…9` tag toggles are built in.
 
 ## 12. When you are done

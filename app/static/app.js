@@ -363,7 +363,7 @@ function updateCursor(p) {
 }
 
 // True when the force-draw modifier is held for this event. The modifier is
-// configured by the `app_force_draw` binding in shortcuts.txt / shortcuts.a.txt
+// configured by the `app_force_draw` binding in your shortcuts.txt
 // (e.g. <Ctrl>, <Alt> or <Ctrl+Shift>); it is not a keydown action. Falls back
 // to Ctrl when unbound. Ctrl/Meta are the Linux-safe choices — many window
 // managers swallow Alt+drag, and Shift is reserved for selecting boxes.

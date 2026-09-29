@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""yolo-box-editor filters: one Python script per filter, in this filters/ dir.
+"""yolo-box-editor filters: one Python script per filter in a filters/ dir.
 
-This example file is comments only and defines nothing (it never writes its
-output pipe, so if it were selected it would show zero images). Copy it (or any
-file here) to a new <Name>.py to add a filter, or write your own.
+This file is a shipped, comments-only example and defines nothing (it never
+writes its output pipe, so if it were selected it would show zero images). Your
+own filters live in <home>/filters/ and are read after the shipped ones, so a
+file with the same name wins and is never overwritten by an upgrade. Copy this
+file to a new <Name>.py to add a filter, or write your own.
 
 Contract
 --------
@@ -59,6 +61,9 @@ also demos why filters get absolute paths):
             if os.path.basename(path).startswith("a"):
                 f.write(path + "\\n")
 
-Personal filters: files ending in `.a.py` are read after the shipped ones, win
-on a name clash, and are never shipped/overwritten (they are git-ignored).
+Filters run with the working directory set to your user folder ({HOME_DIR},
+logged to the server console), so write files with explicit paths.
+
+Your filters: files in <home>/filters/ are read after the shipped ones, win on a
+name clash, and are never shipped/overwritten.
 """

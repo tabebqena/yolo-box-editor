@@ -5,7 +5,7 @@
 A small Flask-served web app for labelling images in
 [YOLO](https://docs.ultralytics.com/datasets/detect/) format.
 
-Version **1.1.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
+Version **2.0.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
 non-commercial-use condition, no warranty on usage) · new to labelling?
 read [TUTORIAL.md](TUTORIAL.md) first.
 
@@ -14,10 +14,10 @@ read [TUTORIAL.md](TUTORIAL.md) first.
 - **One-file setup**: point the app at a single `data.yaml` from the command
   line or the UI. No database, no build step.
 - **Recent list**: the last 10 opened `data.yaml` paths are remembered in
-  `.recent_data_yamls.json` next to `app.py`; reopen one from the *Recent…*
-  dropdown or type a new path. Starting with a plain `python app.py` (no
-  `--data`) reopens the last dataset automatically — pass `--no-resume` to get
-  the settings screen instead.
+  `.recent_data_yamls.json` in your user folder; reopen one from the *Recent…*
+  dropdown or type a new path. Starting with a plain run (no `--data`) reopens
+  the last dataset automatically — pass `--no-resume` to get the settings screen
+  instead.
 - **Browse** across `train` / `val` / `test` with Prev/Next buttons or the
   `→` / `←` arrow keys; the current image is shown as `<split>/<filename>`.
   The `current / total` counter is an input — type a number and press Enter to
@@ -68,25 +68,23 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   simultaneous edits can still overwrite each other. **This app is designed to
   be used by one user at a time and is not designed to be served to multiple
   clients.**
-- **User actions**: custom commands defined in the `actions/` folder, one YAML
+- **User actions**: custom commands defined in your `actions/` folder, one YAML
   file per action, run on the current image (with a confirmation) and show
   stdout / stderr / exit code in a popup. `steps` may mix shell commands with
   built-in app actions and other actions (referenced as `action_<Name>`); the
-  backend runs the queue and pauses for the UI at each app action. `{IMAGE_PATH}`, `{LABEL_PATH}`,
-  `{DATASET_PATH}`, `{DATA_YAML_PATH}`, `{IMAGE_INDEX}`, `{APP_DIR}` and
-  `{PIPE_PATH}` are substituted and shell-quoted — see
-  [User actions](#user-actions). App updates overwrite the shipped files; keep
-  personal actions in `actions/*.a.yaml` (see below), which are read after the
-  others and win on name clashes.
-- **Event hooks**: YAML files in the `hooks/` folder, named `on_<event>.yaml`,
+  backend runs the queue and pauses for the UI at each app action. `{IMAGE_PATH}`,
+  `{LABEL_PATH}`, `{DATASET_PATH}`, `{DATA_YAML_PATH}`, `{IMAGE_INDEX}`,
+  `{APP_DIR}`, `{SCRIPTS_DIR}`, `{HOME_DIR}` and `{PIPE_PATH}` are substituted and
+  shell-quoted — see [User actions](#user-actions). App updates only replace the
+  shipped `app/` folder, so your files in the user folder are never touched.
+- **Event hooks**: YAML files in your `hooks/` folder, named `on_<event>.yaml`,
   run on app events instead of a button — e.g. `on_after_save` or
-  `on_box_created`. See [Hooks](#hooks). Steps run with the working directory
-  set to the app's folder (where `app.py` lives), so they can reach `scripts/`.
+  `on_box_created`. See [Hooks](#hooks). Steps and filters run with the working
+  directory set to your user folder (logged to the server console).
 - **Configurable shortcuts**: bind keys in `shortcuts.txt` with
   `ACTION_NAME <SHORTCUT> label`. Every app action and your action names
-  can be bound; invalid names are rejected with a dismissible banner.
-  Personal remaps go in `shortcuts.a.txt` (same format, read after
-  `shortcuts.txt`).
+  can be bound; invalid names are rejected with a dismissible banner. Your
+  `shortcuts.txt` lives in the user folder and is read after the shipped one.
 - **Tags** (opt-in via the topbar `Tags` switch): a tag bar below the image
   shows the dataset's tags as clickable badges — click to toggle a tag on the
   current image, `+ Add tag` appends a brand-new name to `tags.yaml`, and
@@ -95,9 +93,9 @@ read [TUTORIAL.md](TUTORIAL.md) first.
 
 ## Keyboard shortcuts & app actions
 
-The 17 built-in app actions are defined in `app.py` (`APP_ACTIONS`) and
-implemented in `static/app.js`. Rebind them in `shortcuts.txt` (or
-`shortcuts.a.txt`); the names themselves are fixed. They are also the valid
+The 17 built-in app actions are defined in `app/app.py` (`APP_ACTIONS`) and
+implemented in `app/static/app.js`. Rebind them in your `shortcuts.txt`; the
+names themselves are fixed. They are also the valid
 values for an action's `after_success` (see [User actions](#user-actions)) —
 they are **not** valid in `steps`, which are shell commands.
 
@@ -122,7 +120,7 @@ they are **not** valid in `steps`, which are shell commands.
 | `app_refresh_image` | — | re-fetch the current image (cache-busted) |
 
 `app_refresh_images_list`, `app_reload_images_list` and `app_refresh_image` have
-**no default keys** — bind them in `shortcuts.a.txt` (e.g. `app_refresh_image <F5>`)
+**no default keys** — bind them in your `shortcuts.txt` (e.g. `app_refresh_image <F5>`)
 or call them from a YAML action's `after_success`.
 
 `app_force_draw` is special: its binding is a *modifier* (`Ctrl`, `Alt`,
@@ -143,6 +141,27 @@ specially while typing in inputs; all other shortcuts are ignored while an
 input/select is focused. Modifiers are `Ctrl`, `Alt`, `Shift`, `Meta` joined
 with `+`.
 
+## Files and folders
+
+The app is split into a relocatable **code folder** and your **user folder**:
+
+```
+<root>/
+├── .venv/                    virtual environment (created by install.sh)
+├── actions/ hooks/ filters/ scripts/ shortcuts.txt   your files
+├── .recent_data_yamls.json .view_state.json          your app state
+└── app/                      the shipped app (replaced on upgrade)
+    ├── app.py static/ templates/ requirements.txt VERSION
+    └── actions/ hooks/ filters/ scripts/ shortcuts.txt   built-ins
+```
+
+The user folder is `--home <dir>`, else the `YBX_HOME` environment variable,
+else **the parent of `app.py`**. Because the code lives in `app/`, that parent
+is the repo root in a clone and the install root in an installed copy — so both
+behave the same with no flags. Your files are read after the shipped ones and
+win on a name clash. The app creates the folders when they are missing and logs
+`[ybe] user dir: …` (override with `--home`).
+
 ## Run
 
 On Linux, `install.sh` sets up an isolated virtual environment and installs the
@@ -151,32 +170,33 @@ requirements:
 ```bash
 git clone git@github.com:tabebqena/yolo-box-editor.git
 cd yolo-box-editor
-bash install.sh              # creates ./.venv and installs requirements.txt
+bash install.sh              # creates ./.venv and installs app/requirements.txt
 bash install.sh --link       # also adds a `yolo-box-editor` command to ~/.local/bin
 ```
 
 Then run the app:
 
 ```bash
-.venv/bin/python app.py --data /path/to/data.yaml   # after install.sh
-yolo-box-editor --data /path/to/data.yaml           # if installed with --link
+.venv/bin/python app/app.py --data /path/to/data.yaml   # after install.sh
+yolo-box-editor --data /path/to/data.yaml               # if installed with --link
 ```
 
-If you prefer to manage Python yourself, `pip install -r requirements.txt`
-and run `python app.py`:
+If you prefer to manage Python yourself, `pip install -r app/requirements.txt`
+and run `python app/app.py`:
 
 ```bash
-python app.py --data /path/to/data.yaml
-python app.py --data /path/to/data.yaml --readonly   # viewer only
-python app.py --data /path/to/data.yaml --debug      # verbose browser console
-python app.py --no-resume                            # settings screen, no auto-open
-python app.py --data /path/to/data.yaml --keep-pipe  # keep each run's {PIPE_PATH} file
-python app.py --data /path/to/data.yaml --keep-filter-pipes  # keep filter-chain pipe files
+python app/app.py --data /path/to/data.yaml
+python app/app.py --data /path/to/data.yaml --readonly   # viewer only
+python app/app.py --data /path/to/data.yaml --debug      # verbose browser console
+python app/app.py --no-resume                            # settings screen, no auto-open
+python app/app.py --data /path/to/data.yaml --keep-pipe  # keep each run's {PIPE_PATH} file
+python app/app.py --data /path/to/data.yaml --keep-filter-pipes  # keep filter-chain pipe files
+python app/app.py --data /path/to/data.yaml --home ./my-user-files  # custom user folder
 ```
 
 Open <http://127.0.0.1:5000>. You can also leave out `--data` and paste the
 `data.yaml` path into the settings bar, then click *Load data.yaml* — or just
-run `python app.py`, which reopens the dataset you used last (add `--no-resume`
+run `python app/app.py`, which reopens the dataset you used last (add `--no-resume`
 to start on the settings screen instead). The dataset, split, filter chain, last
 image and topbar switches are all restored, so the app comes back as you left it.
 
@@ -219,12 +239,13 @@ Coordinates are normalized to `0..1` relative to the image dimensions.
 
 ## User actions
 
-Each action is one YAML file in the `actions/` folder (next to `app.py`), shown
-as a button in the topbar. The action's name is its top-level `name:` key, or
-the file name without extension when omitted.
+Each action is one YAML file in your `actions/` folder (inside your user folder),
+shown as a button in the topbar. The action's name is its top-level `name:` key,
+or the file name without extension when omitted. A shipped `actions/example.yaml`
+template is ignored until you give it steps.
 
 ```yaml
-# actions/Remove.a.yaml — a personal action, not shipped with the repo
+# <home>/actions/Remove.yaml — your own action, never overwritten by an upgrade
 steps:                  # one entry per line; stop on the first failure
   - rm -f {IMAGE_PATH}  # do NOT put quotes around {PLACEHOLDERS}; the app
   - rm -f {LABEL_PATH}  # shell-quotes them for you
@@ -233,7 +254,7 @@ after_success:          # app actions to run, one after another
 ```
 
 ```yaml
-# actions/EditImage.yaml — name: is optional; here it defaults to "EditImage"
+# <home>/actions/EditImage.yaml — name: is optional; here it defaults to "EditImage"
 name: EditImage
 steps:
   - gimp {IMAGE_PATH}   # open the image in an external editor
@@ -268,8 +289,16 @@ Placeholders (leave them unquoted):
 | `{DATASET_PATH}`  | root path of the loaded dataset                              |
 | `{DATA_YAML_PATH}`| path of the loaded data.yaml                                 |
 | `{IMAGE_INDEX}`   | 1-based position of the current image (matches the counter)  |
-| `{APP_DIR}`       | folder holding `app.py` (use it to reach `{APP_DIR}/scripts/…`) |
+| `{APP_DIR}`       | shipped code folder (use it to reach `{APP_DIR}/scripts/…`)  |
+| `{SCRIPTS_DIR}`   | your scripts folder (`{SCRIPTS_DIR}/helper.py`)             |
+| `{HOME_DIR}`      | your user folder (the working directory of every run)        |
 | `{PIPE_PATH}`     | path of the run's scratch file (see below; may be empty if the temp file could not be created) |
+
+Every step runs with the working directory set to `{HOME_DIR}` (logged to the
+server console before each command), so relative paths land in your user folder;
+use `{APP_DIR}` or `{SCRIPTS_DIR}` to reach scripts explicitly. The same
+environment is exported to each command as `YBE_HOME`, `YBE_APP_DIR` and
+`YBE_SCRIPTS_DIR`.
 
 `{PIPE_PATH}` is a per-run scratch file: it starts empty and every step of the
 run — plus every action reached through `after_success` — shares the same file,
@@ -279,16 +308,16 @@ it deletes the file when the whole chain (steps + `after_success`) has finished,
 whether it succeeded or failed. Pass `--keep-pipe` to keep the file instead,
 e.g. for debugging.
 
-Files ending in `.a.yaml` are *yours*: they are read after the shipped files,
-win on a name clash (matched by action name, so `name:` can retarget an
-override), and are git-ignored so app updates never touch them. A file with
-neither `steps` nor `after_success` is ignored — `actions/example.yaml` is such
-a template.
+Your actions live in `<home>/actions/` and are read after the shipped
+`app/actions/`, so a file with the same name wins (matched by action name, so a
+`name:` key can retarget an override). App upgrades replace only `app/`, so your
+files are never touched. A file with neither `steps` nor `after_success` is
+ignored — `app/actions/example.yaml` is such a template.
 
-Helper programs called by those steps live in the `scripts/` folder (next to
-`app.py`); `scripts/example.py` is a comments-only template and personal
-`scripts/*.a.py` are git-ignored. The app does not scan this folder — a script
-runs only when a `steps` command names it.
+Helper programs called by those steps live in your `<home>/scripts/` folder
+(`{SCRIPTS_DIR}`); the shipped `app/scripts/example.py` is a comments-only
+template. The app does not scan either folder — a script runs only when a
+`steps` command names it.
 
 `after_success` uses the same entries as `steps` (see above) and runs after them.
 The backend drives the whole run: it executes the server-side entries itself and
@@ -319,7 +348,7 @@ after_success:
 ```
 
 The active split and filter chain are remembered **per dataset** (in
-`.view_state.json`, next to `app.py`), so restarting the server (e.g. the Flask
+`.view_state.json`, in your user folder), so restarting the server (e.g. the Flask
 `--debug` reloader) reopens the dataset in the same view instead of falling back
 to *All splits* — that also keeps an open browser tab and the server agreeing on
 what an image reference means.
@@ -329,20 +358,21 @@ only); a bare `on_*` entry is just a shell command. Entries take no arguments.
 
 ## Hooks
 
-An **event hook** is a YAML file in the `hooks/` folder (not `actions/`) that
+An **event hook** is a YAML file in your `hooks/` folder (not `actions/`) that
 runs when the app fires an event, instead of a toolbar button. Hooks use the
 same `steps` / `after_success` and the same placeholders as actions; steps run
-with the working directory set to the app's folder, so they can call scripts as
-`python scripts/<name>.py` or `python {APP_DIR}/scripts/<name>.py`. A successful
-hook reports in the **bottom status bar** (auto-hides after a few seconds); a
-failed hook opens the result **modal**. They are opt-in: no file, no hook.
+with the working directory set to your user folder, so call scripts as
+`python {SCRIPTS_DIR}/<name>.py` (yours) or `python {APP_DIR}/scripts/<name>.py`
+(shipped). A successful hook reports in the **bottom status bar** (auto-hides
+after a few seconds); a failed hook opens the result **modal**. They are opt-in:
+no file, no hook.
 
 The event comes from the **file name**: `on_<event>.yaml`. If the file name does
 not name a known event, the top-level `event_name:` key is used as a fallback.
 A file that defines `steps` but names no known event is reported as an error;
-`hooks/example.yaml` (a comments-only template) is ignored silently. Set
-`active: false` to skip a hook without deleting it. Personal hooks are named
-`hooks/*.a.yaml`, are read last, win on an event clash and are git-ignored.
+`app/hooks/example.yaml` (a comments-only template) is ignored silently. Set
+`active: false` to skip a hook without deleting it. Your hooks live in
+`<home>/hooks/`, are read after the shipped ones and win on an event clash.
 
 | Hook file | Fired when |
 | --------- | ---------- |
@@ -357,9 +387,9 @@ A file that defines `steps` but names no known event is reported as an error;
 | `on_box_edited.yaml` | a box was moved / resized / reclassed (committed edits) |
 
 ```yaml
-# hooks/on_after_save.yaml — run a script (from scripts/) after every save
+# <home>/hooks/on_after_save.yaml — run a script after every save
 steps:
-  - python {APP_DIR}/scripts/helper.py {DATA_YAML_PATH} {IMAGE_PATH} {LABEL_PATH}
+  - python {SCRIPTS_DIR}/helper.py {DATA_YAML_PATH} {IMAGE_PATH} {LABEL_PATH}
 ```
 
 ```yaml
@@ -418,11 +448,15 @@ the previous one's result, applies its own logic, and passes its result on. The
 last filter's output is exactly what the app shows (count, Prev/Next, the counter
 jump and resume all follow it). `No filter` clears the whole chain.
 
-Each filter is one **Python script** in the `filters/` folder, run as:
+Each filter is one **Python script** in a `filters/` folder, run as:
 
 ```bash
-python filters/<Name>.py <data.yaml> <split> <input_pipe> <output_pipe>
+python <filter-script> <data.yaml> <split> <input_pipe> <output_pipe>
 ```
+
+with the working directory set to your user folder (logged to the server
+console). Shipped filters live in `app/filters/`; your filters live in
+`<home>/filters/`, are read after the shipped ones and win on a name clash.
 
 - `<data.yaml>` — path of the loaded dataset's `data.yaml`.
 - `<split>` — `train` / `val` / `test`, or an empty string when the UI is on
@@ -448,15 +482,15 @@ path, so re-applying a chain keeps you on it when it is still in the result
 remembered in your browser and restored when you reopen the app — even after a
 server restart.
 
-Personal filters live in `filters/*.a.py` (git-ignored, read after the shipped
-files, win on a name clash). `filters/example.py` is a comments-only template
+Your filters live in `<home>/filters/` (read after the shipped `app/filters/`,
+win on a name clash). `app/filters/example.py` is a comments-only template
 documenting the contract.
 
 ## Development
 
-A single Flask module (`app.py`, ~750 lines) with a hand-rolled `data.yaml`
-parser (no PyYAML needed to run). The UI is `index.html` + `app.js` + `style.css`
-and needs no build step.
+A single Flask module (`app/app.py`) with a hand-rolled `data.yaml` parser (no
+PyYAML needed to run). The UI is `app/templates/index.html` + `app/static/app.js`
++ `app/static/style.css` and needs no build step.
 
 Behaviour checks live in `tests/` and are run from the repo root:
 

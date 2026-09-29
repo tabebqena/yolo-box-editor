@@ -1,11 +1,13 @@
-# --- local / personal files: never tracked ---
-.recent_data_yamls.json
-.view_state.json
-actions/*.a.yaml
-hooks/*.a.yaml
-filters/*.a.py
-scripts/*.a.py
-shortcuts.a.txt
+# --- user files (YBX_HOME = repo root in a clone): never tracked ---
+# Root-anchored so the shipped app/actions/, app/hooks/, … stay tracked.
+/.recent_data_yamls.json
+/.view_state.json
+/actions/
+/hooks/
+/filters/
+/scripts/
+/shortcuts.txt
+/shortcuts.a.txt
 
 # --- Python / tooling ---
 __pycache__/

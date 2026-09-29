@@ -3,24 +3,28 @@
 # install.sh - install yolo-box-editor on Linux.
 #
 # Creates a local virtual environment (.venv), installs the Python
-# requirements, and optionally adds a "yolo-box-editor" command to your PATH.
+# requirements from app/requirements.txt, and optionally adds a
+# "yolo-box-editor" command to your PATH.
 #
 # Usage:
-#   bash install.sh              # install into ./.venv
+#   bash install.sh              # install into ./.venv, user folder = repo root
 #   bash install.sh --link       # also create ~/.local/bin/yolo-box-editor
 #   bash install.sh --python python3.11
 #   bash install.sh --venv /path/to/venv
+#   bash install.sh --home /path/to/user-folder
 #
 set -euo pipefail
 
-APP_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-VENV_DIR="${VENV_DIR:-$APP_DIR/.venv}"
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="$ROOT_DIR/app"
+VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
+HOME_DIR="${YBX_HOME:-$ROOT_DIR}"
 PYTHON_CMD="${PYTHON_CMD:-python3}"
 LINK=0
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 
 usage() {
-  sed -n '3,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -29,6 +33,7 @@ while [ $# -gt 0 ]; do
     --link) LINK=1 ;;
     --python) PYTHON_CMD="${2:?--python needs a value}"; shift ;;
     --venv) VENV_DIR="${2:?--venv needs a value}"; shift ;;
+    --home) HOME_DIR="${2:?--home needs a value}"; shift ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
   shift
@@ -37,6 +42,8 @@ done
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+
+[ -f "$APP_DIR/app.py" ] || die "app/app.py not found under $ROOT_DIR; run this from the repo root."
 
 if [ "$(uname -s)" != "Linux" ]; then
   warn "This installer targets Linux (detected: $(uname -s)); continuing anyway."
@@ -63,10 +70,11 @@ fi
 VENV_PY="$VENV_DIR/bin/python"
 [ -x "$VENV_PY" ] || die "Virtual environment looks broken (no $VENV_PY); delete $VENV_DIR and retry."
 
-say "Installing dependencies from requirements.txt"
+say "Installing dependencies from app/requirements.txt"
 "$VENV_PY" -m pip install --upgrade pip >/dev/null
 "$VENV_PY" -m pip install -r "$APP_DIR/requirements.txt"
 
+mkdir -p "$HOME_DIR"
 chmod +x "$APP_DIR/app.py" 2>/dev/null || true
 
 if [ "$LINK" -eq 1 ]; then
@@ -75,13 +83,14 @@ if [ "$LINK" -eq 1 ]; then
   say "Creating launcher: $LAUNCHER"
   cat > "$LAUNCHER" <<EOF
 #!/usr/bin/env bash
-exec "$VENV_PY" "$APP_DIR/app.py" "\$@"
+exec "$VENV_PY" "$APP_DIR/app.py" --home "$HOME_DIR" "\$@"
 EOF
   chmod +x "$LAUNCHER"
 fi
 
 printf '\n'
 say "Done."
+echo "User folder (your actions/ hooks/ filters/ scripts/): $HOME_DIR"
 echo "Start the app with:"
 if [ "$LINK" -eq 1 ]; then
   echo "    yolo-box-editor --data /path/to/data.yaml"

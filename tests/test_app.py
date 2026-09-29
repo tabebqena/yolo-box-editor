@@ -9,6 +9,7 @@ constant to disposable paths under tmp_path, and STATE is reset per test.
 """
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -17,9 +18,31 @@ import pytest
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "app"))
 
 import app as ybe
+
+# --------------------------------------------------------------------------- #
+# user home resolution
+# --------------------------------------------------------------------------- #
+def test_default_home_is_parent_of_app(monkeypatch):
+    monkeypatch.delenv("YBX_HOME", raising=False)
+    assert ybe._resolve_home() == os.path.dirname(ybe.BASE_DIR)
+
+
+def test_home_env_overrides_default(monkeypatch, tmp_path):
+    monkeypatch.setenv("YBX_HOME", str(tmp_path / "h"))
+    assert ybe._resolve_home() == str(tmp_path / "h")
+
+
+def test_configure_home_repoints_user_dirs(clean_state, tmp_path):
+    target = tmp_path / "elsewhere"
+    ybe.configure_home(str(target))
+    assert ybe.YBX_HOME == str(target)
+    assert ybe.USER_ACTIONS_DIR == str(target / "actions")
+    assert ybe.USER_SCRIPTS_DIR == str(target / "scripts")
+    assert ybe.RECENT_FILE == str(target / ".recent_data_yamls.json")
+
 
 # --------------------------------------------------------------------------- #
 # fixtures / helpers
@@ -49,14 +72,25 @@ def _img(path):
 
 @pytest.fixture
 def clean_state(tmp_path, monkeypatch):
-    """Reset STATE and redirect file constants away from the repo."""
+    """Reset STATE and redirect file constants away from the repo.
+
+    The fixtures write user files under `<tmp_path>/actions` etc. (the USER_*
+    dirs, read last); the shipped `app-actions` etc. stay empty here so only the
+    test's own files are loaded.
+    """
+    monkeypatch.setattr(ybe, "YBX_HOME", str(tmp_path))
     monkeypatch.setattr(ybe, "RECENT_FILE", str(tmp_path / "recent.json"))
     monkeypatch.setattr(ybe, "VIEW_FILE", str(tmp_path / "view.json"))
-    monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
-    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
-    monkeypatch.setattr(ybe, "FILTERS_DIR", str(tmp_path / "filters"))
-    monkeypatch.setattr(ybe, "SHORTCUTS_FILE", str(tmp_path / "shortcuts.txt"))
-    monkeypatch.setattr(ybe, "SHORTCUTS_ADD_FILE", str(tmp_path / "shortcuts.a.txt"))
+    monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "app-actions"))
+    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "app-hooks"))
+    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe, "FILTERS_DIR", str(tmp_path / "app-filters"))
+    monkeypatch.setattr(ybe, "USER_FILTERS_DIR", str(tmp_path / "filters"))
+    monkeypatch.setattr(ybe, "SCRIPTS_DIR", str(tmp_path / "app-scripts"))
+    monkeypatch.setattr(ybe, "USER_SCRIPTS_DIR", str(tmp_path / "scripts"))
+    monkeypatch.setattr(ybe, "SHORTCUTS_FILE", str(tmp_path / "app-shortcuts.txt"))
+    monkeypatch.setattr(ybe, "USER_SHORTCUTS_FILE", str(tmp_path / "shortcuts.txt"))
     monkeypatch.setattr(ybe, "PIPE_DIR", str(tmp_path / "pipes"))
     monkeypatch.setattr(ybe, "FILTER_PIPES_DIR", str(tmp_path / "filter-pipes"))
     ybe.STATE.clear()
@@ -94,23 +128,23 @@ def load_dataset(client, root):
     return cfg
 
 
-def write_action(root, fname, body):
-    """Write one action file into <root>/actions (created on demand)."""
-    d = Path(root) / "actions"
+def write_action(root, fname, body, subdir="actions"):
+    """Write one action file into <root>/<subdir> (created on demand)."""
+    d = Path(root) / subdir
     d.mkdir(parents=True, exist_ok=True)
     (d / fname).write_text(body, encoding="utf-8")
 
 
-def write_hook(root, fname, body):
-    """Write one hook file into <root>/hooks (created on demand)."""
-    d = Path(root) / "hooks"
+def write_hook(root, fname, body, subdir="hooks"):
+    """Write one hook file into <root>/<subdir> (created on demand)."""
+    d = Path(root) / subdir
     d.mkdir(parents=True, exist_ok=True)
     (d / fname).write_text(body, encoding="utf-8")
 
 
-def write_filter(root, fname, body):
-    """Write one filter script into <root>/filters (created on demand)."""
-    d = Path(root) / "filters"
+def write_filter(root, fname, body, subdir="filters"):
+    """Write one filter script into <root>/<subdir> (created on demand)."""
+    d = Path(root) / subdir
     d.mkdir(parents=True, exist_ok=True)
     (d / fname).write_text(body, encoding="utf-8")
 
@@ -308,6 +342,7 @@ def test_parse_action_file_unquotes_scalars():
 
 def test_load_actions_dir_one_file_per_action(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
     write_action(tmp_path, "Keep.yaml", "steps:\n  - echo one\n")
     write_action(
         tmp_path,
@@ -323,6 +358,7 @@ def test_load_actions_dir_one_file_per_action(tmp_path, monkeypatch):
 
 def test_load_actions_name_key_overrides_filename(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
     write_action(tmp_path, "whatever.yaml", "name: Custom\nsteps:\n  - echo hi\n")
     actions = {a["name"]: a for a in ybe.load_actions()}
     assert "Custom" in actions and "whatever" not in actions
@@ -330,22 +366,32 @@ def test_load_actions_name_key_overrides_filename(tmp_path, monkeypatch):
 
 def test_load_actions_user_override_wins(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
     write_action(tmp_path, "Shared.yaml", "steps:\n  - echo repo\n")
-    write_action(tmp_path, "Shared.a.yaml", "steps:\n  - echo user\n")
+    write_action(
+        tmp_path, "Shared.yaml", "steps:\n  - echo user\n", subdir="user-actions"
+    )
     actions = {a["name"]: a for a in ybe.load_actions()}
     assert actions["Shared"]["steps"] == ["echo user"]
 
 
 def test_load_actions_override_targets_name_key(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
     write_action(tmp_path, "Shared.yaml", "steps:\n  - echo repo\n")
-    write_action(tmp_path, "mine.a.yaml", "name: Shared\nsteps:\n  - echo user\n")
+    write_action(
+        tmp_path,
+        "mine.yaml",
+        "name: Shared\nsteps:\n  - echo user\n",
+        subdir="user-actions",
+    )
     actions = {a["name"]: a for a in ybe.load_actions()}
     assert actions["Shared"]["steps"] == ["echo user"]
 
 
 def test_load_actions_ignores_empty_entries_and_non_yaml(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
     write_action(tmp_path, "Empty.yaml", "name: Empty\nafter_success: []\n")
     write_action(tmp_path, "notes.txt", "steps:\n  - echo hi\n")
     assert ybe.load_actions() == []
@@ -353,6 +399,7 @@ def test_load_actions_ignores_empty_entries_and_non_yaml(tmp_path, monkeypatch):
 
 def test_load_actions_missing_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "nope"))
+    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "nope-user"))
     assert ybe.load_actions() == []
 
 
@@ -377,6 +424,7 @@ def test_parse_action_file_reads_event_name_and_active():
 
 def test_load_hooks_event_from_filename(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(tmp_path, "on_after_save.yaml", "steps:\n  - echo saved\n")
     hooks, errors = ybe.load_hooks()
     assert errors == []
@@ -387,6 +435,7 @@ def test_load_hooks_event_from_filename(tmp_path, monkeypatch):
 
 def test_load_hooks_event_name_fallback(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(
         tmp_path, "whatever.yaml", "event_name: after_save\nsteps:\n  - echo hi\n"
     )
@@ -397,6 +446,7 @@ def test_load_hooks_event_name_fallback(tmp_path, monkeypatch):
 
 def test_load_hooks_known_filename_wins_over_event_name(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(
         tmp_path,
         "on_after_save.yaml",
@@ -408,6 +458,7 @@ def test_load_hooks_known_filename_wins_over_event_name(tmp_path, monkeypatch):
 
 def test_load_hooks_inactive_is_ignored(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(tmp_path, "on_after_save.yaml", "active: false\nsteps:\n  - echo hi\n")
     hooks, errors = ybe.load_hooks()
     assert hooks == [] and errors == []
@@ -415,6 +466,7 @@ def test_load_hooks_inactive_is_ignored(tmp_path, monkeypatch):
 
 def test_load_hooks_unknown_event_with_steps_reports_error(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(tmp_path, "on_nope.yaml", "steps:\n  - echo hi\n")
     hooks, errors = ybe.load_hooks()
     assert hooks == []
@@ -423,6 +475,7 @@ def test_load_hooks_unknown_event_with_steps_reports_error(tmp_path, monkeypatch
 
 def test_load_hooks_empty_template_is_silent(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(tmp_path, "example.yaml", "# comments only, no steps\n")
     hooks, errors = ybe.load_hooks()
     assert hooks == [] and errors == []
@@ -430,23 +483,30 @@ def test_load_hooks_empty_template_is_silent(tmp_path, monkeypatch):
 
 def test_load_hooks_user_override_wins(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(tmp_path, "on_after_save.yaml", "steps:\n  - echo repo\n")
-    write_hook(tmp_path, "on_after_save.a.yaml", "steps:\n  - echo user\n")
+    write_hook(
+        tmp_path,
+        "on_after_save.yaml",
+        "steps:\n  - echo user\n",
+        subdir="user-hooks",
+    )
     hooks, _ = ybe.load_hooks()
     assert [h["steps"] for h in hooks] == [["echo user"]]
 
 
 def test_load_hooks_missing_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "nope"))
+    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "nope-user"))
     assert ybe.load_hooks() == ([], [])
 
 
 def test_load_shortcuts_merges_and_user_override_wins(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "SHORTCUTS_FILE", str(tmp_path / "s.txt"))
-    monkeypatch.setattr(ybe, "SHORTCUTS_ADD_FILE", str(tmp_path / "s.a.txt"))
+    monkeypatch.setattr(ybe, "USER_SHORTCUTS_FILE", str(tmp_path / "s-user.txt"))
     (tmp_path / "s.txt").write_text("app_next <D> repo\napp_undo <Z> undo\n",
                                     encoding="utf-8")
-    (tmp_path / "s.a.txt").write_text("app_next <F> user\n", encoding="utf-8")
+    (tmp_path / "s-user.txt").write_text("app_next <F> user\n", encoding="utf-8")
     shortcuts = ybe.load_shortcuts()
     assert shortcuts["app_next"]["shortcut"] == "F"
     assert shortcuts["app_undo"]["label"] == "undo"
@@ -454,9 +514,11 @@ def test_load_shortcuts_merges_and_user_override_wins(tmp_path, monkeypatch):
 
 def test_modifier_only_shortcut_is_valid_app_binding(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "SHORTCUTS_FILE", str(tmp_path / "s.txt"))
-    monkeypatch.setattr(ybe, "SHORTCUTS_ADD_FILE", str(tmp_path / "s.a.txt"))
+    monkeypatch.setattr(ybe, "USER_SHORTCUTS_FILE", str(tmp_path / "s-user.txt"))
     monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
     monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     (tmp_path / "s.txt").write_text(
         "app_force_draw <Ctrl> hold + drag\napp_fix_box <F> fix\n",
         encoding="utf-8",
@@ -472,7 +534,9 @@ def test_modifier_only_shortcut_is_valid_app_binding(tmp_path, monkeypatch):
 
 def test_split_shortcuts_partitions_and_reports_unknown(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
     monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_action(tmp_path, "Mine.yaml", "steps:\n  - echo hi\n")
     shortcuts = {
         "app_next": {"shortcut": "ArrowRight", "label": "next"},
@@ -1049,9 +1113,8 @@ def test_api_action_run_substitutes_app_dir(clean_state, tmp_path):
     assert ybe.BASE_DIR in payload["stdout"]
 
 
-def test_api_action_run_sets_cwd_to_app_dir(clean_state, tmp_path):
-    # scripts/ is a sibling of app.py; steps must resolve it regardless of the
-    # directory the server was started from
+def test_api_action_run_sets_cwd_to_home(clean_state, tmp_path):
+    # every run uses the user root as cwd; steps reach shipped files via {APP_DIR}
     write_hook(tmp_path, "on_after_save.yaml", "steps:\n  - pwd\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
@@ -1059,7 +1122,30 @@ def test_api_action_run_sets_cwd_to_app_dir(clean_state, tmp_path):
         "/api/actions/run", json={"action": "on_after_save", "target": "train/a.jpg"}
     ).get_json()
     assert payload["ok"] is True
-    assert ybe.BASE_DIR in payload["stdout"]
+    assert str(clean_state) in payload["stdout"]
+    assert payload["cwd"] == str(clean_state)
+
+
+def test_api_action_run_substitutes_scripts_and_home_dir(clean_state, tmp_path):
+    write_hook(
+        tmp_path,
+        "on_after_save.yaml",
+        "steps:\n  - echo {SCRIPTS_DIR}\n  - echo {HOME_DIR}\n",
+    )
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    payload = client.post(
+        "/api/actions/run", json={"action": "on_after_save", "target": "train/a.jpg"}
+    ).get_json()
+    assert payload["ok"] is True
+    assert ybe.USER_SCRIPTS_DIR in payload["stdout"]
+    assert ybe.YBX_HOME in payload["stdout"]
+
+
+def test_run_command_logs_cwd(clean_state, capsys):
+    state = {"stdout": [], "stderr": [], "commands": [], "exit_code": 0}
+    ybe._run_command(state, "true")
+    assert f"cwd={ybe.YBX_HOME}" in capsys.readouterr().err
 
 
 def test_api_action_run_pipe_path_is_deleted_when_done(clean_state, tmp_path):
@@ -1307,9 +1393,8 @@ def test_api_image_no_store_header(clean_state, tmp_path):
 # --------------------------------------------------------------------------- #
 # filters/ (script-based image-list filters)
 # --------------------------------------------------------------------------- #
-def test_filter_name_strips_py_and_override_suffix():
+def test_filter_name_strips_py_suffix():
     assert ybe._filter_name("/d/Odd.py") == "Odd"
-    assert ybe._filter_name("/d/Odd.a.py") == "Odd"
 
 
 def test_load_filters_one_script_per_filter(clean_state):
@@ -1319,9 +1404,9 @@ def test_load_filters_one_script_per_filter(clean_state):
 
 
 def test_load_filters_user_override_wins(clean_state):
-    write_filter(clean_state, "Odd.py", "print('repo')\n")
-    write_filter(clean_state, "Odd.a.py", "print('user')\n")
-    assert ybe.load_filters()["Odd"].endswith("Odd.a.py")
+    write_filter(clean_state, "Odd.py", "print('repo')\n", subdir="app-filters")
+    write_filter(clean_state, "Odd.py", "print('user')\n")
+    assert ybe.load_filters()["Odd"].endswith("filters/Odd.py")
 
 
 def test_load_filters_ignores_non_py(clean_state):
@@ -1332,6 +1417,7 @@ def test_load_filters_ignores_non_py(clean_state):
 
 def test_load_filters_missing_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "FILTERS_DIR", str(tmp_path / "nope"))
+    monkeypatch.setattr(ybe, "USER_FILTERS_DIR", str(tmp_path / "nope-user"))
     assert ybe.load_filters() == {}
 
 

@@ -1,29 +1,31 @@
 #!/usr/bin/env python3
 """yolo-box-editor scripts: helper scripts invoked by user actions.
 
-Put your own helper programs in this scripts/ dir and call them from an action
-in the actions/ folder. The app never scans this dir itself — a script runs only
-when a `steps:` command names it, e.g.:
+Put your own helper programs in <home>/scripts/ and call them from an action in
+<home>/actions/. This shipped file lives in the app's own app/scripts/. The app
+never scans either dir itself — a script runs only when a `steps:` command names
+it, e.g.:
 
-    # actions/MyAction.a.yaml
+    # <home>/actions/MyAction.yaml
     steps:
-      - python scripts/helper.py {DATA_YAML_PATH} {IMAGE_PATH} {LABEL_PATH}
+      - python {SCRIPTS_DIR}/helper.py {DATA_YAML_PATH} {IMAGE_PATH} {LABEL_PATH}
 
 The placeholders ({IMAGE_PATH}, {LABEL_PATH}, {DATASET_PATH}, {DATA_YAML_PATH},
-{IMAGE_INDEX}) are substituted and shell-quoted by the app before the command
-runs; the single tool output is shown in the result popup. See the README
-"User actions" section for the placeholder list.
+{IMAGE_INDEX}, {APP_DIR}, {SCRIPTS_DIR}, {HOME_DIR}) are substituted and
+shell-quoted by the app before the command runs; the single tool output is shown
+in the result popup. See the README "User actions" section for the placeholder
+list.
 
-This example file is comments only and does nothing. Copy it (or any file here)
-to a new <Name>.py to add a script, or write your own.
+This example file is comments only and does nothing. Copy it to a new <Name>.py
+in <home>/scripts/ to add a script, or write your own.
 
 Contract
 --------
 There is no fixed interface: the script gets whatever the action's `steps`
 command passes as arguments. By convention a script:
 
-  - is run with the current working directory set to the app's folder, so
-    relative paths resolve predictably;
+  - is run with the current working directory set to your user folder
+    ({HOME_DIR}, logged to the server console), so relative paths land there;
   - prints to stdout (shown to the user) and exits 0 on success, non-zero on
     failure (a failing step stops the action and reports the error).
 
@@ -44,7 +46,6 @@ would do; this shows the Python form):
         tag_file.write_text("".join(f"{t}\\n" for t in sorted(set(tags))),
                             encoding="utf-8")
 
-Personal scripts: files ending in `.a.py` are git-ignored, so app updates never
-touch them and they are never shipped. Keep your own work in `scripts/*.a.py`
-and leave this example file as-is.
+Your scripts: keep your own work in <home>/scripts/ (never shipped or
+overwritten); this example file stays in the app's app/scripts/.
 """

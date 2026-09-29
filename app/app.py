@@ -2,8 +2,8 @@
 """YOLO labelling app served by Flask.
 
 Usage:
-    python app.py --data /path/to/data.yaml
-    python app.py --data /path/to/data.yaml --readonly   # viewer only
+    python app/app.py --data /path/to/data.yaml
+    python app/app.py --data /path/to/data.yaml --readonly   # viewer only
 
 The data.yaml file can also be set from the web interface.
 
@@ -36,21 +36,69 @@ import uuid
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # the shipped app/ directory
+
+
+def _resolve_home():
+    """The user folder: `--home` (applied later) > $YBX_HOME > parent of app.py.
+
+    The parent of `app.py` is the user root in both an installed copy
+    (`<root>/app/app.py`) and a git clone (`<repo>/app/app.py`), so both behave
+    identically without extra flags.
+    """
+    env = os.environ.get("YBX_HOME")
+    if env:
+        return os.path.abspath(os.path.expanduser(env))
+    return os.path.dirname(BASE_DIR)
+
+
+YBX_HOME = _resolve_home()
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 
-RECENT_FILE = os.path.join(BASE_DIR, ".recent_data_yamls.json")
-VIEW_FILE = os.path.join(BASE_DIR, ".view_state.json")  # active split/filter per dataset
+# Built-in, shipped files (inside app/); replaced wholesale on upgrade.
 ACTIONS_DIR = os.path.join(BASE_DIR, "actions")  # one YAML file per action
 HOOKS_DIR = os.path.join(BASE_DIR, "hooks")  # one YAML file per event hook
 FILTERS_DIR = os.path.join(BASE_DIR, "filters")  # one Python script per filter
+SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")  # helper programs for steps
 SHORTCUTS_FILE = os.path.join(BASE_DIR, "shortcuts.txt")
-SHORTCUTS_ADD_FILE = os.path.join(BASE_DIR, "shortcuts.a.txt")  # user overrides, never shipped
+
+# User files (inside YBX_HOME); read after the built-ins and win on a clash.
+USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
+USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
+USER_FILTERS_DIR = os.path.join(YBX_HOME, "filters")
+USER_SCRIPTS_DIR = os.path.join(YBX_HOME, "scripts")
+USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
+RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
+VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")  # active split/filter per dataset
+
 # Per-run {PIPE_PATH} files live in the system temp dir (never in the repo).
 PIPE_DIR = os.path.join(tempfile.gettempdir(), "yolo-box-editor-pipes")
 # Per-run filter-chain scratch dirs (input/output pipes) live here too.
 FILTER_PIPES_DIR = os.path.join(tempfile.gettempdir(), "yolo-box-editor-filter-pipes")
+
+
+def configure_home(path):
+    """Point the user folders at `path` (the `--home` override)."""
+    global YBX_HOME, USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR
+    global USER_SCRIPTS_DIR, USER_SHORTCUTS_FILE, RECENT_FILE, VIEW_FILE
+    YBX_HOME = os.path.abspath(os.path.expanduser(path))
+    USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
+    USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
+    USER_FILTERS_DIR = os.path.join(YBX_HOME, "filters")
+    USER_SCRIPTS_DIR = os.path.join(YBX_HOME, "scripts")
+    USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
+    RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
+    VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")
+
+
+def ensure_user_dirs():
+    """Create the user folders when missing, so the home is usable right away."""
+    for dirpath in (USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR, USER_SCRIPTS_DIR):
+        try:
+            os.makedirs(dirpath, exist_ok=True)
+        except OSError:
+            pass
 
 # Built-in app actions; may be rebound in shortcuts.txt but cannot be renamed.
 APP_ACTIONS = {
@@ -326,12 +374,12 @@ ACTIONS_DOC = (
     "failure. Both lists accept the same entries: an `app_*` name runs in the "
     "UI, a `backend_*` built-in action (e.g. `backend_rescan_images`) runs "
     "inline on the server, `action_<Name>` runs another (non-hook) action "
-    "inline, and anything else is a shell command. Files ending in `.a.yaml` are "
-    "the user's own "
-    "(never shipped) and win on a name clash. Placeholders are substituted with "
-    "shell-quoted values: {IMAGE_PATH}, {LABEL_PATH}, {DATASET_PATH}, "
-    "{DATA_YAML_PATH}, {IMAGE_INDEX}, {APP_DIR}, {PIPE_PATH}. Event hooks live "
-    "in the hooks/ directory and cannot be bound."
+    "inline, and anything else is a shell command. Shipped files live in the "
+    "app's actions/ folder and yours in <home>/actions/; yours are read last and "
+    "win on a name clash. Placeholders are substituted with shell-quoted values: "
+    "{IMAGE_PATH}, {LABEL_PATH}, {DATASET_PATH}, {DATA_YAML_PATH}, {IMAGE_INDEX}, "
+    "{APP_DIR}, {SCRIPTS_DIR}, {HOME_DIR}, {PIPE_PATH}. Event hooks live in the "
+    "hooks/ directory and cannot be bound."
 )
 
 
@@ -411,13 +459,13 @@ def _parse_action_file(text):
     return data
 
 
-def _action_files(dirpath, overrides):
-    """Sorted `.yaml` paths in `dirpath`: `.a.yaml` when `overrides`, else the rest."""
+def _action_files(dirpath):
+    """Sorted `.yaml` paths in `dirpath`."""
     if not os.path.isdir(dirpath):
         return []
     paths = []
     for fname in sorted(os.listdir(dirpath)):
-        if not fname.endswith(".yaml") or fname.endswith(".a.yaml") != overrides:
+        if not fname.endswith(".yaml"):
             continue
         path = os.path.join(dirpath, fname)
         if os.path.isfile(path):
@@ -430,22 +478,19 @@ def _action_name(path, explicit):
     if explicit:
         return explicit
     fname = os.path.basename(path)
-    suffix = ".a.yaml" if fname.endswith(".a.yaml") else ".yaml"
-    return fname[: -len(suffix)]
+    return fname[: -len(".yaml")]
 
 
 def load_actions():
-    """Parse the actions/ directory into entries (read fresh).
+    """Parse the actions/ folders into entries (read fresh).
 
     One action per `.yaml` file (name from its `name:` key or the file name).
     Returns [{"name": ..., "steps": [...], "after_success": [...]}]; entries with
-    neither steps nor after_success are dropped. The user's `.a.yaml` files are
-    read last and win on a name clash.
+    neither steps nor after_success are dropped. The shipped app/actions/ folder
+    is read first, the user's <home>/actions/ second (it wins on a name clash).
     """
     merged = {}
-    paths = _action_files(ACTIONS_DIR, overrides=False) + _action_files(
-        ACTIONS_DIR, overrides=True
-    )
+    paths = _action_files(ACTIONS_DIR) + _action_files(USER_ACTIONS_DIR)
     for path in paths:
         data = _parse_action_file(_read_text(path))
         name = _action_name(path, data["name"])
@@ -466,7 +511,8 @@ HOOKS_DOC = (
     "known event, the top-level `event_name:` key is used instead. A hook with "
     "`active: false` is ignored. Hooks use the same `steps` / `after_success` "
     "as actions and the same placeholders, but run on app events instead of a "
-    "button. Files ending in `.a.yaml` are the user's own (never shipped). "
+    "button. Shipped files live in the app's hooks/ folder and yours in "
+    "<home>/hooks/ (read last, win on an event clash). "
     "Available events: " + ", ".join(HOOK_EVENTS) + "."
 )
 
@@ -478,8 +524,7 @@ def _hook_event(path, data):
     known app event.
     """
     fname = os.path.basename(path)
-    suffix = ".a.yaml" if fname.endswith(".a.yaml") else ".yaml"
-    stem = fname[: -len(suffix)]
+    stem = fname[: -len(".yaml")]
     if is_hook_name(stem):
         event = stem[len(HOOK_PREFIX):]
         if event in HOOK_EVENTS:
@@ -498,13 +543,12 @@ def load_hooks():
     hooks are skipped. Templates (files with neither `steps` nor
     `after_success`, e.g. hooks/example.yaml) are ignored silently; a file that
     does define steps but names no known event is reported in `errors`. The
-    user's `.a.yaml` files are read last and win on an event clash.
+    shipped app/hooks/ folder is read first, the user's <home>/hooks/ second (it
+    wins on an event clash).
     """
     merged = {}
     errors = []
-    paths = _action_files(HOOKS_DIR, overrides=False) + _action_files(
-        HOOKS_DIR, overrides=True
-    )
+    paths = _action_files(HOOKS_DIR) + _action_files(USER_HOOKS_DIR)
     for path in paths:
         data = _parse_action_file(_read_text(path))
         event = _hook_event(path, data)
@@ -586,12 +630,24 @@ def remove_pipe(path):
 # the client runs it and calls back to resume. The backend owns the whole run,
 # including its {PIPE_PATH} file.
 # --------------------------------------------------------------------------- #
+def _subprocess_env():
+    """Environment handed to every command/filter: the resolved user paths."""
+    env = os.environ.copy()
+    env["YBE_HOME"] = YBX_HOME
+    env["YBE_APP_DIR"] = BASE_DIR
+    env["YBE_SCRIPTS_DIR"] = USER_SCRIPTS_DIR
+    return env
+
+
 def _run_command(state, command):
     """Run one shell command, accumulating output in `state`.
 
     Returns "ok", "failed", "timeout" or "error"; `state["exit_code"]` holds the
-    failing command's code on "failed".
+    failing command's code on "failed". Runs with cwd=YBX_HOME (logged), so
+    relative paths land in the user folder; use {APP_DIR}/{SCRIPTS_DIR} to reach
+    shipped and user scripts explicitly.
     """
+    print(f"[ybe] command: cwd={YBX_HOME} cmd={command}", file=sys.stderr)
     try:
         proc = subprocess.run(
             command,
@@ -599,7 +655,8 @@ def _run_command(state, command):
             capture_output=True,
             text=True,
             timeout=ACTION_TIMEOUT,
-            cwd=BASE_DIR,
+            cwd=YBX_HOME,
+            env=_subprocess_env(),
         )
     except subprocess.TimeoutExpired:
         state["stderr"].append(f"$ {command}\ntimed out")
@@ -694,6 +751,7 @@ def begin_execution(action, action_name, values, pipe_path):
         "action": action_name,
         "values": values,
         "pipe_path": pipe_path,
+        "cwd": YBX_HOME,
         "queue": _action_items(action),
         "stdout": [],
         "stderr": [],
@@ -719,8 +777,9 @@ SHORTCUTS_FILE_DOC = (
     "SHORTCUT is wrapped in angle brackets: a key with optional +joined "
     "modifiers (Ctrl, Alt, Shift, Meta). The label after the '>' is free text. "
     "ACTION_NAME must be an app action (app_*) or an action from the actions/ "
-    "folder (hooks cannot be bound). Entries are merged from shortcuts.txt then "
-    "shortcuts.a.txt (the user file, which wins on a name clash)."
+    "folder (hooks cannot be bound). Entries are merged from the shipped "
+    "app/shortcuts.txt then the user's <home>/shortcuts.txt (which wins on a "
+    "name clash)."
 )
 
 
@@ -751,9 +810,9 @@ def parse_shortcut_line(line):
 
 
 def load_shortcuts():
-    """Parse shortcuts.txt + shortcuts.a.txt into {name: {shortcut, label}} (read fresh)."""
+    """Parse the shipped + user shortcuts.txt into {name: {shortcut, label}} (read fresh)."""
     shortcuts = {}
-    for path in (SHORTCUTS_FILE, SHORTCUTS_ADD_FILE):
+    for path in (SHORTCUTS_FILE, USER_SHORTCUTS_FILE):
         for raw in _read_text_lines(path):
             parsed = parse_shortcut_line(raw)
             if parsed is None:
@@ -795,18 +854,18 @@ FILTERS_DOC = (
     "<split> is train/val/test or an empty string for all splits. The input pipe "
     "holds one absolute image path per line (the active split's images); the "
     "script writes the paths it keeps to the output pipe, one per line, and that "
-    "becomes the next filter's input. Files ending in `.a.py` are the user's own "
-    "(never shipped) and win on a name clash."
+    "becomes the next filter's input. Ships in app/filters/, yours live in "
+    "<home>/filters/ (read last, win on a name clash)."
 )
 
 
-def _filter_files(dirpath, overrides):
-    """Sorted `.py` paths in `dirpath`: `.a.py` when `overrides`, else the rest."""
+def _filter_files(dirpath):
+    """Sorted `.py` paths in `dirpath`."""
     if not os.path.isdir(dirpath):
         return []
     paths = []
     for fname in sorted(os.listdir(dirpath)):
-        if not fname.endswith(".py") or fname.endswith(".a.py") != overrides:
+        if not fname.endswith(".py"):
             continue
         path = os.path.join(dirpath, fname)
         if os.path.isfile(path):
@@ -815,21 +874,18 @@ def _filter_files(dirpath, overrides):
 
 
 def _filter_name(path):
-    """The filter's name: its file name without the `.py` / `.a.py` suffix."""
-    fname = os.path.basename(path)
-    suffix = ".a.py" if fname.endswith(".a.py") else ".py"
-    return fname[: -len(suffix)]
+    """The filter's name: its file name without the `.py` suffix."""
+    return os.path.basename(path)[: -len(".py")]
 
 
 def load_filters():
     """Map every filter name to its script path (read fresh).
 
-    The user's `.a.py` files are read last and win on a name clash.
+    The shipped app/filters/ folder is read first, the user's <home>/filters/
+    second (it wins on a name clash).
     """
     merged = {}
-    for path in _filter_files(FILTERS_DIR, overrides=False) + _filter_files(
-        FILTERS_DIR, overrides=True
-    ):
+    for path in _filter_files(FILTERS_DIR) + _filter_files(USER_FILTERS_DIR):
         name = _filter_name(path)
         if name:
             merged[name] = path
@@ -913,9 +969,15 @@ def run_filter(name, data_yaml, split, input_pipe, output_pipe):
         input_pipe,
         output_pipe,
     ]
+    print(f"[ybe] filter: cwd={YBX_HOME} cmd={' '.join(command)}", file=sys.stderr)
     try:
         proc = subprocess.run(
-            command, capture_output=True, text=True, timeout=FILTER_TIMEOUT
+            command,
+            capture_output=True,
+            text=True,
+            timeout=FILTER_TIMEOUT,
+            cwd=YBX_HOME,
+            env=_subprocess_env(),
         )
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": "filter timed out"}
@@ -1564,9 +1626,11 @@ def api_action_run():
         "DATASET_PATH": STATE["dataset_path"] or "",
         "DATA_YAML_PATH": STATE["data_yaml"] or "",
         "IMAGE_INDEX": str(position or 0),
-        # the folder holding app.py, so steps can reach scripts/ and other files
-        # the same way regardless of the directory the server was started from
+        # the folder holding app.py (shipped files) and the user root; reach
+        # built-in helpers with {APP_DIR}/scripts/… and yours with {SCRIPTS_DIR}/…
         "APP_DIR": BASE_DIR,
+        "SCRIPTS_DIR": USER_SCRIPTS_DIR,
+        "HOME_DIR": YBX_HOME,
         # scratch file shared by every step and after_success action of this run
         "PIPE_PATH": pipe_path or "",
     }
@@ -1630,6 +1694,7 @@ def _execution_payload(state):
         "stdout": "\n".join(state["stdout"]),
         "stderr": "\n".join(state["stderr"]),
         "pipe_path": state["pipe_path"],
+        "cwd": state.get("cwd"),
     }
 
 
@@ -1745,6 +1810,11 @@ def api_tags():
 def main():
     parser = argparse.ArgumentParser(description="YOLO labelling app (Flask)")
     parser.add_argument("--data", help="path to data.yaml")
+    parser.add_argument(
+        "--home",
+        help="folder holding your actions/ hooks/ filters/ scripts/ (default: "
+        "$YBX_HOME, else the parent of app.py)",
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5000)
     parser.add_argument(
@@ -1773,6 +1843,11 @@ def main():
         help="keep the filter-chain input/output pipe files instead of deleting them",
     )
     args = parser.parse_args()
+
+    if args.home:
+        configure_home(args.home)
+    ensure_user_dirs()
+    print(f"[ybe] user dir: {YBX_HOME} (override with --home)", file=sys.stderr)
 
     STATE["readonly"] = args.readonly
     STATE["debug"] = args.debug

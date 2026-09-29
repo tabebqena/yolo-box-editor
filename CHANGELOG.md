@@ -4,6 +4,39 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-09-30
+
+### Changed
+
+- **Split code and user files** (breaking). The app now lives in `app/`
+  (`app/app.py`, `app/static/`, `app/templates/`, `app/requirements.txt`,
+  `app/VERSION`) and the shipped extension files are `app/actions/`,
+  `app/hooks/`, `app/filters/`, `app/scripts/` and `app/shortcuts.txt`. Your own
+  files live in the **user folder** (`actions/`, `hooks/`, `filters/`,
+  `scripts/`, `shortcuts.txt`), next to `app/`. Upgrades replace only `app/`, so
+  user files are never overwritten.
+- **User folder resolution**: `--home <dir>` > `$YBX_HOME` > the parent of
+  `app.py`. A clone and an install therefore behave the same. The folders are
+  created at startup and the path is logged (`[ybe] user dir: …`).
+- **`.a.*` convention removed** (breaking): `*.a.yaml`, `*.a.py` and
+  `shortcuts.a.txt` are no longer special. Move those files into the user folder
+  and drop the `.a` suffix (`actions/Archive.a.yaml` -> `actions/Archive.yaml`).
+  User files are still read after the shipped ones and win on a name clash.
+- **Run working directory is now the user folder** (breaking), logged before
+  each command/filter. Previously it was the app folder. Use `{APP_DIR}` for the
+  shipped helpers and the new `{SCRIPTS_DIR}` for your own; `{HOME_DIR}` is the
+  user folder. Commands also receive `YBE_HOME`, `YBE_APP_DIR` and
+  `YBE_SCRIPTS_DIR` in their environment.
+- `.recent_data_yamls.json` and `.view_state.json` now live in the user folder.
+
+### Added
+
+- `--home <dir>` flag and the `YBX_HOME` environment variable.
+- `{SCRIPTS_DIR}` and `{HOME_DIR}` placeholders; per-run `cwd` in the action
+  result payload.
+- `app/` layout keeps the shipped files in one relocatable directory, ready for
+  the upcoming `ybx.sh` installer (Task 2).
+
 ## [1.1.0] - 2026-09-29
 
 ### Added
