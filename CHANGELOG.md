@@ -22,6 +22,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   - The bottom shortcut bar was replaced by a **Show all shortcuts** entry in
     Settings that opens a modal with the full list.
   - Status toasts now appear at the **bottom center**.
+  - The tag controls and the image nav / Undo / Redo / Save controls now share
+    a **single bottom row**; the filename label was removed.
 
 ### Added
 

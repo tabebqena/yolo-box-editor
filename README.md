@@ -19,7 +19,7 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   the last dataset automatically — pass `--no-resume` to get the Settings dialog
   instead.
 - **Browse** across `train` / `val` / `test` with Prev/Next buttons or the
-  `→` / `←` arrow keys; the current image is shown as `<split>/<filename>`.
+  `→` / `←` arrow keys.
   The `current / total` counter is an input — type a number and press Enter to
   jump straight to that image. The app also resumes at the last image you
   reached (per dataset) when you reload.
@@ -86,7 +86,7 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   `ACTION_NAME <SHORTCUT> label`. Every app action and your action names
   can be bound; invalid names are rejected with a dismissible notification. Your
   `shortcuts.txt` lives in the user folder and is read after the shipped one.
-- **Tags** (opt-in via the Settings `Tags` switch): a tag bar below the image
+- **Tags** (opt-in via the Settings `Tags` switch): the tag controls in the bottom bar
   shows the dataset's tags as clickable badges — click to toggle a tag on the
   current image, `+ Add tag` appends a brand-new name to `tags.yaml`, and
   `Alt+1..9` toggles the matching tag by number. Active badges look different
@@ -434,7 +434,7 @@ hook are skipped.
 ## Tags
 
 YOLO has no canonical tagging scheme, so this app defines a minimal one. It is
-opt-in: flip the **Tags** switch in **Settings** to show a tag bar below the image.
+opt-in: flip the **Tags** switch in **Settings** to show the tag controls in the bottom bar.
 
 - **`tags.yaml`** lives next to `data.yaml` and holds the dataset's available
   tags under a single key:

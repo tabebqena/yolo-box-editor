@@ -570,9 +570,6 @@ function updateNav() {
   el('counter').value = total ? `${currentIndex + 1} / ${total}` : '0 / 0';
   el('prevBtn').disabled = total === 0 || currentIndex <= 0;
   el('nextBtn').disabled = total === 0 || currentIndex >= total - 1;
-  el('filename').textContent = total
-    ? `${images[currentIndex].split}/${images[currentIndex].name}`
-    : '';
 }
 
 // jump to image N (1-based) typed into the counter input

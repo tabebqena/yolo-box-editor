@@ -88,11 +88,12 @@ canvas.
   button that opens the filter modal; the per-dataset action buttons (a few,
   with a `…` to show the rest); and finally the _Boxes_ list for the current
   image (one row per box with its class dropdown, `cx cy w h` number inputs and
-  a `×`). The header row is always visible; the **Panel** toggle collapses the
-  rest, and the column width can be dragged from its right edge.
+  a `×`). The column width can be dragged from its left edge. The **Panel**
+  toggle collapses the whole column (the image takes the full width); only the
+  **Panel** and bell buttons remain, floating over the top-right corner.
 - **Middle** — the picture (canvas).
-- **Bottom bar** — image navigation (Prev / Next, counter, filename) and
-  Undo / Redo / Save.
+- **Bottom bar** — one row with the tag controls (when Tags is on) plus image
+  navigation (Prev / Next, counter) and Undo / Redo / Save.
 - **Settings** (⚙) — the _Read-only_, _Tags_ and _Auto-save_ switches, the
   dataset field and a **Show all shortcuts** button opening the full shortcut list.
 
@@ -186,7 +187,7 @@ editing and saving stop working; boxes still display.
 Tags are short labels you attach to a whole image (not to a box) — useful to
 mark, say, "night", "indoor" or "hard". They are separate from YOLO classes.
 
-1. Tick **Tags** in **Settings** to show the tag bar below the image.
+1. Tick **Tags** in **Settings** to show the tag controls in the bottom bar.
 2. The dataset's tags appear as **badges**. Green = the tag is on this image;
    grey = it is not. **Click a badge** to toggle it — the image's tag file is
    saved straight away.

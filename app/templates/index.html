@@ -13,20 +13,18 @@
         <canvas id="canvas"></canvas>
       </main>
 
-      <section id="tagBar" class="tagbar hidden">
-        <span class="tagbar-title">Tags</span>
-        <span id="tagHint" class="tagbar-hint hidden">Alt+1..9 toggles</span>
-        <div id="tagBadges" class="tag-badges"></div>
-        <div class="tagbar-add">
-          <input id="tagInput" class="tag-input" type="text" placeholder="add a tag…"
-                 list="tagSuggestions" maxlength="64">
-          <datalist id="tagSuggestions"></datalist>
-          <button id="addTagBtn" type="button" title="Add tag to the image (new names are written to tags.yaml)">+ Add tag</button>
-        </div>
-      </section>
-
       <section class="imagebar">
-        <span id="filename" class="filename"></span>
+        <div id="tagBar" class="tagbar hidden">
+          <span class="tagbar-title">Tags</span>
+          <span id="tagHint" class="tagbar-hint hidden">Alt+1..9 toggles</span>
+          <div id="tagBadges" class="tag-badges"></div>
+          <div class="tagbar-add">
+            <input id="tagInput" class="tag-input" type="text" placeholder="add a tag…"
+                   list="tagSuggestions" maxlength="64">
+            <datalist id="tagSuggestions"></datalist>
+            <button id="addTagBtn" type="button" title="Add tag to the image (new names are written to tags.yaml)">+ Add tag</button>
+          </div>
+        </div>
         <div class="imagebar-nav">
           <button id="prevBtn" title="Previous (←)">&#9664; Prev</button>
           <input id="counter" class="counter" type="text" inputmode="numeric"

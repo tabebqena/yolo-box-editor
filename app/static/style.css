@@ -79,12 +79,29 @@ select, input {
   flex-direction: column;
   min-height: 0;
 }
-/* Collapsed: everything below the header row disappears and the column shrinks
-   to just the header, freeing horizontal space for the image. */
-.sidebar.collapsed { width: var(--sidebar-collapsed-w, 170px); }
+/* Collapsed: the column takes no width at all; only the Panel + bell buttons
+   stay, floating over the image as a small overlay. */
+.sidebar.collapsed {
+  width: 0;
+  border-left: none;
+  overflow: visible;
+}
 .sidebar.collapsed .sidebar-body { display: none; }
 .sidebar.collapsed .sidebar-resizer { display: none; }
-.sidebar.collapsed .sidebar-head { flex-wrap: wrap; }
+.sidebar.collapsed .brand { display: none; }
+.sidebar.collapsed #settingsBtn { display: none; }
+.sidebar.collapsed .sidebar-head {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 55;
+  width: auto;
+  padding: 4px 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
 
 .sidebar-resizer {
   position: absolute;
@@ -253,10 +270,6 @@ select, input {
   background: #20212a;
   border-top: 1px solid var(--border);
 }
-.imagebar .filename {
-  flex: 1;
-  min-width: 0;
-}
 .imagebar .imagebar-nav {
   flex: 0 0 auto;
   display: flex;
@@ -264,23 +277,30 @@ select, input {
   gap: 8px;
 }
 .imagebar .imagebar-right {
-  flex: 1;
-  min-width: 0;
+  flex: 0 0 auto;
+  margin-left: auto;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 14px;
 }
-
-.filename {
-  color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
-  max-width: 40vw;
+/* the tag controls share the single bottom row with the nav / save controls */
+.imagebar .tagbar {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  flex-wrap: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
+.imagebar .tag-badges {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.imagebar .tagbar-add { flex: 0 0 auto; }
 
 .splitbox { flex-direction: row; align-items: center; gap: 6px; }
 .splitbox label { color: var(--muted); font-size: 13px; white-space: nowrap; }
