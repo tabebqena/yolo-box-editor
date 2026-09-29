@@ -24,8 +24,8 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   jump straight to that image. The app also resumes at the last image you
   reached (per dataset) when you reload.
 - **Split filter**: narrow navigation to a single split, or "All splits".
-- **Filters**: narrow the loaded image list with a script from the `filters/`
-  folder (shown once a `data.yaml` is loaded). See [Filters](#filters).
+- **Filters**: chain scripts from the `filters/` folder to narrow the loaded
+  image list (shown once a `data.yaml` is loaded). See [Filters](#filters).
 - **Labels** are drawn on the image as boxes; a class list pops up when a new
   box is drawn.
 - **Hide / show boxes**: press `.` to toggle the box overlay, so you can inspect
@@ -154,13 +154,14 @@ python app.py --data /path/to/data.yaml --readonly   # viewer only
 python app.py --data /path/to/data.yaml --debug      # verbose browser console
 python app.py --no-resume                            # settings screen, no auto-open
 python app.py --data /path/to/data.yaml --keep-pipe  # keep each run's {PIPE_PATH} file
+python app.py --data /path/to/data.yaml --keep-filter-pipes  # keep filter-chain pipe files
 ```
 
 Open <http://127.0.0.1:5000>. You can also leave out `--data` and paste the
 `data.yaml` path into the settings bar, then click *Load data.yaml* — or just
 run `python app.py`, which reopens the dataset you used last (add `--no-resume`
-to start on the settings screen instead). The dataset, split, filter, last image
-and topbar switches are all restored, so the app comes back as you left it.
+to start on the settings screen instead). The dataset, split, filter chain, last
+image and topbar switches are all restored, so the app comes back as you left it.
 
 `--debug` writes verbose messages to the **browser console** (prefixed `[ybe]`):
 the loaded config, image loads, saves, tag writes, user actions / `after_success`
@@ -230,7 +231,7 @@ after_success:
   below);
 - **a `backend_*` name** — a built-in server-side action, run inline by the
   backend (no browser needed). Currently `backend_rescan_images` re-scans the
-  image folders and re-applies the active filter;
+  image folders and re-applies the active filter chain;
 - **`action_<Name>`** — run another action inline, right here, with its own
   `steps` / `after_success` (the prefix keeps a reference from looking like a
   shell command);
@@ -282,7 +283,7 @@ list; a cascade is capped at 8 actions per run. Useful app actions:
 
 - `app_refresh_images_list` — re-scan the image folders; the current image is
   kept **by path**, not by index, so the display survives list changes from an
-  action (`Archive`) or a re-applied filter. When that image was removed, the
+  action (`Archive`) or a re-applied filter chain. When that image was removed, the
   next one that followed it and still exists is shown (clamped at the end).
 - `app_reload_images_list` — re-read the server's list *without* a disk scan:
   use it after `backend_rescan_images` so the rescan runs once, server-side.
@@ -295,12 +296,12 @@ reload the UI, so the removal is guaranteed even if the browser is slow:
 
 ```yaml
 after_success:
-  - backend_rescan_images     # server re-scans + re-applies the filter, inline
+  - backend_rescan_images     # server re-scans + re-applies the filter chain, inline
   - app_reload_images_list    # UI re-reads the fresh list (no second scan)
   - app_refresh_image
 ```
 
-The active split and filter are remembered **per dataset** (in
+The active split and filter chain are remembered **per dataset** (in
 `.view_state.json`, next to `app.py`), so restarting the server (e.g. the Flask
 `--debug` reloader) reopens the dataset in the same view instead of falling back
 to *All splits* — that also keeps an open browser tab and the server agreeing on
@@ -392,39 +393,41 @@ opt-in: flip the topbar **Tags** switch to show a tag bar below the image.
 
 ## Filters
 
-A **filter** narrows the loaded image list to the images a script returns. The
-topbar `Filter` dropdown (next to `Split`) appears once a `data.yaml` is loaded;
-pick a filter to apply it, or `No filter` to clear it. An active filter
-supersedes the split's own filtering — the split is passed to the filter as its
-input, and the returned list is exactly what the app shows (count, Prev/Next,
-the counter jump and resume all follow it).
+A **filter** narrows the loaded image list to the images a script returns.
+**Filters are chainable**: the topbar `Filters` button (next to `Split`) appears
+once a `data.yaml` is loaded and opens a modal with a stack of selects (up to 8).
+Pick a filter in each select and they run **top to bottom** — each one receives
+the previous one's result, applies its own logic, and passes its result on. The
+last filter's output is exactly what the app shows (count, Prev/Next, the counter
+jump and resume all follow it). `No filter` clears the whole chain.
 
 Each filter is one **Python script** in the `filters/` folder, run as:
 
 ```bash
-python filters/<Name>.py <data.yaml> <split>
+python filters/<Name>.py <data.yaml> <split> <input_pipe> <output_pipe>
 ```
 
 - `<data.yaml>` — path of the loaded dataset's `data.yaml`.
 - `<split>` — `train` / `val` / `test`, or an empty string when the UI is on
   *All splits* (the filter decides what to return then).
+- `<input_pipe>` — a file with the candidate images, one **absolute path** per
+  line. The first filter's input is the active split's images (every scanned
+  image when the split is *All splits*).
+- `<output_pipe>` — the file the filter must write the paths it keeps to, one
+  absolute path per line.
 
-The script must print one `split/name` per line, e.g.:
+The app feeds each output pipe to the next filter and keeps the final images
+**in that order** (handy for ranking). Blank lines are ignored and duplicates
+are dropped; a path that is not in the dataset is skipped and a notice is shown.
+A non-zero exit code or a timeout (120 s) stops the chain — nothing is applied,
+so the previous chain (if any) stays in effect, and the failing filter is named
+in the message. The scratch pipe files are deleted after each run; pass
+`--keep-filter-pipes` to keep them for debugging.
 
-```
-train/a.jpg
-val/b.png
-```
-
-The app keeps those images **in that order** (handy for ranking), ignores blank
-lines and drops duplicates; a line whose image is not in the dataset is skipped
-and a notice is shown. A non-zero exit code or a timeout (120 s) is reported as
-a filter failure and the previous filter (if any) stays active.
-
-Filters re-run when you pick one, when you change the split (while one is
+The chain re-runs when you apply it, when you change the split (while one is
 active), and after an image-list rescan. The image you are on is tracked by its
-path, so re-applying a filter keeps you on it when it is still in the result
-(otherwise you are moved to the nearest surviving image). The active filter is
+path, so re-applying a chain keeps you on it when it is still in the result
+(otherwise you are moved to the nearest surviving image). The active chain is
 remembered in your browser and restored when you reopen the app — even after a
 server restart.
 

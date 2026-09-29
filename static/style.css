@@ -163,6 +163,7 @@ select, input {
 
 .filterbox { display: flex; align-items: center; gap: 6px; }
 .filterbox label { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.filter-btn { font-size: 13px; padding: 6px 10px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .actionbox { display: flex; align-items: center; gap: 8px; }
 .actionbox .action-label { color: var(--muted); font-size: 13px; white-space: nowrap; }
@@ -599,3 +600,20 @@ canvas {
 }
 .modal-err { color: #ff8f8f; }
 .modal-empty { color: var(--muted); }
+
+.filter-modal-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+}
+.filter-modal-body select { width: 100%; }
+.filter-modal-body .filter-empty { color: var(--muted); font-size: 13px; }
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}

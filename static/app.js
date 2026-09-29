@@ -15,7 +15,7 @@ let filters = [];
 let classes = [];
 let currentIndex = -1;
 let activeSplit = null;
-let activeFilter = null;
+let activeFilters = [];         // active filter chain, run top to bottom
 let boxes = [];        // normalized: {class, cx, cy, w, h, fixed?}
                        // `fixed` is transient (never saved / reloaded): it is
                        // dropped when the image changes and is not written to labels
@@ -530,21 +530,65 @@ function populateSplitSelect() {
   sel.value = activeSplit || '';
 }
 
-function populateFilterSelect() {
-  const sel = el('filterSelect');
-  sel.innerHTML = '';
-  const none = document.createElement('option');
-  none.value = '';
-  none.textContent = 'No filter';
-  sel.appendChild(none);
-  filters.forEach((name) => {
-    const opt = document.createElement('option');
-    opt.value = name;
-    opt.textContent = name;
-    sel.appendChild(opt);
+const FILTER_CHAIN_MAX = 8;
+
+function filterSummary() {
+  if (!activeFilters.length) return 'No filter';
+  return activeFilters.join(' → ');
+}
+
+function updateFilterButton() {
+  const btn = el('filtersBtn');
+  btn.textContent = filterSummary();
+  btn.title = activeFilters.length
+    ? `Filters: ${filterSummary()} (click to edit)`
+    : 'Chain filters from filters/ to narrow the image list';
+  btn.disabled = filters.length === 0;
+}
+
+function populateFilterModal() {
+  const body = el('filterModalBody');
+  body.innerHTML = '';
+  if (!filters.length) {
+    const empty = document.createElement('div');
+    empty.className = 'filter-empty';
+    empty.textContent = 'No filters found in filters/.';
+    body.appendChild(empty);
+    return;
+  }
+  const count = Math.min(filters.length, FILTER_CHAIN_MAX);
+  for (let i = 0; i < count; i++) {
+    const sel = document.createElement('select');
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = i === 0 ? 'No filter' : '(none)';
+    sel.appendChild(none);
+    filters.forEach((name) => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+    sel.value = activeFilters[i] || '';
+    body.appendChild(sel);
+  }
+}
+
+function openFilterModal() {
+  populateFilterModal();
+  el('filterModal').classList.remove('hidden');
+}
+
+function closeFilterModal() {
+  el('filterModal').classList.add('hidden');
+}
+
+function selectedFilterChain() {
+  const names = [];
+  el('filterModalBody').querySelectorAll('select').forEach((s) => {
+    if (s.value) names.push(s.value);
   });
-  sel.value = activeFilter || '';
-  sel.disabled = filters.length === 0;
+  return names;
 }
 
 function populateRecent(paths) {
@@ -801,7 +845,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
     data_yaml: cfg.data_yaml, dataset_path: cfg.dataset_path,
     images: (cfg.images || []).length, splits: (cfg.splits || []).map((s) => s.name),
     classes: cfg.classes, active_split: cfg.active_split,
-    filters: cfg.filters, active_filter: cfg.active_filter, filter_error: cfg.filter_error,
+    filters: cfg.filters, active_filters: cfg.active_filters, filter_error: cfg.filter_error,
     actions: cfg.actions, hooks: cfg.hooks, hook_errors: cfg.hook_errors,
     readonly: cfg.readonly, debug: cfg.debug,
   });
@@ -809,7 +853,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
   splits = cfg.splits || [];
   filters = cfg.filters || [];
   activeSplit = cfg.active_split || null;
-  activeFilter = cfg.active_filter || null;
+  activeFilters = cfg.active_filters || [];
   classes = cfg.classes || ['class_0'];
   availableTags = cfg.tags || [];
   datasetLoaded = !!cfg.data_yaml;
@@ -822,7 +866,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
   applyReadonly();
   populateClasses();
   populateSplitSelect();
-  populateFilterSelect();
+  updateFilterButton();
   populateRecent(cfg.recent_data_yamls || []);
   actionShortcuts = cfg.action_shortcuts || {};
   appShortcuts = cfg.shortcuts || {};
@@ -870,7 +914,7 @@ function persistView(cfg) {
     localStorage.setItem(VIEW_KEY, JSON.stringify({
       dataYaml: cfg.data_yaml,
       split: cfg.active_split || null,
-      filter: cfg.active_filter || null,
+      filters: cfg.active_filters || [],
     }));
   } catch (e) { /* storage unavailable */ }
 }
@@ -916,8 +960,11 @@ async function maybeRestoreView(cfg) {
       if (data.ok) cfg = data;
     }
   }
-  if (!cfg.active_filter && saved.filter && (cfg.filters || []).includes(saved.filter)) {
-    const data = await postJson('/api/filter', { filter: saved.filter });
+  const wanted = Array.isArray(saved.filters) ? saved.filters
+    : (saved.filter ? [saved.filter] : []);
+  const valid = wanted.filter((f) => (cfg.filters || []).includes(f));
+  if (!cfg.active_filters.length && valid.length) {
+    const data = await postJson('/api/filter', { filters: valid });
     if (data.ok) return data;
     clearSavedView();
   }
@@ -1045,7 +1092,7 @@ async function resumeLastImage(cfg) {
   // the remembered image lives in a split that isn't currently active: switch
   // the filter first; the reload will then resume onto the image itself.
   // (with a filter active the split is just its input, so don't force it)
-  if (!cfg.active_filter && mem.split && mem.split !== cfg.active_split) {
+  if (!(cfg.active_filters || []).length && mem.split && mem.split !== cfg.active_split) {
     if (cfg.splits.some((s) => s.name === mem.split)) {
       // one attempt per page load: if the switch doesn't stick, give up instead
       // of letting a repeated reload re-issue it forever.
@@ -1409,31 +1456,32 @@ async function setSplit(split, resumeOk = false) {
   }
 }
 
-async function setFilter(name) {
+async function applyFilterChain(names) {
   const status = el('folderStatus');
-  status.textContent = 'Applying filter…';
+  status.textContent = 'Applying filters…';
   const anchor = captureImageAnchor(false);
   try {
     const res = await fetch('/api/filter', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filter: name || null }),
+      body: JSON.stringify({ filters: names || [] }),
     });
     const data = await res.json();
     if (res.ok && data.ok) {
-      dbg('filter changed', { filter: name || null,
+      dbg('filters changed', { filters: names || [],
         images: (data.images || []).length, filter_error: data.filter_error });
       status.textContent = '';
+      closeFilterModal();
       await loadConfig(0, { noResume: true, skipFilterRestore: true, anchor });
     } else {
       dbgWarn('filter failed', { status: res.status, error: data.error });
       status.textContent = data.error || 'Filter failed';
-      populateFilterSelect(); // revert the select to the active filter
+      populateFilterModal(); // revert the modal to the active chain
     }
   } catch (err) {
     dbgWarn('filter error', err);
     status.textContent = 'Error: ' + err.message;
-    populateFilterSelect();
+    populateFilterModal();
   }
 }
 
@@ -1987,7 +2035,13 @@ el('recentSelect').addEventListener('change', () => {
   setDataYaml();
 });
 el('splitSelect').addEventListener('change', () => setSplit(el('splitSelect').value));
-el('filterSelect').addEventListener('change', () => setFilter(el('filterSelect').value));
+el('filtersBtn').addEventListener('click', openFilterModal);
+el('filterModalClose').addEventListener('click', closeFilterModal);
+el('filterModalClear').addEventListener('click', () => applyFilterChain([]));
+el('filterModalApply').addEventListener('click', () => applyFilterChain(selectedFilterChain()));
+el('filterModal').addEventListener('click', (e) => {
+  if (e.target === el('filterModal')) closeFilterModal();
+});
 const counterInput = el('counter');
 counterInput.addEventListener('focus', () => counterInput.select());
 counterInput.addEventListener('keydown', (e) => {
@@ -2159,11 +2213,11 @@ const APP_SHORTCUT_HANDLERS = {
 function applyImagesPayload(data, anchor, label) {
   images = data.images || [];
   activeSplit = data.active_split || null;
-  if (data.active_filter !== undefined) activeFilter = data.active_filter || null;
+  if (data.active_filters !== undefined) activeFilters = data.active_filters || [];
   dbg(label + ' done', { now: images.length, active_split: activeSplit,
-    active_filter: activeFilter, filter_error: data.filter_error });
+    active_filters: activeFilters, filter_error: data.filter_error });
   populateSplitSelect();
-  populateFilterSelect();
+  updateFilterButton();
   if (data.filter_error) showTransientFilterMessage(data.filter_error);
   if (!images.length) {
     currentIndex = -1;
@@ -2257,6 +2311,10 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!el('actionResult').classList.contains('hidden')) {
       closeActionResult();
+      return;
+    }
+    if (!el('filterModal').classList.contains('hidden')) {
+      closeFilterModal();
       return;
     }
     if (!el('shortcutsMenu').classList.contains('hidden')) {

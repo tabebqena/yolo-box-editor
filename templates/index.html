@@ -16,8 +16,8 @@
     </div>
 
     <div id="filterBox" class="filterbox hidden">
-      <label for="filterSelect">Filter</label>
-      <select id="filterSelect" title="Limit the image list with a script from filters/"></select>
+      <label for="filtersBtn">Filters</label>
+      <button id="filtersBtn" class="filter-btn" title="Chain filters from filters/ to narrow the image list">No filter</button>
     </div>
 
     <div class="actionbox">
@@ -141,6 +141,20 @@
       <pre id="actionResultExit" class="modal-exit"></pre>
       <pre id="actionResultOut" class="modal-out"></pre>
       <pre id="actionResultErr" class="modal-err"></pre>
+    </div>
+  </div>
+
+  <div id="filterModal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span class="modal-title">Filter chain</span>
+        <button id="filterModalClose" class="modal-close" title="Close (Esc)">&#10005;</button>
+      </div>
+      <div id="filterModalBody" class="filter-modal-body"></div>
+      <div class="modal-actions">
+        <button id="filterModalClear" title="Remove every filter">Clear</button>
+        <button id="filterModalApply" class="primary" title="Run the selected filters top to bottom">Apply</button>
+      </div>
     </div>
   </div>
 

@@ -26,6 +26,7 @@ import argparse
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -48,6 +49,8 @@ SHORTCUTS_FILE = os.path.join(BASE_DIR, "shortcuts.txt")
 SHORTCUTS_ADD_FILE = os.path.join(BASE_DIR, "shortcuts.a.txt")  # user overrides, never shipped
 # Per-run {PIPE_PATH} files live in the system temp dir (never in the repo).
 PIPE_DIR = os.path.join(tempfile.gettempdir(), "yolo-box-editor-pipes")
+# Per-run filter-chain scratch dirs (input/output pipes) live here too.
+FILTER_PIPES_DIR = os.path.join(tempfile.gettempdir(), "yolo-box-editor-filter-pipes")
 
 # Built-in app actions; may be rebound in shortcuts.txt but cannot be renamed.
 APP_ACTIONS = {
@@ -120,13 +123,14 @@ STATE = {
     "splits": [],   # [{"name": "train", "images_dir": ..., "labels_dir": ...}]
     "images": [],   # flat navigation list: [{"split": "train", "name": "a.jpg"}]
     "active_split": None,  # None = all splits; or a single split name
-    "active_filter": None,  # None = no filter; or a filter name from filters/
-    "filter_images": None,  # cached filter result (list of {split, name})
+    "active_filters": [],   # chain of filter names from filters/ ([] = none)
+    "filter_images": None,  # cached filter-chain result (list of {split, name})
     "filter_error": None,   # last filter failure/notice message (shown in the UI)
     "classes": [],  # resolved class names from data.yaml `names`
     "readonly": False,
     "debug": False,  # --debug: the UI logs verbose messages to the browser console
     "keep_pipe": False,  # --keep-pipe: do not delete the {PIPE_PATH} file after a run
+    "keep_filter_pipes": False,  # --keep-filter-pipes: keep the filter scratch dir
 }
 
 # In-flight action executions, paused at a client-side (app_*) after_success
@@ -277,12 +281,12 @@ def _load_views():
         return {}
 
 
-def _save_view(data_yaml, split, filter_name):
-    """Remember a dataset's active split/filter so a restart reopens it the same."""
+def _save_view(data_yaml, split, filter_names):
+    """Remember a dataset's active split/filter chain so a restart reopens it."""
     if not data_yaml:
         return
     views = _load_views()
-    views[data_yaml] = {"split": split, "filter": filter_name}
+    views[data_yaml] = {"split": split, "filters": list(filter_names or [])}
     try:
         with open(VIEW_FILE, "w", encoding="utf-8") as f:
             json.dump(views, f, indent=2)
@@ -303,9 +307,13 @@ def _restore_view(data_yaml):
     split = view.get("split")
     if split in {s["name"] for s in STATE["splits"]}:
         STATE["active_split"] = split
-    filter_name = view.get("filter")
-    if filter_name and filter_name in load_filters():
-        apply_filter(filter_name)
+    # `filters` is the current shape; `filter` was a single-name (legacy) view.
+    names = view.get("filters")
+    if not isinstance(names, list):
+        names = [view["filter"]] if view.get("filter") else []
+    names = [n for n in names if n and n in load_filters()]
+    if names:
+        apply_filters(names)
 
 
 # --------------------------------------------------------------------------- #
@@ -782,11 +790,13 @@ def split_shortcuts(shortcuts):
 # --------------------------------------------------------------------------- #
 FILTERS_DOC = (
     "Each filter is a Python script in the filters/ directory (name = file name "
-    "without .py). The app runs it as `python <script> <data.yaml> <split>`, "
-    "where <split> is train/val/test or an empty string for all splits. The "
-    "script must print one `split/name` per line (e.g. train/a.jpg); the app "
-    "keeps those images in that order. Files ending in `.a.py` are the user's "
-    "own (never shipped) and win on a name clash."
+    "without .py). Filters are chainable: the app runs each one as "
+    "`python <script> <data.yaml> <split> <input_pipe> <output_pipe>`, where "
+    "<split> is train/val/test or an empty string for all splits. The input pipe "
+    "holds one absolute image path per line (the active split's images); the "
+    "script writes the paths it keeps to the output pipe, one per line, and that "
+    "becomes the next filter's input. Files ending in `.a.py` are the user's own "
+    "(never shipped) and win on a name clash."
 )
 
 
@@ -826,41 +836,83 @@ def load_filters():
     return merged
 
 
-def _parse_filter_output(text):
-    """Parse `split/name` lines into entries, keeping only known images.
+def _entry_path(entry):
+    """Absolute path of a scanned `{split, name}` entry (or None)."""
+    split = _split_by_name(entry["split"])
+    if split is None:
+        return None
+    return os.path.abspath(os.path.join(split["images_dir"], entry["name"]))
+
+
+def _known_image_paths():
+    """Map every scanned image's absolute path to its `{split, name}` entry."""
+    known = {}
+    for entry in STATE["images"]:
+        path = _entry_path(entry)
+        if path:
+            known[path] = entry
+    return known
+
+
+def _write_filter_input(path, entries):
+    """Write one absolute image path per line (a filter's input pipe)."""
+    with open(path, "w", encoding="utf-8") as f:
+        for entry in entries:
+            abs_path = _entry_path(entry)
+            if abs_path:
+                f.write(abs_path + "\n")
+
+
+def _parse_filter_output(text, known):
+    """Map absolute image paths to entries, keeping only known images.
 
     Order is preserved and duplicates dropped. Returns (entries, skipped),
-    where `skipped` counts non-blank lines that are malformed or not in the
-    scanned image list.
+    where `skipped` counts non-blank lines that map to no scanned image.
     """
-    known = {(e["split"], e["name"]) for e in STATE["images"]}
     entries, seen, skipped = [], set(), 0
     for raw in text.splitlines():
         line = raw.strip()
         if not line:
             continue
-        if "/" not in line:
+        entry = known.get(os.path.abspath(line))
+        if entry is None:
             skipped += 1
             continue
-        split, name = line.split("/", 1)
-        key = (split, name)
-        if key not in known:
-            skipped += 1
+        pair = (entry["split"], entry["name"])
+        if pair in seen:
             continue
-        if key in seen:
-            continue
-        seen.add(key)
-        entries.append({"split": split, "name": name})
+        seen.add(pair)
+        entries.append(entry)
     return entries, skipped
 
 
-def run_filter(name, split):
-    """Run filter `name` for `split`; return {ok, images, skipped, error}."""
+def _read_filter_output(path, known):
+    """Read a filter's output pipe; missing/unreadable means an empty result."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return _parse_filter_output(f.read(), known)
+    except OSError:
+        return [], 0
+
+
+def run_filter(name, data_yaml, split, input_pipe, output_pipe):
+    """Run filter `name` once; return {ok, error}.
+
+    The filter reads candidate image paths from `input_pipe` and writes the kept
+    ones to `output_pipe`; the caller validates the output.
+    """
     path = load_filters().get(name)
     if path is None:
         return {"ok": False, "error": f"unknown filter: {name}"}
 
-    command = [sys.executable, path, STATE["data_yaml"] or "", split or ""]
+    command = [
+        sys.executable,
+        path,
+        data_yaml or "",
+        split or "",
+        input_pipe,
+        output_pipe,
+    ]
     try:
         proc = subprocess.run(
             command, capture_output=True, text=True, timeout=FILTER_TIMEOUT
@@ -871,28 +923,78 @@ def run_filter(name, split):
         return {"ok": False, "error": f"could not run filter: {exc}"}
     if proc.returncode != 0:
         detail = proc.stderr.strip() or f"exit code {proc.returncode}"
-        return {"ok": False, "error": f"filter failed: {detail}"}
+        return {"ok": False, "error": detail}
+    return {"ok": True}
 
-    entries, skipped = _parse_filter_output(proc.stdout)
-    return {"ok": True, "images": entries, "skipped": skipped}
+
+def run_filter_chain(names, split):
+    """Run `names` in order, piping each result into the next.
+
+    `split` selects the first filter's input (its images, or every scanned image
+    when it is empty/"All"). Returns {ok, images, skipped, error, chain_dir};
+    `chain_dir` is the scratch directory (kept only with --keep-filter-pipes).
+    """
+    known = _known_image_paths()
+    if not names:
+        return {"ok": True, "images": [], "skipped": 0, "error": None,
+                "chain_dir": None}
+
+    try:
+        os.makedirs(FILTER_PIPES_DIR, exist_ok=True)
+        chain_dir = tempfile.mkdtemp(prefix="chain_", dir=FILTER_PIPES_DIR)
+    except OSError as exc:
+        return {"ok": False, "error": f"could not create filter pipes: {exc}",
+                "chain_dir": None}
+
+    initial = [e for e in STATE["images"] if e["split"] == split] if split \
+        else STATE["images"]
+    in_path = os.path.join(chain_dir, "input_0.txt")
+    _write_filter_input(in_path, initial)
+
+    entries, skipped, error = initial, 0, None
+    for i, name in enumerate(names):
+        out_path = os.path.join(chain_dir, f"output_{i}.txt")
+        result = run_filter(name, STATE["data_yaml"], split, in_path, out_path)
+        if not result["ok"]:
+            error = f'Filter "{name}" failed: {result["error"]}'
+            entries = None
+            break
+        entries, skipped = _read_filter_output(out_path, known)
+        in_path = out_path
+
+    if not STATE["keep_filter_pipes"]:
+        shutil.rmtree(chain_dir, ignore_errors=True)
+        chain_dir = None
+
+    if error:
+        return {"ok": False, "error": error, "chain_dir": chain_dir}
+    return {"ok": True, "images": entries, "skipped": skipped, "error": None,
+            "chain_dir": chain_dir}
 
 
 def _clear_filter():
-    STATE["active_filter"] = None
+    STATE["active_filters"] = []
     STATE["filter_images"] = None
     STATE["filter_error"] = None
 
 
-def apply_filter(name):
-    """Run `name` for the current split and cache the result in STATE.
+def apply_filters(names):
+    """Run the filter chain for the current split and cache it in STATE.
 
-    Returns an error message on failure (state untouched), or None on success.
+    `names` is a list of filter names ([] clears). Returns an error message on
+    failure (state untouched), or None on success.
     """
-    result = run_filter(name, STATE["active_split"])
+    names = [n for n in (names or []) if n]
+    if not names:
+        _clear_filter()
+        return None
+    result = run_filter_chain(names, STATE["active_split"])
     if not result["ok"]:
         return result["error"]
-    STATE["active_filter"] = name
+    STATE["active_filters"] = names
     STATE["filter_images"] = result["images"]
+    if STATE["keep_filter_pipes"] and result["chain_dir"]:
+        print(f"[ybe] kept filter pipes: {result['chain_dir']}", file=sys.stderr)
     STATE["filter_error"] = (
         f"{result['skipped']} filter line(s) ignored" if result["skipped"] else None
     )
@@ -993,10 +1095,11 @@ def _resume_last_dataset():
 def _current_images():
     """The images visible to the UI.
 
-    A filter narrows the list to its own result (it already received the active
-    split as an argument); otherwise the list is filtered to the active split.
+    A filter chain narrows the list to its own result (the chain's first filter
+    already received the active split as its input); otherwise the list is
+    filtered to the active split.
     """
-    if STATE["active_filter"]:
+    if STATE["active_filters"]:
         return STATE["filter_images"] or []
     if not STATE["active_split"]:
         return STATE["images"]
@@ -1016,9 +1119,9 @@ def _rescan_images():
         e["split"] == STATE["active_split"] for e in STATE["images"]
     ):
         STATE["active_split"] = None
-    # the flat list changed: an active filter must be re-evaluated
-    if STATE["active_filter"]:
-        error = apply_filter(STATE["active_filter"])
+    # the flat list changed: an active filter chain must be re-evaluated
+    if STATE["active_filters"]:
+        error = apply_filters(STATE["active_filters"])
         if error:
             _clear_filter()
             STATE["filter_error"] = error
@@ -1256,7 +1359,7 @@ def api_config():
             "images": _current_images(),
             "active_split": STATE["active_split"],
             "filters": sorted(load_filters()),
-            "active_filter": STATE["active_filter"],
+            "active_filters": STATE["active_filters"],
             "filter_error": STATE["filter_error"],
             "recent_data_yamls": _load_recent(),
             "actions": [a["name"] for a in actions],
@@ -1349,14 +1452,14 @@ def api_split():
 
     previous = STATE["active_split"]
     STATE["active_split"] = split
-    # A filter receives the split, so an active one must re-run for the new one.
-    if STATE["active_filter"]:
-        error = apply_filter(STATE["active_filter"])
+    # The chain's first filter receives the split, so an active one must re-run.
+    if STATE["active_filters"]:
+        error = apply_filters(STATE["active_filters"])
         if error:
             STATE["active_split"] = previous  # keep split + filter consistent
             return jsonify({"ok": False, "error": error}), 400
 
-    _save_view(STATE["data_yaml"], STATE["active_split"], STATE["active_filter"])
+    _save_view(STATE["data_yaml"], STATE["active_split"], STATE["active_filters"])
     cfg = api_config().get_json()
     cfg["ok"] = True
     return jsonify(cfg)
@@ -1364,20 +1467,28 @@ def api_split():
 
 @app.route("/api/filter", methods=["POST"])
 def api_filter():
-    """Set the active filter (narrows the image list), or clear it with null/empty."""
+    """Set the active filter chain (narrows the image list), or clear it.
+
+    Body `{filters: [name, ...]}` runs the chain in order; an empty/missing list
+    clears it. `{filter: name}` (or `null`) is accepted for older clients.
+    """
     if not STATE["splits"]:
         return jsonify({"ok": False, "error": "no dataset loaded"}), 400
 
     data = request.get_json(silent=True) or {}
-    name = (data.get("filter") or "").strip() or None
-    if name is None:
-        _clear_filter()
-    else:
-        error = apply_filter(name)
-        if error:
-            return jsonify({"ok": False, "error": error}), 400
+    names = data.get("filters")
+    if names is None:
+        legacy = (data.get("filter") or "").strip()
+        names = [legacy] if legacy else []
+    if not isinstance(names, list):
+        return jsonify({"ok": False, "error": "filters must be a list"}), 400
+    names = [str(n).strip() for n in names if str(n).strip()]
 
-    _save_view(STATE["data_yaml"], STATE["active_split"], STATE["active_filter"])
+    error = apply_filters(names)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+
+    _save_view(STATE["data_yaml"], STATE["active_split"], STATE["active_filters"])
     cfg = api_config().get_json()
     cfg["ok"] = True
     return jsonify(cfg)
@@ -1389,7 +1500,7 @@ def _images_payload():
         "ok": True,
         "images": _current_images(),
         "active_split": STATE["active_split"],
-        "active_filter": STATE["active_filter"],
+        "active_filters": STATE["active_filters"],
         "filter_error": STATE["filter_error"],
     }
 
@@ -1656,11 +1767,17 @@ def main():
         action="store_true",
         help="keep the {PIPE_PATH} file after each action/hook run instead of deleting it",
     )
+    parser.add_argument(
+        "--keep-filter-pipes",
+        action="store_true",
+        help="keep the filter-chain input/output pipe files instead of deleting them",
+    )
     args = parser.parse_args()
 
     STATE["readonly"] = args.readonly
     STATE["debug"] = args.debug
     STATE["keep_pipe"] = args.keep_pipe
+    STATE["keep_filter_pipes"] = args.keep_filter_pipes
 
     if args.data:
         _load_dataset(args.data)

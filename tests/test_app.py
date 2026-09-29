@@ -8,6 +8,7 @@ The app's own support files (the actions/ folder / shortcuts.txt /
 constant to disposable paths under tmp_path, and STATE is reset per test.
 """
 
+import json
 import sys
 import time
 from pathlib import Path
@@ -29,13 +30,14 @@ DEFAULT_STATE = {
     "splits": [],
     "images": [],
     "active_split": None,
-    "active_filter": None,
+    "active_filters": [],
     "filter_images": None,
     "filter_error": None,
     "classes": [],
     "readonly": False,
     "debug": False,
     "keep_pipe": False,
+    "keep_filter_pipes": False,
 }
 
 
@@ -56,6 +58,7 @@ def clean_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "SHORTCUTS_FILE", str(tmp_path / "shortcuts.txt"))
     monkeypatch.setattr(ybe, "SHORTCUTS_ADD_FILE", str(tmp_path / "shortcuts.a.txt"))
     monkeypatch.setattr(ybe, "PIPE_DIR", str(tmp_path / "pipes"))
+    monkeypatch.setattr(ybe, "FILTER_PIPES_DIR", str(tmp_path / "filter-pipes"))
     ybe.STATE.clear()
     ybe.STATE.update(DEFAULT_STATE)
     ybe.EXECUTIONS.clear()
@@ -110,6 +113,42 @@ def write_filter(root, fname, body):
     d = Path(root) / "filters"
     d.mkdir(parents=True, exist_ok=True)
     (d / fname).write_text(body, encoding="utf-8")
+
+
+def load_into_state(root):
+    """Activate `root`'s dataset in STATE without going through a client."""
+    ybe.STATE["data_yaml"] = str(Path(root) / "data.yaml")
+    ybe.STATE["splits"] = ybe.scan_splits()
+    ybe.STATE["images"] = ybe.scan_images()
+
+
+# Copies the input pipe to the output pipe unchanged (the identity filter).
+FILTER_COPY = "import sys\nopen(sys.argv[4], 'w').write(open(sys.argv[3]).read())\n"
+
+
+def filter_selecting(*names):
+    """A filter that keeps only input paths whose file name is in `names`."""
+    wanted = ", ".join(repr(n) for n in names)
+    return (
+        "import os, sys\n"
+        "paths = [l.strip() for l in open(sys.argv[3], encoding='utf-8') if l.strip()]\n"
+        f"wanted = {{{wanted}}}\n"
+        "with open(sys.argv[4], 'w', encoding='utf-8') as out:\n"
+        "    for p in paths:\n"
+        "        if os.path.basename(p) in wanted:\n"
+        "            out.write(p + '\\n')\n"
+    )
+
+
+def filter_recording_input(log_path):
+    """A filter that copies its input to `log_path` as well as to the output."""
+    return (
+        "import sys\n"
+        f"text = open(sys.argv[3], encoding='utf-8').read()\n"
+        f"open({str(log_path)!r}, 'w', encoding='utf-8').write(text)\n"
+        "open(sys.argv[4], 'w', encoding='utf-8').write(text)\n"
+    )
+
 
 
 # --------------------------------------------------------------------------- #
@@ -568,7 +607,8 @@ def test_index_serves_page():
     assert "id=\"shortcutBar\"" in html
     assert "id=\"hookStatusBar\"" in html
     assert "id=\"autoSaveSw\"" in html
-    assert "id=\"filterSelect\"" in html
+    assert "id=\"filtersBtn\"" in html
+    assert "id=\"filterModal\"" in html
 
 
 def test_api_config_defaults(clean_state):
@@ -1295,102 +1335,178 @@ def test_load_filters_missing_dir(tmp_path, monkeypatch):
     assert ybe.load_filters() == {}
 
 
-def test_parse_filter_output_keeps_known_dedupes_and_order(clean_state):
-    ybe.STATE["images"] = [
-        {"split": "train", "name": "a.jpg"},
-        {"split": "train", "name": "b.jpg"},
-        {"split": "val", "name": "c.jpg"},
-    ]
-    text = "train/b.jpg\nval/c.jpg\ntrain/b.jpg\n\nunknown/x.jpg\ntrain/a.jpg\n"
-    entries, skipped = ybe._parse_filter_output(text)
+def test_parse_filter_output_maps_paths_dedupes_and_orders(clean_state, tmp_path):
+    root = make_dataset(tmp_path, splits=("train", "val"), images=("a", "b"))
+    load_into_state(root)
+    known = ybe._known_image_paths()
+    a = str(root / "images" / "train" / "a.jpg")
+    b = str(root / "images" / "train" / "b.jpg")
+    c = str(root / "images" / "val" / "a.jpg")
+    text = f"{b}\n{c}\n{b}\n\n/unknown/x.jpg\n{a}\n"
+    entries, skipped = ybe._parse_filter_output(text, known)
     assert entries == [
         {"split": "train", "name": "b.jpg"},
-        {"split": "val", "name": "c.jpg"},
+        {"split": "val", "name": "a.jpg"},
         {"split": "train", "name": "a.jpg"},
     ]
     assert skipped == 1
 
 
-def test_parse_filter_output_counts_malformed_lines(clean_state):
-    ybe.STATE["images"] = []
-    entries, skipped = ybe._parse_filter_output("no-slash-here\n")
+def test_parse_filter_output_counts_unknown_paths(clean_state):
+    entries, skipped = ybe._parse_filter_output("/nope/x.jpg\n", {})
     assert entries == [] and skipped == 1
 
 
-def test_run_filter_passes_data_yaml_and_split(clean_state, tmp_path):
-    root = make_dataset(tmp_path, splits=("train",), images=("a",))
-    ybe.STATE["data_yaml"] = str(root / "data.yaml")
-    ybe.STATE["splits"] = ybe.scan_splits()
-    ybe.STATE["images"] = ybe.scan_images()
-    out = clean_state / "args.txt"
+def test_run_filter_passes_args_and_pipes(clean_state):
+    args_log = clean_state / "args.txt"
     write_filter(
         clean_state,
         "Args.py",
-        f"import sys\nopen({str(out)!r}, 'w').write('|'.join(sys.argv[1:]))\n",
+        f"import sys\nopen({str(args_log)!r}, 'w').write('|'.join(sys.argv[1:]))\n",
     )
-    result = ybe.run_filter("Args", "train")
+    result = ybe.run_filter("Args", "/d/data.yaml", "train", "in.txt", "out.txt")
     assert result["ok"] is True
-    assert out.read_text(encoding="utf-8") == f"{root / 'data.yaml'}|train"
+    assert args_log.read_text(encoding="utf-8") == "/d/data.yaml|train|in.txt|out.txt"
 
 
-def test_run_filter_empty_split_for_all_splits(clean_state, tmp_path):
-    root = make_dataset(tmp_path, splits=("train",), images=("a",))
-    ybe.STATE["data_yaml"] = str(root / "data.yaml")
-    ybe.STATE["splits"] = ybe.scan_splits()
-    ybe.STATE["images"] = ybe.scan_images()
-    out = clean_state / "args.txt"
+def test_run_filter_empty_split_for_all_splits(clean_state):
+    args_log = clean_state / "args.txt"
     write_filter(
         clean_state,
         "Args.py",
-        f"import sys\nopen({str(out)!r}, 'w').write('|'.join(sys.argv[1:]))\n",
+        f"import sys\nopen({str(args_log)!r}, 'w').write('|'.join(sys.argv[1:]))\n",
     )
-    assert ybe.run_filter("Args", "")["ok"] is True
-    assert out.read_text(encoding="utf-8") == f"{root / 'data.yaml'}|"
+    assert ybe.run_filter("Args", "/d/data.yaml", "", "in.txt", "out.txt")["ok"] is True
+    assert args_log.read_text(encoding="utf-8") == "/d/data.yaml||in.txt|out.txt"
 
 
 def test_run_filter_unknown(clean_state):
-    assert ybe.run_filter("Nope", "train")["ok"] is False
+    assert ybe.run_filter("Nope", "", "train", "in", "out")["ok"] is False
 
 
 def test_run_filter_nonzero_exit_reports_stderr(clean_state):
     write_filter(
         clean_state, "Boom.py", "import sys\nsys.stderr.write('boom')\nsys.exit(3)\n"
     )
-    result = ybe.run_filter("Boom", "train")
+    result = ybe.run_filter("Boom", "", "train", "in", "out")
     assert result["ok"] is False and "boom" in result["error"]
 
 
 def test_run_filter_timeout(clean_state, monkeypatch):
     monkeypatch.setattr(ybe, "FILTER_TIMEOUT", 0.2)
     write_filter(clean_state, "Slow.py", "import time\ntime.sleep(5)\n")
-    result = ybe.run_filter("Slow", "train")
+    result = ybe.run_filter("Slow", "", "train", "in", "out")
     assert result["ok"] is False and "timed out" in result["error"]
+
+
+def test_filter_chain_feeds_output_to_next(clean_state, tmp_path):
+    root = make_dataset(tmp_path, splits=("train",), images=("a", "b"))
+    load_into_state(root)
+    second_input = clean_state / "second_input.txt"
+    write_filter(clean_state, "OnlyA.py", filter_selecting("a.jpg"))
+    write_filter(clean_state, "Record.py", filter_recording_input(second_input))
+    result = ybe.run_filter_chain(["OnlyA", "Record"], "train")
+    assert result["ok"] is True
+    assert [e["name"] for e in result["images"]] == ["a.jpg"]
+    # the second filter saw exactly the first filter's output
+    lines = second_input.read_text(encoding="utf-8").split()
+    assert [Path(p).name for p in lines] == ["a.jpg"]
+
+
+def test_filter_chain_first_input_is_active_split(clean_state, tmp_path):
+    root = make_dataset(tmp_path, splits=("train", "val"), images=("a",))
+    load_into_state(root)
+    seen = clean_state / "seen.txt"
+    write_filter(clean_state, "Record.py", filter_recording_input(seen))
+    assert ybe.run_filter_chain(["Record"], "train")["ok"] is True
+    assert seen.read_text(encoding="utf-8").split() == [
+        str(root / "images" / "train" / "a.jpg")
+    ]
+    assert ybe.run_filter_chain(["Record"], "")["ok"] is True
+    assert set(seen.read_text(encoding="utf-8").split()) == {
+        str(root / "images" / "train" / "a.jpg"),
+        str(root / "images" / "val" / "a.jpg"),
+    }
+
+
+def test_filter_chain_stops_at_first_failure(clean_state, tmp_path):
+    root = make_dataset(tmp_path, splits=("train",), images=("a",))
+    load_into_state(root)
+    after_log = clean_state / "after.txt"
+    write_filter(clean_state, "Copy.py", FILTER_COPY)
+    write_filter(clean_state, "Boom.py", "import sys\nsys.exit(4)\n")
+    write_filter(clean_state, "After.py", filter_recording_input(after_log))
+    result = ybe.run_filter_chain(["Copy", "Boom", "After"], "train")
+    assert result["ok"] is False and 'Filter "Boom" failed' in result["error"]
+    assert not after_log.exists()
+
+
+def test_filter_chain_cleans_scratch_dir(clean_state, tmp_path):
+    root = make_dataset(tmp_path, splits=("train",), images=("a",))
+    load_into_state(root)
+    write_filter(clean_state, "Copy.py", FILTER_COPY)
+    result = ybe.run_filter_chain(["Copy"], "train")
+    assert result["ok"] is True and result["chain_dir"] is None
+    assert list(Path(ybe.FILTER_PIPES_DIR).glob("chain_*")) == []
+
+
+def test_filter_chain_keeps_scratch_dir_when_asked(clean_state, tmp_path):
+    ybe.STATE["keep_filter_pipes"] = True
+    root = make_dataset(tmp_path, splits=("train",), images=("a",))
+    load_into_state(root)
+    write_filter(clean_state, "Copy.py", FILTER_COPY)
+    result = ybe.run_filter_chain(["Copy"], "train")
+    assert result["ok"] is True
+    assert Path(result["chain_dir"]).is_dir()
+    assert (Path(result["chain_dir"]) / "input_0.txt").is_file()
 
 
 def test_api_config_reports_filters(clean_state):
     write_filter(clean_state, "Odd.py", "# nothing\n")
     cfg = ybe.app.test_client().get("/api/config").get_json()
     assert cfg["filters"] == ["Odd"]
-    assert cfg["active_filter"] is None
+    assert cfg["active_filters"] == []
 
 
-def test_api_filter_set_and_clear(clean_state, tmp_path):
+def test_api_filter_set_chain_and_clear(clean_state, tmp_path):
     root = make_dataset(tmp_path, splits=("train",), images=("a", "b"))
-    write_filter(clean_state, "OnlyA.py", "print('train/a.jpg')\n")
+    write_filter(clean_state, "OnlyA.py", filter_selecting("a.jpg"))
+    write_filter(clean_state, "Copy.py", FILTER_COPY)
     client = ybe.app.test_client()
     load_dataset(client, root)
 
-    cfg = client.post("/api/filter", json={"filter": "OnlyA"}).get_json()
-    assert cfg["ok"] is True and cfg["active_filter"] == "OnlyA"
+    cfg = client.post("/api/filter", json={"filters": ["OnlyA", "Copy"]}).get_json()
+    assert cfg["ok"] is True
+    assert cfg["active_filters"] == ["OnlyA", "Copy"]
     assert [e["name"] for e in cfg["images"]] == ["a.jpg"]
 
-    cfg = client.post("/api/filter", json={"filter": None}).get_json()
-    assert cfg["active_filter"] is None
+    cfg = client.post("/api/filter", json={"filters": []}).get_json()
+    assert cfg["active_filters"] == []
     assert len(cfg["images"]) == 2
 
 
+def test_api_filter_accepts_legacy_single_name(clean_state, tmp_path):
+    root = make_dataset(tmp_path, splits=("train",), images=("a", "b"))
+    write_filter(clean_state, "OnlyA.py", filter_selecting("a.jpg"))
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    cfg = client.post("/api/filter", json={"filter": "OnlyA"}).get_json()
+    assert cfg["active_filters"] == ["OnlyA"]
+    assert [e["name"] for e in cfg["images"]] == ["a.jpg"]
+
+
+def test_api_filter_clear_with_legacy_null(clean_state, tmp_path):
+    root = make_dataset(tmp_path, splits=("train",), images=("a",))
+    write_filter(clean_state, "OnlyA.py", filter_selecting("a.jpg"))
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    client.post("/api/filter", json={"filters": ["OnlyA"]})
+    cfg = client.post("/api/filter", json={"filter": None}).get_json()
+    assert cfg["active_filters"] == []
+
+
 def test_api_filter_requires_dataset(clean_state):
-    resp = ybe.app.test_client().post("/api/filter", json={"filter": "X"})
+    resp = ybe.app.test_client().post("/api/filter", json={"filters": ["X"]})
     assert resp.status_code == 400
     assert "no dataset" in resp.get_json()["error"]
 
@@ -1398,62 +1514,69 @@ def test_api_filter_requires_dataset(clean_state):
 def test_api_filter_unknown(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    resp = client.post("/api/filter", json={"filter": "Nope"})
+    resp = client.post("/api/filter", json={"filters": ["Nope"]})
     assert resp.status_code == 400
     assert "unknown filter" in resp.get_json()["error"]
 
 
 def test_api_filter_can_span_splits_when_all(clean_state, tmp_path):
     root = make_dataset(tmp_path, splits=("train", "val"), images=("a",))
-    write_filter(clean_state, "All.py", "print('train/a.jpg')\nprint('val/a.jpg')\n")
+    write_filter(clean_state, "Copy.py", FILTER_COPY)
     client = ybe.app.test_client()
     load_dataset(client, root)
-    cfg = client.post("/api/filter", json={"filter": "All"}).get_json()
+    cfg = client.post("/api/filter", json={"filters": ["Copy"]}).get_json()
     assert [(e["split"], e["name"]) for e in cfg["images"]] == [
         ("train", "a.jpg"),
         ("val", "a.jpg"),
     ]
 
 
-def test_api_filter_reports_skipped_lines(clean_state, tmp_path):
+def test_api_filter_reports_unknown_paths(clean_state, tmp_path):
     root = make_dataset(tmp_path, splits=("train",), images=("a",))
     write_filter(
-        clean_state, "Sloppy.py", "print('train/a.jpg')\nprint('nope/missing.jpg')\n"
+        clean_state,
+        "Sloppy.py",
+        "import sys\n"
+        "inp, out = sys.argv[3], sys.argv[4]\n"
+        "text = open(inp, encoding='utf-8').read()\n"
+        "open(out, 'w', encoding='utf-8').write(text + '/nope/missing.jpg\\n')\n",
     )
     client = ybe.app.test_client()
     load_dataset(client, root)
-    cfg = client.post("/api/filter", json={"filter": "Sloppy"}).get_json()
-    assert cfg["active_filter"] == "Sloppy"
+    cfg = client.post("/api/filter", json={"filters": ["Sloppy"]}).get_json()
+    assert cfg["active_filters"] == ["Sloppy"]
     assert "ignored" in (cfg["filter_error"] or "")
 
 
 def test_api_filter_allowed_in_readonly(clean_state, tmp_path):
     ybe.STATE["readonly"] = True
     root = make_dataset(tmp_path, splits=("train",), images=("a",))
-    write_filter(clean_state, "Keep.py", "print('train/a.jpg')\n")
+    write_filter(clean_state, "Keep.py", FILTER_COPY)
     client = ybe.app.test_client()
     load_dataset(client, root)
-    resp = client.post("/api/filter", json={"filter": "Keep"})
-    assert resp.status_code == 200 and resp.get_json()["active_filter"] == "Keep"
+    resp = client.post("/api/filter", json={"filters": ["Keep"]})
+    assert resp.status_code == 200
+    assert resp.get_json()["active_filters"] == ["Keep"]
 
 
-def test_api_data_clears_active_filter(clean_state, tmp_path):
+def test_api_data_clears_active_filters(clean_state, tmp_path):
     root = make_dataset(tmp_path, splits=("train",), images=("a",))
-    write_filter(clean_state, "Keep.py", "print('train/a.jpg')\n")
+    write_filter(clean_state, "Keep.py", FILTER_COPY)
     client = ybe.app.test_client()
     load_dataset(client, root)
-    client.post("/api/filter", json={"filter": "Keep"})
-    assert ybe.STATE["active_filter"] == "Keep"
+    client.post("/api/filter", json={"filters": ["Keep"]})
+    assert ybe.STATE["active_filters"] == ["Keep"]
     load_dataset(client, root)
-    assert ybe.STATE["active_filter"] is None
+    assert ybe.STATE["active_filters"] == []
 
 
-def test_api_split_reruns_active_filter(clean_state, tmp_path):
+def test_api_split_reruns_active_chain(clean_state, tmp_path):
     root = make_dataset(tmp_path, splits=("train", "val"), images=("a", "b"))
-    write_filter(clean_state, "OnlyA.py", "import sys\nprint(sys.argv[2] + '/a.jpg')\n")
+    write_filter(clean_state, "Copy.py", FILTER_COPY)
+    write_filter(clean_state, "OnlyA.py", filter_selecting("a.jpg"))
     client = ybe.app.test_client()
     load_dataset(client, root)
-    client.post("/api/filter", json={"filter": "OnlyA"})
+    client.post("/api/filter", json={"filters": ["Copy", "OnlyA"]})
     cfg = client.post("/api/split", json={"split": "val"}).get_json()
     assert cfg["ok"] is True and cfg["active_split"] == "val"
     assert cfg["images"] == [{"split": "val", "name": "a.jpg"}]
@@ -1467,35 +1590,35 @@ def test_api_split_filter_failure_keeps_state(clean_state, tmp_path):
         "import sys\n"
         "if sys.argv[2] == 'val':\n"
         "    sys.exit(1)\n"
-        "print('train/a.jpg')\n",
+        "open(sys.argv[4], 'w').write(open(sys.argv[3]).read())\n",
     )
     client = ybe.app.test_client()
     load_dataset(client, root)
-    client.post("/api/filter", json={"filter": "Pick"})
+    client.post("/api/filter", json={"filters": ["Pick"]})
     resp = client.post("/api/split", json={"split": "val"})
     assert resp.status_code == 400
     assert ybe.STATE["active_split"] is None  # unchanged
-    assert ybe.STATE["active_filter"] == "Pick"
+    assert ybe.STATE["active_filters"] == ["Pick"]
 
 
-def test_api_images_rescan_reruns_filter(clean_state, tmp_path):
+def test_api_images_rescan_reruns_chain(clean_state, tmp_path):
     root = make_dataset(tmp_path, splits=("train",), images=("a", "b"))
-    write_filter(clean_state, "OnlyA.py", "print('train/a.jpg')\n")
+    write_filter(clean_state, "OnlyA.py", filter_selecting("a.jpg"))
     client = ybe.app.test_client()
     load_dataset(client, root)
-    client.post("/api/filter", json={"filter": "OnlyA"})
+    client.post("/api/filter", json={"filters": ["OnlyA"]})
     (root / "images" / "train" / "a.jpg").unlink()
     data = client.post("/api/images/rescan").get_json()
-    assert data["active_filter"] == "OnlyA"
+    assert data["active_filters"] == ["OnlyA"]
     assert data["images"] == []
 
 
 def test_api_image_resolves_by_key_regardless_of_filter(clean_state, tmp_path):
     root = make_dataset(tmp_path, splits=("train",), images=("a", "b"))
-    write_filter(clean_state, "OnlyB.py", "print('train/b.jpg')\n")
+    write_filter(clean_state, "OnlyB.py", filter_selecting("b.jpg"))
     client = ybe.app.test_client()
     load_dataset(client, root)
-    cfg = client.post("/api/filter", json={"filter": "OnlyB"}).get_json()
+    cfg = client.post("/api/filter", json={"filters": ["OnlyB"]}).get_json()
     assert [e["name"] for e in cfg["images"]] == ["b.jpg"]
     # identity reads are not affected by the filter: both files still resolve
     assert client.get("/api/image?key=train/a.jpg").status_code == 200
@@ -1554,31 +1677,43 @@ def test_backend_unknown_action_entry_errors(clean_state, tmp_path):
 # --------------------------------------------------------------------------- #
 def test_view_state_saved_on_split_and_filter(clean_state, tmp_path):
     root = make_dataset(tmp_path, splits=("train",), images=("a",))
-    write_filter(clean_state, "OnlyA.py", "print('train/a.jpg')\n")
+    write_filter(clean_state, "OnlyA.py", filter_selecting("a.jpg"))
     client = ybe.app.test_client()
     load_dataset(client, root)
     client.post("/api/split", json={"split": "train"})
-    client.post("/api/filter", json={"filter": "OnlyA"})
+    client.post("/api/filter", json={"filters": ["OnlyA"]})
     assert ybe._load_views()[str(root / "data.yaml")] == {
         "split": "train",
-        "filter": "OnlyA",
+        "filters": ["OnlyA"],
     }
 
 
 def test_resume_restores_saved_view(clean_state, tmp_path):
     root = make_dataset(tmp_path, splits=("train",), images=("a",))
-    write_filter(clean_state, "OnlyA.py", "print('train/a.jpg')\n")
+    write_filter(clean_state, "OnlyA.py", filter_selecting("a.jpg"))
     client = ybe.app.test_client()
     load_dataset(client, root)
     client.post("/api/split", json={"split": "train"})
-    client.post("/api/filter", json={"filter": "OnlyA"})
+    client.post("/api/filter", json={"filters": ["OnlyA"]})
     # simulate a server restart: in-memory state resets, then resume reopens the
-    # last dataset (RECENT_FILE persists) and must restore its split/filter
+    # last dataset (RECENT_FILE persists) and must restore its split/filter chain
     ybe.STATE.clear()
     ybe.STATE.update(DEFAULT_STATE)
     assert ybe._resume_last_dataset() == str(root / "data.yaml")
     assert ybe.STATE["active_split"] == "train"
-    assert ybe.STATE["active_filter"] == "OnlyA"
+    assert ybe.STATE["active_filters"] == ["OnlyA"]
+
+
+def test_restore_view_accepts_legacy_single_filter(clean_state, tmp_path):
+    root = make_dataset(tmp_path, splits=("train",), images=("a",))
+    write_filter(clean_state, "OnlyA.py", filter_selecting("a.jpg"))
+    load_into_state(root)
+    ybe._save_view(str(root / "data.yaml"), "train", [])
+    views = ybe._load_views()
+    views[str(root / "data.yaml")] = {"split": "train", "filter": "OnlyA"}
+    Path(ybe.VIEW_FILE).write_text(json.dumps(views), encoding="utf-8")
+    ybe._restore_view(str(root / "data.yaml"))
+    assert ybe.STATE["active_filters"] == ["OnlyA"]
 
 
 # --------------------------------------------------------------------------- #

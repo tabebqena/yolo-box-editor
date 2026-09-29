@@ -4,7 +4,23 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.0] - 2026-09-29
+
+### Changed
+
+- **Filters are now chainable** (breaking). The topbar `Filter` dropdown is
+  replaced by a **`Filters` button** that opens a modal with stacked selects
+  (up to 8). The selected filters run top to bottom, each narrowing the previous
+  one's list; the last result is what the app shows.
+- **New filter contract** (breaking): a filter is run as
+  `python filters/<Name>.py <data.yaml> <split> <input_pipe> <output_pipe>`
+  instead of printing `split/name` lines on stdout. The input pipe holds one
+  absolute image path per line (the first filter gets the active split's images);
+  the filter writes the paths it keeps to the output pipe. `filters/example.py`
+  and personal filters must be migrated.
+- A failed filter stops the chain and keeps the previous chain in effect; filter
+  scratch files are deleted after each run. New `--keep-filter-pipes` flag keeps
+  them for debugging.
 
 ### Added
 
