@@ -15,8 +15,8 @@
 #
 # `steps` and `after_success` accept the same entries:
 #   - an app_* name (run in the UI), or
-#   - another action name (its steps run inline here), or
-#   - anything else in `steps` = a shell command.
+#   - action_<Name> (run that action inline), or
+#   - anything else = a shell command.
 # The backend runs the whole queue and pauses at each app_* entry for the UI.
 # `steps` and `after_success` may also be a single value on the key line.
 #

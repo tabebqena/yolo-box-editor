@@ -1029,7 +1029,7 @@ def test_api_action_run_after_success_action_shares_pipe(clean_state, tmp_path):
     # the root action wrote to the pipe
     write_action(tmp_path, "Write.yaml", "steps:\n  - echo one > {PIPE_PATH}\n")
     write_action(tmp_path, "Read.yaml", "steps:\n  - cat {PIPE_PATH}\n")
-    write_action(tmp_path, "Root.yaml", "after_success:\n  - Write\n  - Read\n")
+    write_action(tmp_path, "Root.yaml", "after_success:\n  - action_Write\n  - action_Read\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
     payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
@@ -1084,12 +1084,23 @@ def test_api_action_run_steps_can_mix_client_action(clean_state, tmp_path):
 
 def test_api_action_run_steps_can_chain_action(clean_state, tmp_path):
     write_action(tmp_path, "Sub.yaml", "steps:\n  - echo sub\n")
-    write_action(tmp_path, "Root.yaml", "steps:\n  - echo root\n  - Sub\n")
+    write_action(tmp_path, "Root.yaml", "steps:\n  - echo root\n  - action_Sub\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
     payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
     assert payload["ok"] is True
     assert "root" in payload["stdout"] and "sub" in payload["stdout"]
+
+
+def test_api_action_run_bare_action_name_is_a_shell_command(clean_state, tmp_path):
+    # without the `action_` prefix a name is not resolved as an action
+    write_action(tmp_path, "Sub.yaml", "steps:\n  - echo sub\n")
+    write_action(tmp_path, "Root.yaml", "steps:\n  - Sub\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    assert payload["ok"] is False
+    assert "sub" not in payload["stdout"]
 
 
 def test_api_action_run_hook_steps_can_include_client_action(clean_state, tmp_path):
@@ -1116,7 +1127,7 @@ def test_api_action_run_preserves_mixed_after_success_order(clean_state, tmp_pat
     write_action(
         tmp_path,
         "Root.yaml",
-        "after_success:\n  - ServerA\n  - app_refresh_image\n  - ServerB\n",
+        "after_success:\n  - action_ServerA\n  - app_refresh_image\n  - action_ServerB\n",
     )
     client = ybe.app.test_client()
     load_dataset(client, root)
@@ -1152,7 +1163,7 @@ def test_api_action_run_client_action_failure_aborts(clean_state, tmp_path):
 
 
 def test_api_action_run_unknown_after_success_entry(clean_state, tmp_path):
-    write_action(tmp_path, "Root.yaml", "steps:\n  - echo hi\nafter_success:\n  - Nope\n")
+    write_action(tmp_path, "Root.yaml", "steps:\n  - echo hi\nafter_success:\n  - action_Nope\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
     payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
@@ -1161,21 +1172,25 @@ def test_api_action_run_unknown_after_success_entry(clean_state, tmp_path):
     assert not Path(payload["pipe_path"]).exists()
 
 
-def test_api_action_run_rejects_hook_in_after_success(clean_state, tmp_path):
-    write_hook(tmp_path, "on_after_save.yaml", "steps:\n  - echo hooked\n")
-    write_action(tmp_path, "Root.yaml", "after_success:\n  - on_after_save\n")
+def test_api_action_run_after_success_accepts_shell_and_action(clean_state, tmp_path):
+    write_action(tmp_path, "Sub.yaml", "steps:\n  - echo sub\n")
+    write_action(
+        tmp_path,
+        "Root.yaml",
+        "after_success:\n  - echo shell\n  - action_Sub\n",
+    )
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
     payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
-    assert payload["ok"] is False
-    assert "event hook" in payload["error"]
+    assert payload["ok"] is True
+    assert "shell" in payload["stdout"] and "sub" in payload["stdout"]
 
 
 def test_api_action_run_cascade_limit(clean_state, tmp_path):
     for i in range(9):
         body = f"steps:\n  - echo {i}\n"
         if i < 8:
-            body += f"after_success:\n  - Chain{i + 1}\n"
+            body += f"after_success:\n  - action_Chain{i + 1}\n"
         write_action(tmp_path, f"Chain{i}.yaml", body)
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))

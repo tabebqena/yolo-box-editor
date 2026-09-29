@@ -21,13 +21,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   entry, which it returns as `client_action` with an execution `uid`. The UI runs
   that action and posts `{uid, result}` to resume, so a mixed list keeps its
   exact order while the backend still owns the run (and its `{PIPE_PATH}` file).
-  Cascades are capped at 8 actions per run; hook names in `after_success` and
-  unknown actions are rejected server-side. `PIPE_PATH` is shared by every step
-  and every server-side action of the run.
-- **`steps` and `after_success` now accept the same entries.** Besides shell
-  commands, a `steps` entry may be an `app_*` action (run in the UI, pausing the
-  run) or another (non-hook) action name (run inline, with its own steps), just
-  like `after_success` always could. A run is a single queue, so a `steps` entry
+  Cascades are capped at 8 actions per run and unknown `app_*` / `action_*` names
+  are rejected server-side. `PIPE_PATH` is shared by every step and every
+  server-side action of the run.
+- **`steps` and `after_success` now accept the same entries.** Each entry is an
+  `app_*` action (run in the UI, pausing the run), `action_<Name>` (run that
+  action inline, with its own steps — the prefix keeps it from clashing with a
+  shell command), or anything else, which is a shell command (so `after_success`
+  can run commands too, not only actions). A run is a single queue, so any entry
   can stop for the UI and continue on resume.
 - **Resume the previous session on start**: running `python app.py` without
   `--data` reopens the dataset last used (the newest entry of

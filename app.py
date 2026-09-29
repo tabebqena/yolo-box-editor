@@ -70,6 +70,9 @@ MAX_RECENT = 10
 ACTION_TIMEOUT = 120  # seconds
 FILTER_TIMEOUT = 120  # seconds
 MAX_CASCADE_DEPTH = 8  # max actions run by one execution (root + after_success)
+# In a steps/after_success entry, another action is named `action_<Name>` so a
+# bare action name can never be confused with a shell command.
+ACTION_REF_PREFIX = "action_"
 
 # Event hooks live in the hooks/ folder and fire on app events (never from a
 # toolbar button or a shortcut). A hook file is named `on_<event>.yaml`; when the
@@ -252,12 +255,12 @@ ACTIONS_DOC = (
     "top-level `name:` (defaults to the file name), a `steps` list and an "
     "optional `after_success` list, run in order and stopping at the first "
     "failure. Both lists accept the same entries: an `app_*` name runs in the "
-    "UI, another (non-hook) action name runs its own steps inline, and any "
-    "other `steps` entry is a shell command. Files ending in `.a.yaml` are the "
-    "user's own (never shipped) and win on a name clash. Placeholders are "
-    "substituted with shell-quoted values: {IMAGE_PATH}, {LABEL_PATH}, "
-    "{DATASET_PATH}, {DATA_YAML_PATH}, {IMAGE_INDEX}, {APP_DIR}, {PIPE_PATH}. "
-    "Event hooks live in the hooks/ directory and cannot be bound."
+    "UI, `action_<Name>` runs another (non-hook) action inline, and anything "
+    "else is a shell command. Files ending in `.a.yaml` are the user's own "
+    "(never shipped) and win on a name clash. Placeholders are substituted with "
+    "shell-quoted values: {IMAGE_PATH}, {LABEL_PATH}, {DATASET_PATH}, "
+    "{DATA_YAML_PATH}, {IMAGE_INDEX}, {APP_DIR}, {PIPE_PATH}. Event hooks live "
+    "in the hooks/ directory and cannot be bound."
 )
 
 
@@ -544,36 +547,32 @@ def _run_command(state, command):
     return "ok"
 
 
-def _action_items(action):
-    """Expand an action into its ordered work-queue items.
+def _resolve_entry(entry, actions_by_name):
+    """Resolve one `steps` / `after_success` entry into a work-queue item.
 
-    `steps` and `after_success` share one syntax:
-      - an `app_*` name                 -> ("app", name)    run in the UI
-      - a known (non-hook) action name  -> ("action", dict) run its steps inline
-      - anything else in `steps`        -> ("cmd", text)    shell command
-      - anything else in `after_success`-> an error item
+    Both lists share one syntax:
+      - an `app_*` app action        -> ("app", name)     run in the UI
+      - `action_<Name>` known action -> ("action", dict)  run inline
+      - anything else                -> ("cmd", entry)    shell command
+    An unknown `app_*` or `action_*` name becomes a ("bad", message) item.
     """
+    if entry in APP_ACTIONS:
+        return ("app", entry)
+    if entry.startswith("app_"):
+        return ("bad", f"unknown app action: {entry}")
+    if entry.startswith(ACTION_REF_PREFIX):
+        name = entry[len(ACTION_REF_PREFIX):]
+        if name in actions_by_name:
+            return ("action", actions_by_name[name])
+        return ("bad", f"unknown action: {name}")
+    return ("cmd", entry)
+
+
+def _action_items(action):
+    """Expand an action into its ordered work-queue items (steps, then after_success)."""
     actions_by_name = {a["name"]: a for a in load_actions()}
-    items = []
-    for step in action.get("steps") or []:
-        if step in APP_ACTIONS:
-            items.append(("app", step))
-        elif step in actions_by_name:
-            items.append(("action", actions_by_name[step]))
-        else:
-            items.append(("cmd", step))
-    for name in action.get("after_success") or []:
-        if name in APP_ACTIONS:
-            items.append(("app", name))
-        elif name in actions_by_name:
-            items.append(("action", actions_by_name[name]))
-        elif is_hook_name(name):
-            items.append(
-                ("bad", f'"{name}" is an event hook; hooks cannot run from after_success')
-            )
-        else:
-            items.append(("bad", f"unknown action: {name}"))
-    return items
+    entries = list(action.get("steps") or []) + list(action.get("after_success") or [])
+    return [_resolve_entry(entry, actions_by_name) for entry in entries]
 
 
 def _advance_execution(state):

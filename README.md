@@ -5,7 +5,7 @@
 A small Flask-served web app for labelling images in
 [YOLO](https://docs.ultralytics.com/datasets/detect/) format.
 
-Version **0.9.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
+Version **0.10.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
 non-commercial-use condition, no warranty on usage) · new to labelling?
 read [TUTORIAL.md](TUTORIAL.md) first.
 
@@ -64,8 +64,8 @@ read [TUTORIAL.md](TUTORIAL.md) first.
 - **User actions**: custom commands defined in the `actions/` folder, one YAML
   file per action, run on the current image (with a confirmation) and show
   stdout / stderr / exit code in a popup. `steps` may mix shell commands with
-  built-in app actions and other actions (the backend runs the queue and pauses
-  for the UI at each app action). `{IMAGE_PATH}`, `{LABEL_PATH}`,
+  built-in app actions and other actions (referenced as `action_<Name>`); the
+  backend runs the queue and pauses for the UI at each app action. `{IMAGE_PATH}`, `{LABEL_PATH}`,
   `{DATASET_PATH}`, `{DATA_YAML_PATH}`, `{IMAGE_INDEX}`, `{APP_DIR}` and
   `{PIPE_PATH}` are substituted and shell-quoted — see
   [User actions](#user-actions). App updates overwrite the shipped files; keep
@@ -220,16 +220,15 @@ after_success:
 
 - **an `app_*` name** — a built-in app action, run in the browser (see the table
   below);
-- **another action name** — that action runs inline, right here, with its own
-  `steps` / `after_success`;
-- **anything else in `steps`** — a shell command, run with the placeholders
-  substituted and quoted. stdout / stderr / exit code are shown in the popup.
+- **`action_<Name>`** — run another action inline, right here, with its own
+  `steps` / `after_success` (the prefix keeps a reference from looking like a
+  shell command);
+- **anything else** — a shell command, run with the placeholders substituted and
+  quoted. stdout / stderr / exit code are shown in the popup.
 
-The run is a single ordered queue and stops at the first failure (the remaining
-entries are skipped and the error is reported). Since a `steps` entry that is
-exactly an app action or a known action name is treated as such, write a shell
-command that happens to be a bare word in a form the shell resolves (e.g.
-`./tool` instead of `tool`).
+An unknown `app_*` / `action_*` name is an error. The run is a single ordered
+queue and stops at the first failure (the remaining entries are skipped and the
+error is reported).
 
 Placeholders (leave them unquoted):
 
@@ -278,9 +277,8 @@ list; a cascade is capped at 8 actions per run. Useful app actions:
   e.g. after an external editor saved a new version. Image responses are served
   with `Cache-Control: no-store`, so you never see a stale frame.
 
-Event hooks (`on_*`) may **not** appear in `after_success` (they are event-driven
-only); in `steps` a name like `on_after_save` is just a shell command. Entries
-take no arguments.
+Event hooks (`on_*`) cannot be **referenced** as actions (they are event-driven
+only); a bare `on_*` entry is just a shell command. Entries take no arguments.
 
 ## Hooks
 
