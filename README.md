@@ -95,7 +95,7 @@ read [TUTORIAL.md](TUTORIAL.md) first.
 
 ## Keyboard shortcuts & app actions
 
-The 16 built-in app actions are defined in `app.py` (`APP_ACTIONS`) and
+The 17 built-in app actions are defined in `app.py` (`APP_ACTIONS`) and
 implemented in `static/app.js`. Rebind them in `shortcuts.txt` (or
 `shortcuts.a.txt`); the names themselves are fixed. They are also the valid
 values for an action's `after_success` (see [User actions](#user-actions)) —
@@ -118,11 +118,12 @@ they are **not** valid in `steps`, which are shell commands.
 | `app_fix_box` | `F` | fix / unfix the selected box (transient: never saved, reset on image change) |
 | `app_force_draw` | `Ctrl` | held modifier, not a key: hold it and drag to always draw a new box (configurable, e.g. `<Alt>`) |
 | `app_refresh_images_list` | — | re-scan the image folders; stay on the same image by path (clamped when gone) |
+| `app_reload_images_list` | — | re-read the current list from the server **without** re-scanning the disk (use after a `backend_*` entry already rescanned) |
 | `app_refresh_image` | — | re-fetch the current image (cache-busted) |
 
-`app_refresh_images_list` and `app_refresh_image` have **no default keys** —
-bind them in `shortcuts.a.txt` (e.g. `app_refresh_image <F5>`) or call them
-from a YAML action's `after_success`.
+`app_refresh_images_list`, `app_reload_images_list` and `app_refresh_image` have
+**no default keys** — bind them in `shortcuts.a.txt` (e.g. `app_refresh_image <F5>`)
+or call them from a YAML action's `after_success`.
 
 `app_force_draw` is special: its binding is a *modifier* (`Ctrl`, `Alt`,
 `Shift`, `Meta`, or a `+`-joined combination), not a key. `Ctrl`/`Meta` are the
@@ -227,15 +228,18 @@ after_success:
 
 - **an `app_*` name** — a built-in app action, run in the browser (see the table
   below);
+- **a `backend_*` name** — a built-in server-side action, run inline by the
+  backend (no browser needed). Currently `backend_rescan_images` re-scans the
+  image folders and re-applies the active filter;
 - **`action_<Name>`** — run another action inline, right here, with its own
   `steps` / `after_success` (the prefix keeps a reference from looking like a
   shell command);
 - **anything else** — a shell command, run with the placeholders substituted and
   quoted. stdout / stderr / exit code are shown in the popup.
 
-An unknown `app_*` / `action_*` name is an error. The run is a single ordered
-queue and stops at the first failure (the remaining entries are skipped and the
-error is reported).
+An unknown `app_*` / `backend_*` / `action_*` name is an error. The run is a
+single ordered queue and stops at the first failure (the remaining entries are
+skipped and the error is reported).
 
 Placeholders (leave them unquoted):
 
@@ -280,9 +284,27 @@ list; a cascade is capped at 8 actions per run. Useful app actions:
   kept **by path**, not by index, so the display survives list changes from an
   action (`Archive`) or a re-applied filter. When that image was removed, the
   next one that followed it and still exists is shown (clamped at the end).
+- `app_reload_images_list` — re-read the server's list *without* a disk scan:
+  use it after `backend_rescan_images` so the rescan runs once, server-side.
 - `app_refresh_image` — re-fetch the current image from disk (cache-busted),
   e.g. after an external editor saved a new version. Image responses are served
   with `Cache-Control: no-store`, so you never see a stale frame.
+
+An action that changes files (e.g. `Archive`) should rescan server-side and then
+reload the UI, so the removal is guaranteed even if the browser is slow:
+
+```yaml
+after_success:
+  - backend_rescan_images     # server re-scans + re-applies the filter, inline
+  - app_reload_images_list    # UI re-reads the fresh list (no second scan)
+  - app_refresh_image
+```
+
+The active split and filter are remembered **per dataset** (in
+`.view_state.json`, next to `app.py`), so restarting the server (e.g. the Flask
+`--debug` reloader) reopens the dataset in the same view instead of falling back
+to *All splits* — that also keeps an open browser tab and the server agreeing on
+what an image reference means.
 
 Event hooks (`on_*`) cannot be **referenced** as actions (they are event-driven
 only); a bare `on_*` entry is just a shell command. Entries take no arguments.

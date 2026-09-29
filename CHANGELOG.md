@@ -8,6 +8,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Server-side built-in actions (`backend_*`)**: a `steps` / `after_success`
+  entry can name a whitelisted server-side action, run inline by the backend
+  with no browser round trip. `backend_rescan_images` re-scans the image folders
+  and re-applies the active filter, so an action (e.g. `Archive`) can guarantee
+  the server list is fresh; an unknown `backend_*` name is rejected.
+- **`GET /api/images`** returns the current in-memory image list without
+  touching the disk, and the new app action **`app_reload_images_list`** applies
+  it to the UI. Use it after `backend_rescan_images` so the disk is scanned once,
+  server-side.
+- **Per-dataset view persistence** (`.view_state.json`, git-ignored): the active
+  split and filter are saved per `data.yaml` and restored when the app resumes
+  that dataset, so a restart (e.g. the Flask `--debug` reloader) no longer drops
+  the view of an already-open browser tab.
 - **Concurrent-client warning**: the UI pings the new `POST /api/presence`
   route and, while more than one tab, browser or machine is using a running
   instance, shows a dismissible banner ("Another user is using this app. It is
@@ -133,6 +146,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Per-image requests are addressed by `split/name`, not by index.**
+  `/api/image`, `/api/labels` and `/api/tags` now take `?key=<split>/<name>`, and
+  `/api/actions/run` takes `target=<split>/<name>`; the old `<int:idx>` routes
+  and the `idx` body field are removed. An index was only meaningful while the
+  client and server lists matched — after a restart or a filter change the same
+  index could mean a different file. An old cached `app.js` will 404 until the
+  page is reloaded.
 - **The current image is tracked by path, not index, across list changes.** When
   an action (`Archive`) or a re-applied filter rebuilds the image list,
   `app_refresh_images_list` now looks the image up by `split/name`; if it was
@@ -144,6 +164,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **An action or hook could act on the wrong image — and `Archive` could move
+  the wrong file.** The request only carried the image's position (`idx`), which
+  the backend resolved against its own list. If the browser tab and the server
+  had diverged (a `--debug` reloader restart dropped the server's active filter
+  while the open tab kept its filtered list), position `5` meant one file on
+  screen and another on the server, so the archive/delete hit the wrong file and
+  the one on screen stayed. Requests now name the image (`split/name`) and the
+  server acts on exactly that file.
 - The shortcuts bar's `…` button did nothing: its popup is anchored above the
   bar but the bar clipped it with `overflow: hidden`, so the menu was rendered
   invisibly. The bar no longer clips its popup (the shortcut list itself still

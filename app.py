@@ -40,6 +40,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 
 RECENT_FILE = os.path.join(BASE_DIR, ".recent_data_yamls.json")
+VIEW_FILE = os.path.join(BASE_DIR, ".view_state.json")  # active split/filter per dataset
 ACTIONS_DIR = os.path.join(BASE_DIR, "actions")  # one YAML file per action
 HOOKS_DIR = os.path.join(BASE_DIR, "hooks")  # one YAML file per event hook
 FILTERS_DIR = os.path.join(BASE_DIR, "filters")  # one Python script per filter
@@ -65,8 +66,17 @@ APP_ACTIONS = {
     "app_fix_box",
     "app_force_draw",
     "app_refresh_images_list",
+    "app_reload_images_list",
     "app_refresh_image",
 }
+
+# Server-side built-in actions (name -> callable) usable as a `steps` /
+# `after_success` entry. They run inline on the backend, unlike `app_*` which
+# pauses for the UI, so an action can ask the server to change its own state
+# (e.g. re-scan the image folders) even when no browser is driving the run.
+# Defined here so `_resolve_entry` / `_advance_execution` can see it; the actual
+# callables are registered next to `_rescan_images` below.
+BACKEND_ACTION_NAMES = {"backend_rescan_images"}
 
 MAX_RECENT = 10
 ACTION_TIMEOUT = 120  # seconds
@@ -257,6 +267,47 @@ def _push_recent(path):
     return recents
 
 
+def _load_views():
+    """Read the saved per-dataset view ({data_yaml: {split, filter}})."""
+    try:
+        with open(VIEW_FILE, encoding="utf-8") as f:
+            views = json.load(f)
+        return views if isinstance(views, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_view(data_yaml, split, filter_name):
+    """Remember a dataset's active split/filter so a restart reopens it the same."""
+    if not data_yaml:
+        return
+    views = _load_views()
+    views[data_yaml] = {"split": split, "filter": filter_name}
+    try:
+        with open(VIEW_FILE, "w", encoding="utf-8") as f:
+            json.dump(views, f, indent=2)
+            f.write("\n")
+    except OSError:
+        pass
+
+
+def _restore_view(data_yaml):
+    """Re-apply a dataset's remembered split/filter, ignoring stale entries.
+
+    The `data.yaml` (and its filter scripts) may have changed since the view was
+    saved, so only names that still exist are applied.
+    """
+    view = _load_views().get(data_yaml)
+    if not isinstance(view, dict):
+        return
+    split = view.get("split")
+    if split in {s["name"] for s in STATE["splits"]}:
+        STATE["active_split"] = split
+    filter_name = view.get("filter")
+    if filter_name and filter_name in load_filters():
+        apply_filter(filter_name)
+
+
 # --------------------------------------------------------------------------- #
 # actions/ (user-configurable shell actions, one YAML file per action)
 # --------------------------------------------------------------------------- #
@@ -265,8 +316,10 @@ ACTIONS_DOC = (
     "top-level `name:` (defaults to the file name), a `steps` list and an "
     "optional `after_success` list, run in order and stopping at the first "
     "failure. Both lists accept the same entries: an `app_*` name runs in the "
-    "UI, `action_<Name>` runs another (non-hook) action inline, and anything "
-    "else is a shell command. Files ending in `.a.yaml` are the user's own "
+    "UI, a `backend_*` built-in action (e.g. `backend_rescan_images`) runs "
+    "inline on the server, `action_<Name>` runs another (non-hook) action "
+    "inline, and anything else is a shell command. Files ending in `.a.yaml` are "
+    "the user's own "
     "(never shipped) and win on a name clash. Placeholders are substituted with "
     "shell-quoted values: {IMAGE_PATH}, {LABEL_PATH}, {DATASET_PATH}, "
     "{DATA_YAML_PATH}, {IMAGE_INDEX}, {APP_DIR}, {PIPE_PATH}. Event hooks live "
@@ -561,15 +614,21 @@ def _resolve_entry(entry, actions_by_name):
     """Resolve one `steps` / `after_success` entry into a work-queue item.
 
     Both lists share one syntax:
-      - an `app_*` app action        -> ("app", name)     run in the UI
-      - `action_<Name>` known action -> ("action", dict)  run inline
-      - anything else                -> ("cmd", entry)    shell command
-    An unknown `app_*` or `action_*` name becomes a ("bad", message) item.
+      - an `app_*` app action          -> ("app", name)     run in the UI
+      - a `backend_*` built-in action  -> ("backend", name) run inline
+      - `action_<Name>` known action   -> ("action", dict)  run inline
+      - anything else                  -> ("cmd", entry)    shell command
+    An unknown `app_*`, `backend_*` or `action_*` name becomes a
+    ("bad", message) item.
     """
     if entry in APP_ACTIONS:
         return ("app", entry)
     if entry.startswith("app_"):
         return ("bad", f"unknown app action: {entry}")
+    if entry in BACKEND_ACTION_NAMES:
+        return ("backend", entry)
+    if entry.startswith("backend_"):
+        return ("bad", f"unknown backend action: {entry}")
     if entry.startswith(ACTION_REF_PREFIX):
         name = entry[len(ACTION_REF_PREFIX):]
         if name in actions_by_name:
@@ -606,6 +665,11 @@ def _advance_execution(state):
             if state["runs"] > MAX_CASCADE_DEPTH:
                 return "error", f"action cascade exceeded {MAX_CASCADE_DEPTH} levels"
             state["queue"][0:0] = _action_items(value)
+            continue
+        if kind == "backend":
+            error = BACKEND_ACTIONS[value]()
+            if error:
+                return "error", error
             continue
         status = _run_command(state, build_command(value, state["values"]))
         if status != "ok":
@@ -918,6 +982,7 @@ def _resume_last_dataset():
     """
     for path in _load_recent():
         if os.path.isfile(path) and _load_dataset(path):
+            _restore_view(STATE["data_yaml"])
             return path
     STATE["data_yaml"] = None
     STATE["splits"] = []
@@ -936,6 +1001,34 @@ def _current_images():
     if not STATE["active_split"]:
         return STATE["images"]
     return [e for e in STATE["images"] if e["split"] == STATE["active_split"]]
+
+
+def _rescan_images():
+    """Re-scan the image folders and re-apply the active filter in place.
+
+    Used by `POST /api/images/rescan` (an explicit refresh) and by the
+    `backend_rescan_images` action entry. The flat list is rebuilt and a filter
+    that depends on the files (e.g. tags) is re-run; an active split that no
+    longer has any image is cleared.
+    """
+    STATE["images"] = scan_images()
+    if STATE["active_split"] and not any(
+        e["split"] == STATE["active_split"] for e in STATE["images"]
+    ):
+        STATE["active_split"] = None
+    # the flat list changed: an active filter must be re-evaluated
+    if STATE["active_filter"]:
+        error = apply_filter(STATE["active_filter"])
+        if error:
+            _clear_filter()
+            STATE["filter_error"] = error
+
+
+# Server-side built-in action callables (see BACKEND_ACTION_NAMES). Each returns
+# None on success or an error message that stops the run.
+BACKEND_ACTIONS = {
+    "backend_rescan_images": _rescan_images,
+}
 
 
 def _split_by_name(name):
@@ -1100,11 +1193,37 @@ def read_classes():
     return ["class_0"]
 
 
-def _entry(idx):
-    images = _current_images()
-    if idx < 0 or idx >= len(images):
+def _entry_by_key(key):
+    """Resolve a `split/name` key to a known image entry, or None.
+
+    Identity (not position) is the stable way to name an image: the active
+    filter/split can rebuild the list at any time, so an index may point at a
+    different file than the client is showing.
+    """
+    if not key or "/" not in key:
+        return None
+    split, name = key.split("/", 1)
+    for entry in STATE["images"]:
+        if entry["split"] == split and entry["name"] == name:
+            return entry
+    return None
+
+
+def _image_index(entry):
+    """The 1-based position of `entry` in the visible list, else None."""
+    visible = _current_images()
+    for i, e in enumerate(visible):
+        if e["split"] == entry["split"] and e["name"] == entry["name"]:
+            return i + 1
+    return None
+
+
+def _request_entry():
+    """Resolve the `?key=split/name` query string to an image entry, or 404."""
+    entry = _entry_by_key(request.args.get("key", ""))
+    if entry is None:
         abort(404)
-    return images[idx]
+    return entry
 
 
 def _prune_clients(now=None):
@@ -1237,6 +1356,7 @@ def api_split():
             STATE["active_split"] = previous  # keep split + filter consistent
             return jsonify({"ok": False, "error": error}), 400
 
+    _save_view(STATE["data_yaml"], STATE["active_split"], STATE["active_filter"])
     cfg = api_config().get_json()
     cfg["ok"] = True
     return jsonify(cfg)
@@ -1257,34 +1377,34 @@ def api_filter():
         if error:
             return jsonify({"ok": False, "error": error}), 400
 
+    _save_view(STATE["data_yaml"], STATE["active_split"], STATE["active_filter"])
     cfg = api_config().get_json()
     cfg["ok"] = True
     return jsonify(cfg)
 
 
+def _images_payload():
+    """The image-list part of a config/rescan reply (no filesystem access)."""
+    return {
+        "ok": True,
+        "images": _current_images(),
+        "active_split": STATE["active_split"],
+        "active_filter": STATE["active_filter"],
+        "filter_error": STATE["filter_error"],
+    }
+
+
+@app.route("/api/images")
+def api_images():
+    """The current (in-memory) visible image list, without touching the disk."""
+    return jsonify(_images_payload())
+
+
 @app.route("/api/images/rescan", methods=["POST"])
 def api_images_rescan():
     """Re-scan the image folders (e.g. after a user action deleted/added files)."""
-    STATE["images"] = scan_images()
-    if STATE["active_split"] and not any(
-        e["split"] == STATE["active_split"] for e in STATE["images"]
-    ):
-        STATE["active_split"] = None
-    # the flat list changed: an active filter must be re-evaluated
-    if STATE["active_filter"]:
-        error = apply_filter(STATE["active_filter"])
-        if error:
-            _clear_filter()
-            STATE["filter_error"] = error
-    return jsonify(
-        {
-            "ok": True,
-            "images": _current_images(),
-            "active_split": STATE["active_split"],
-            "active_filter": STATE["active_filter"],
-            "filter_error": STATE["filter_error"],
-        }
-    )
+    _rescan_images()
+    return jsonify(_images_payload())
 
 
 @app.route("/api/actions/run", methods=["POST"])
@@ -1304,12 +1424,14 @@ def api_action_run():
         return _resume_execution(uid, data)
 
     name = (data.get("action") or "").strip()
-    idx = data.get("idx")
+    target = (data.get("target") or "").strip()
 
-    if isinstance(idx, bool) or not isinstance(idx, int):
-        return jsonify({"ok": False, "error": "invalid image index"}), 400
-
-    entry = _entry(idx)  # 404 when out of range
+    entry = _entry_by_key(target)
+    if entry is None:
+        return (
+            jsonify({"ok": False, "error": f"image not in the current list: {target}"}),
+            400,
+        )
     split = _split_by_name(entry["split"])
     if split is None:
         abort(404)
@@ -1322,13 +1444,15 @@ def api_action_run():
         return jsonify({"ok": False, "error": f"unknown action: {name}"}), 400
 
     pipe_path = create_pipe()
+    # 1-based, matching the "current / total" counter shown in the UI; 0 when the
+    # target is not part of the visible list (e.g. an off-filter image).
+    position = _image_index(entry)
     values = {
         "IMAGE_PATH": os.path.join(split["images_dir"], entry["name"]),
         "LABEL_PATH": label_path(entry),
         "DATASET_PATH": STATE["dataset_path"] or "",
         "DATA_YAML_PATH": STATE["data_yaml"] or "",
-        # 1-based, matching the "current / total" counter shown in the UI.
-        "IMAGE_INDEX": str(idx + 1),
+        "IMAGE_INDEX": str(position or 0),
         # the folder holding app.py, so steps can reach scripts/ and other files
         # the same way regardless of the directory the server was started from
         "APP_DIR": BASE_DIR,
@@ -1398,9 +1522,9 @@ def _execution_payload(state):
     }
 
 
-@app.route("/api/image/<int:idx>")
-def api_image(idx):
-    entry = _entry(idx)
+@app.route("/api/image")
+def api_image():
+    entry = _request_entry()
     split = _split_by_name(entry["split"])
     if split is None:
         abort(404)
@@ -1410,9 +1534,9 @@ def api_image(idx):
     return resp
 
 
-@app.route("/api/labels/<int:idx>", methods=["GET", "POST"])
-def api_labels(idx):
-    entry = _entry(idx)
+@app.route("/api/labels", methods=["GET", "POST"])
+def api_labels():
+    entry = _request_entry()
     split = _split_by_name(entry["split"])
     if split is None:
         abort(404)
@@ -1476,10 +1600,10 @@ def api_tags_yaml():
     return jsonify({"ok": True, "tags_yaml": path, "tags": read_tags_yaml()})
 
 
-@app.route("/api/tags/<int:idx>", methods=["GET", "POST"])
-def api_tags(idx):
+@app.route("/api/tags", methods=["GET", "POST"])
+def api_tags():
     """Read/write one image's tag list (its <stem>.txt under the split's tags dir)."""
-    entry = _entry(idx)
+    entry = _request_entry()
     split = _split_by_name(entry["split"])
     if split is None:
         abort(404)

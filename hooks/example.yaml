@@ -33,9 +33,10 @@
 #
 # `steps` and `after_success` accept the same entries:
 #   - an app_* name (run in the UI), or
+#   - a backend_* name (run inline on the server; e.g. backend_rescan_images), or
 #   - action_<Name> (run that action inline), or
 #   - anything else = a shell command.
-# The backend runs the whole queue and pauses at each app_* entry for the UI.
+# The backend runs the whole queue, pausing at each app_* entry for the UI.
 #
 # Optional keys:
 #

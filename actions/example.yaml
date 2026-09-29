@@ -15,9 +15,10 @@
 #
 # `steps` and `after_success` accept the same entries:
 #   - an app_* name (run in the UI), or
+#   - a backend_* name (run inline on the server; e.g. backend_rescan_images), or
 #   - action_<Name> (run that action inline), or
 #   - anything else = a shell command.
-# The backend runs the whole queue and pauses at each app_* entry for the UI.
+# The backend runs the whole queue, pausing at each app_* entry for the UI.
 # `steps` and `after_success` may also be a single value on the key line.
 #
 # Event hooks do NOT live here: they are YAML files in the sibling hooks/ folder
@@ -38,8 +39,12 @@
 #                    deleted when the run ends (use --keep-pipe to keep it)
 #
 # App actions usable in after_success (see README for the full list):
-#   app_refresh_images_list   re-scan the image folders (stay on same index)
+#   app_refresh_images_list   re-scan the image folders (stay on same image)
+#   app_reload_images_list    re-read the server list (no disk scan)
 #   app_refresh_image         re-fetch the current image (cache-busted)
+#
+# Backend actions usable in steps / after_success:
+#   backend_rescan_images     re-scan the image folders server-side
 #
 # Personal actions: files ending in `.a.yaml` are read after the others, win on
 # a name clash, and are never shipped/overwritten (they are git-ignored).

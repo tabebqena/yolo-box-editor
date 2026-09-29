@@ -638,7 +638,7 @@ function menuRow(label, keys) {
   return row;
 }
 
-const APP_SHORTCUT_ORDER = ['app_prev', 'app_next', 'app_del', 'app_drop', 'app_undo', 'app_redo', 'app_save', 'app_ch_box', 'app_sel_box', 'app_sel_points', 'app_escape', 'app_show_hide', 'app_fix_box', 'app_force_draw', 'app_refresh_images_list', 'app_refresh_image'];
+const APP_SHORTCUT_ORDER = ['app_prev', 'app_next', 'app_del', 'app_drop', 'app_undo', 'app_redo', 'app_save', 'app_ch_box', 'app_sel_box', 'app_sel_points', 'app_escape', 'app_show_hide', 'app_fix_box', 'app_force_draw', 'app_refresh_images_list', 'app_reload_images_list', 'app_refresh_image'];
 
 function renderShortcutErrors() {
   const box = el('shortcutErrors');
@@ -946,19 +946,25 @@ function loadImage(i) {
   dbg('loadImage', { index: currentIndex, of: images.length,
     image: entry ? `${entry.split}/${entry.name}` : null });
 
+  const q = keyQuery(entry);
   Promise.all([
-    fetch('/api/labels/' + currentIndex).then((r) => r.json()),
-    fetch('/api/tags/' + currentIndex).then((r) => r.json()),
+    fetch('/api/labels' + q).then((r) => (r.ok ? r.json() : null)),
+    fetch('/api/tags' + q).then((r) => (r.ok ? r.json() : null)),
   ]).then(([labelData, tagData]) => {
     if (requested !== currentIndex) return; // a newer loadImage superseded us
     boxes = Array.isArray(labelData) ? labelData : [];
     imageTags = (tagData && tagData.tags) || [];
-    imageEl.src = '/api/image/' + currentIndex + '?_=' + Date.now();
+    imageEl.src = '/api/image' + q + '&_=' + Date.now();
     rememberLastImage();
     renderTagBar();
     dbg('loadImage resolved', { index: currentIndex, boxes: boxes.length,
       tags: imageTags.length, src: imageEl.src });
     runHook('on_image_loaded');
+  }).catch((err) => {
+    // e.g. the key is no longer in the server list (a stale tab): blank it
+    // rather than surfacing an unhandled rejection, and let the image onerror
+    // clear the canvas.
+    dbgWarn('loadImage failed', { image: imageKey(entry), error: String(err) });
   });
 }
 
@@ -985,6 +991,13 @@ function readLastImage() {
 // (indices shift whenever the list is rescanned or a filter is re-applied).
 function imageKey(entry) {
   return entry ? `${entry.split}/${entry.name}` : null;
+}
+
+// Identity query for an image, e.g. `?key=val%2F0014122.jpg`. All per-image
+// requests use this instead of an index: the list can be rebuilt (rescan,
+// filter) so an index may point at a different file than the one on screen.
+function keyQuery(entry) {
+  return '?key=' + encodeURIComponent(imageKey(entry));
 }
 
 // Snapshot where the user is *by path* before the image list is rebuilt: the
@@ -1133,7 +1146,7 @@ function renderTagBar() {
 async function saveImageTags() {
   if (currentIndex < 0) return;
   try {
-    const res = await fetch('/api/tags/' + currentIndex, {
+    const res = await fetch('/api/tags' + keyQuery(images[currentIndex]), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tags: imageTags }),
@@ -1319,7 +1332,7 @@ async function save() {
   status.textContent = 'Saving…';
   let ok = false;
   try {
-    const res = await fetch('/api/labels/' + currentIndex, {
+    const res = await fetch('/api/labels' + keyQuery(images[currentIndex]), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ boxes }),
@@ -1478,7 +1491,7 @@ async function runAction(name, opts = {}) {
   setActionButtonsDisabled(true);
   dbg(`run ${isHook ? 'hook' : 'action'} "${name}"`, { target, index: currentIndex });
   try {
-    let data = await postActionRun({ action: name, idx: currentIndex });
+    let data = await postActionRun({ action: name, target });
     // The server-side chain pauses at each client action (app_*): run it here,
     // then resume the server with the same uid.
     while (data.ok && data.client_action) {
@@ -2105,32 +2118,29 @@ const APP_SHORTCUT_HANDLERS = {
         console.error('[app_refresh_images_list] rescan failed', data);
         return;
       }
-      images = data.images || [];
-      activeSplit = data.active_split || null;
-      if (data.active_filter !== undefined) activeFilter = data.active_filter || null;
-      dbg('rescan done', { now: images.length, active_split: activeSplit,
-        active_filter: activeFilter, filter_error: data.filter_error });
-      populateSplitSelect();
-      populateFilterSelect();
-      if (data.filter_error) showTransientFilterMessage(data.filter_error);
-      if (!images.length) {
-        currentIndex = -1;
-        boxes = [];
-        selected = -1;
-        imageTags = [];
-        imgW = 0;
-        imgH = 0;
-        canvas.width = 0;
-        canvas.height = 0;
-        updateNav();
-        renderSidePanel();
-        renderTagBar();
-        return;
-      }
-      loadImage(resolveImageAnchor(anchor));
-      runHook('on_images_list_loaded');
+      applyImagesPayload(data, anchor, 'rescan');
     } catch (err) {
       console.error('[app_refresh_images_list] failed:', err);
+    }
+  },
+  // Re-read the server's current list *without* touching the disk: use after a
+  // `backend_*` action already re-scanned it (e.g. Archive's
+  // `backend_rescan_images`). Keeps the same image by path; no extra disk scan.
+  app_reload_images_list: async (e) => {
+    e.preventDefault();
+    const anchor = captureImageAnchor();
+    dbg('reload images list', { was: images.length, index: currentIndex,
+      anchor: anchor && anchor.path });
+    try {
+      const res = await fetch('/api/images');
+      const data = await res.json();
+      if (!data.ok) {
+        console.error('[app_reload_images_list] reload failed', data);
+        return;
+      }
+      applyImagesPayload(data, anchor, 'reload');
+    } catch (err) {
+      console.error('[app_reload_images_list] failed:', err);
     }
   },
   // Re-fetch the current image from the server (cache-busted); e.g. after an
@@ -2138,10 +2148,40 @@ const APP_SHORTCUT_HANDLERS = {
   app_refresh_image: (e) => {
     e.preventDefault();
     if (currentIndex < 0) { dbg('refresh image skipped (no image)'); return; }
-    imageEl.src = '/api/image/' + currentIndex + '?_=' + Date.now();
+    imageEl.src = '/api/image' + keyQuery(images[currentIndex]) + '&_=' + Date.now();
     dbg('refresh image', { index: currentIndex, src: imageEl.src });
   },
 };
+
+// Apply an /api/images (GET) or /api/images/rescan (POST) payload to the client
+// list, keeping the current image by path through `anchor`. Shared by
+// app_refresh_images_list (disk rescan) and app_reload_images_list (in-memory).
+function applyImagesPayload(data, anchor, label) {
+  images = data.images || [];
+  activeSplit = data.active_split || null;
+  if (data.active_filter !== undefined) activeFilter = data.active_filter || null;
+  dbg(label + ' done', { now: images.length, active_split: activeSplit,
+    active_filter: activeFilter, filter_error: data.filter_error });
+  populateSplitSelect();
+  populateFilterSelect();
+  if (data.filter_error) showTransientFilterMessage(data.filter_error);
+  if (!images.length) {
+    currentIndex = -1;
+    boxes = [];
+    selected = -1;
+    imageTags = [];
+    imgW = 0;
+    imgH = 0;
+    canvas.width = 0;
+    canvas.height = 0;
+    updateNav();
+    renderSidePanel();
+    renderTagBar();
+    return;
+  }
+  loadImage(resolveImageAnchor(anchor));
+  runHook('on_images_list_loaded');
+}
 
 // Run an app action by name through the same path used for keyboard shortcuts,
 // so after_success hooks behave exactly like bound keys. Rejects with an Error

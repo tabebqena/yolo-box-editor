@@ -49,6 +49,7 @@ def _img(path):
 def clean_state(tmp_path, monkeypatch):
     """Reset STATE and redirect file constants away from the repo."""
     monkeypatch.setattr(ybe, "RECENT_FILE", str(tmp_path / "recent.json"))
+    monkeypatch.setattr(ybe, "VIEW_FILE", str(tmp_path / "view.json"))
     monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
     monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
     monkeypatch.setattr(ybe, "FILTERS_DIR", str(tmp_path / "filters"))
@@ -662,7 +663,7 @@ def test_api_split_rejects_unknown(clean_state, tmp_path):
 def test_api_image_serves_bytes(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    resp = client.get("/api/image/0")
+    resp = client.get("/api/image?key=train/a.jpg")
     assert resp.status_code == 200
     assert resp.data[:2] == b"\xff\xd8"  # JPEG (files are .jpg)
 
@@ -670,13 +671,13 @@ def test_api_image_serves_bytes(clean_state, tmp_path):
 def test_api_image_out_of_range_404(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    assert client.get("/api/image/999").status_code == 404
+    assert client.get("/api/image?key=train/nope.jpg").status_code == 404
 
 
 def test_api_labels_get_empty_without_file(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    assert client.get("/api/labels/0").get_json() == []
+    assert client.get("/api/labels?key=train/a.jpg").get_json() == []
 
 
 def test_api_labels_get_parses_existing(clean_state, tmp_path):
@@ -687,7 +688,7 @@ def test_api_labels_get_parses_existing(clean_state, tmp_path):
     )
     client = ybe.app.test_client()
     load_dataset(client, root)
-    boxes = client.get("/api/labels/0").get_json()
+    boxes = client.get("/api/labels?key=train/a.jpg").get_json()
     assert boxes == [{"class": 1, "cx": 0.5, "cy": 0.25, "w": 0.2, "h": 0.4}]
 
 
@@ -695,7 +696,7 @@ def test_api_labels_post_writes_clamped(clean_state, tmp_path):
     root = make_dataset(tmp_path)
     client = ybe.app.test_client()
     load_dataset(client, root)
-    resp = client.post("/api/labels/0", json={"boxes": [
+    resp = client.post("/api/labels?key=train/a.jpg", json={"boxes": [
         {"class": 2, "cx": -1.0, "cy": 0.5, "w": 2.0, "h": 0.1},
         {"class": -3, "cx": 0.4, "cy": 0.4, "w": 0.2, "h": 0.2},
     ]})
@@ -709,7 +710,7 @@ def test_api_labels_post_writes_clamped(clean_state, tmp_path):
 def test_api_labels_post_invalid_box(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    resp = client.post("/api/labels/0", json={"boxes": [{"class": "x", "cx": 0, "cy": 0, "w": 0, "h": 0}]})
+    resp = client.post("/api/labels?key=train/a.jpg", json={"boxes": [{"class": "x", "cx": 0, "cy": 0, "w": 0, "h": 0}]})
     assert resp.status_code == 400
 
 
@@ -719,7 +720,7 @@ def test_api_labels_post_readonly_rejected(clean_state, tmp_path, monkeypatch):
     load_dataset(client, make_dataset(tmp_path))
     cfg = client.get("/api/config").get_json()
     assert cfg["readonly"] is True
-    resp = client.post("/api/labels/0", json={"boxes": []})
+    resp = client.post("/api/labels?key=train/a.jpg", json={"boxes": []})
     assert resp.status_code == 403
 
 
@@ -806,7 +807,7 @@ def test_api_tags_yaml_post_readonly_rejected(clean_state, tmp_path):
 def test_api_tags_get_empty_without_file(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    assert client.get("/api/tags/0").get_json() == {"tags": []}
+    assert client.get("/api/tags?key=train/a.jpg").get_json() == {"tags": []}
 
 
 def test_api_tags_get_parses_existing(clean_state, tmp_path):
@@ -815,14 +816,14 @@ def test_api_tags_get_parses_existing(clean_state, tmp_path):
     (root / "tags" / "train" / "a.txt").write_text("fire\nsmoke\n\n", encoding="utf-8")
     client = ybe.app.test_client()
     load_dataset(client, root)
-    assert client.get("/api/tags/0").get_json() == {"tags": ["fire", "smoke"]}
+    assert client.get("/api/tags?key=train/a.jpg").get_json() == {"tags": ["fire", "smoke"]}
 
 
 def test_api_tags_post_writes_deduped(clean_state, tmp_path):
     root = make_dataset(tmp_path)
     client = ybe.app.test_client()
     load_dataset(client, root)
-    resp = client.post("/api/tags/0", json={"tags": ["fire", "", "smoke", "fire"]})
+    resp = client.post("/api/tags?key=train/a.jpg", json={"tags": ["fire", "", "smoke", "fire"]})
     assert resp.status_code == 200
     assert resp.get_json()["ok"] and resp.get_json()["count"] == 2
     written = (root / "tags" / "train" / "a.txt").read_text().splitlines()
@@ -833,13 +834,13 @@ def test_api_tags_post_readonly_rejected(clean_state, tmp_path):
     ybe.STATE["readonly"] = True
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    assert client.post("/api/tags/0", json={"tags": ["fire"]}).status_code == 403
+    assert client.post("/api/tags?key=train/a.jpg", json={"tags": ["fire"]}).status_code == 403
 
 
 def test_api_tags_out_of_range_404(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    assert client.get("/api/tags/999").status_code == 404
+    assert client.get("/api/tags?key=train/nope.jpg").status_code == 404
 
 
 # --------------------------------------------------------------------------- #
@@ -848,22 +849,43 @@ def test_api_tags_out_of_range_404(clean_state, tmp_path):
 def test_api_action_run_unknown_action(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    resp = client.post("/api/actions/run", json={"action": "Nope", "idx": 0})
+    resp = client.post("/api/actions/run", json={"action": "Nope", "target": "train/a.jpg"})
     assert resp.status_code == 400
 
 
-def test_api_action_run_invalid_idx(clean_state, tmp_path):
+def test_api_action_run_requires_a_known_target(clean_state, tmp_path):
+    write_action(tmp_path, "Echo.yaml", "steps:\n  - echo hi\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    resp = client.post("/api/actions/run", json={"action": "X", "idx": "nope"})
+    # no target at all
+    assert client.post("/api/actions/run", json={"action": "Echo"}).status_code == 400
+    # a target that is not in the current list
+    resp = client.post("/api/actions/run", json={"action": "Echo", "target": "train/zzz.jpg"})
     assert resp.status_code == 400
+    assert "not in the current list" in resp.get_json()["error"]
+
+
+def test_api_action_run_targets_named_image_not_position(clean_state, tmp_path):
+    # the client names the image it is showing; the server must act on that file
+    # even when its own list order/position differs (the bug that archived the
+    # wrong image when the client and server lists diverged).
+    write_action(tmp_path, "Info.yaml", "steps:\n  - echo {IMAGE_PATH}\n")
+    client = ybe.app.test_client()
+    root = make_dataset(tmp_path)
+    load_dataset(client, root)
+    # server list order is train/a, train/b, ...; ask for the *last* one by name
+    payload = client.post(
+        "/api/actions/run", json={"action": "Info", "target": "test/b.jpg"}
+    ).get_json()
+    assert payload["ok"] is True
+    assert payload["stdout"].strip().endswith("images/test/b.jpg")
 
 
 def test_api_action_run_success(clean_state, tmp_path):
     write_action(tmp_path, "Echo.yaml", "steps:\n  - echo {IMAGE_PATH}\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    resp = client.post("/api/actions/run", json={"action": "Echo", "idx": 0})
+    resp = client.post("/api/actions/run", json={"action": "Echo", "target": "train/a.jpg"})
     payload = resp.get_json()
     assert resp.status_code == 200
     assert payload["ok"] is True
@@ -876,7 +898,7 @@ def test_api_action_run_failure_surfaces_exit_code(clean_state, tmp_path):
     write_action(tmp_path, "Fail.yaml", "steps:\n  - false\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    payload = client.post("/api/actions/run", json={"action": "Fail", "idx": 0}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "Fail", "target": "train/a.jpg"}).get_json()
     assert payload["ok"] is False
     assert payload["exit_code"] == 1
 
@@ -886,7 +908,7 @@ def test_api_action_run_timeout(clean_state, tmp_path, monkeypatch):
     write_action(tmp_path, "Slow.yaml", "steps:\n  - sleep 5\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    resp = client.post("/api/actions/run", json={"action": "Slow", "idx": 0})
+    resp = client.post("/api/actions/run", json={"action": "Slow", "target": "train/a.jpg"})
     assert resp.status_code == 500
     assert "timed out" in resp.get_json()["error"]
 
@@ -895,7 +917,7 @@ def test_api_action_run_without_after_success_omits_it(clean_state, tmp_path):
     write_action(tmp_path, "Echo.yaml", "steps:\n  - echo hi\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    payload = client.post("/api/actions/run", json={"action": "Echo", "idx": 0}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "Echo", "target": "train/a.jpg"}).get_json()
     assert payload["ok"] is True
     assert "after_success" not in payload
 
@@ -909,7 +931,7 @@ def test_api_action_run_steps_success(clean_state, tmp_path):
     )
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    payload = client.post("/api/actions/run", json={"action": "EchoMany", "idx": 0}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "EchoMany", "target": "train/a.jpg"}).get_json()
     assert payload["ok"] is True
     assert payload["exit_code"] == 0
     assert "one" in payload["stdout"] and "two" in payload["stdout"]
@@ -926,7 +948,7 @@ def test_api_action_run_stops_on_first_failure(clean_state, tmp_path):
     )
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    payload = client.post("/api/actions/run", json={"action": "Bad", "idx": 0}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "Bad", "target": "train/a.jpg"}).get_json()
     assert payload["ok"] is False
     assert payload["exit_code"] == 1
     assert "ok" in payload["stdout"]
@@ -943,7 +965,7 @@ def test_api_action_run_substitutes_dataset_path_and_image_index(clean_state, tm
     )
     client = ybe.app.test_client()
     load_dataset(client, root)
-    payload = client.post("/api/actions/run", json={"action": "Info", "idx": 1}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "Info", "target": "train/b.jpg"}).get_json()
     assert payload["ok"] is True
     assert str(root) in payload["stdout"]
     assert payload["stdout"].splitlines()[-1].strip() == "2"  # 1-based
@@ -954,7 +976,7 @@ def test_api_action_run_substitutes_data_yaml_path(clean_state, tmp_path):
     write_action(tmp_path, "Yaml.yaml", "steps:\n  - echo {DATA_YAML_PATH}\n")
     client = ybe.app.test_client()
     load_dataset(client, root)
-    payload = client.post("/api/actions/run", json={"action": "Yaml", "idx": 0}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "Yaml", "target": "train/a.jpg"}).get_json()
     assert payload["ok"] is True
     assert str(root / "data.yaml") in payload["stdout"]
 
@@ -969,7 +991,7 @@ def test_api_action_run_can_run_a_hook_by_name(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
     payload = client.post(
-        "/api/actions/run", json={"action": "on_after_save", "idx": 0}
+        "/api/actions/run", json={"action": "on_after_save", "target": "train/a.jpg"}
     ).get_json()
     assert payload["ok"] is True
     assert "hooked" in payload["stdout"]
@@ -981,7 +1003,7 @@ def test_api_action_run_substitutes_app_dir(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
     payload = client.post(
-        "/api/actions/run", json={"action": "on_after_save", "idx": 0}
+        "/api/actions/run", json={"action": "on_after_save", "target": "train/a.jpg"}
     ).get_json()
     assert payload["ok"] is True
     assert ybe.BASE_DIR in payload["stdout"]
@@ -994,7 +1016,7 @@ def test_api_action_run_sets_cwd_to_app_dir(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
     payload = client.post(
-        "/api/actions/run", json={"action": "on_after_save", "idx": 0}
+        "/api/actions/run", json={"action": "on_after_save", "target": "train/a.jpg"}
     ).get_json()
     assert payload["ok"] is True
     assert ybe.BASE_DIR in payload["stdout"]
@@ -1008,7 +1030,7 @@ def test_api_action_run_pipe_path_is_deleted_when_done(clean_state, tmp_path):
     )
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    payload = client.post("/api/actions/run", json={"action": "Pipe", "idx": 0}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "Pipe", "target": "train/a.jpg"}).get_json()
     assert payload["ok"] is True
     assert "{PIPE_PATH}" not in payload["command"]
     assert "hello" in payload["stdout"]
@@ -1022,7 +1044,7 @@ def test_api_action_run_keep_pipe_keeps_file(clean_state, tmp_path):
     write_action(tmp_path, "Write.yaml", "steps:\n  - echo x > {PIPE_PATH}\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    payload = client.post("/api/actions/run", json={"action": "Write", "idx": 0}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "Write", "target": "train/a.jpg"}).get_json()
     assert Path(payload["pipe_path"]).is_file()
 
 
@@ -1034,7 +1056,7 @@ def test_api_action_run_after_success_action_shares_pipe(clean_state, tmp_path):
     write_action(tmp_path, "Root.yaml", "after_success:\n  - action_Write\n  - action_Read\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "Root", "target": "train/a.jpg"}).get_json()
     assert payload["ok"] is True
     assert "one" in payload["stdout"]
     assert not Path(payload["pipe_path"]).exists()
@@ -1048,7 +1070,7 @@ def test_api_action_run_pauses_at_client_action(clean_state, tmp_path):
     )
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    first = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    first = client.post("/api/actions/run", json={"action": "Root", "target": "train/a.jpg"}).get_json()
     assert first["ok"] is True
     assert first["client_action"] == "app_refresh_image"
     assert first["uid"] in ybe.EXECUTIONS
@@ -1072,7 +1094,7 @@ def test_api_action_run_steps_can_mix_client_action(clean_state, tmp_path):
     )
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    first = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    first = client.post("/api/actions/run", json={"action": "Root", "target": "train/a.jpg"}).get_json()
     assert first["ok"] is True
     assert first["client_action"] == "app_refresh_image"
     # execution stopped before the step after the client action
@@ -1089,7 +1111,7 @@ def test_api_action_run_steps_can_chain_action(clean_state, tmp_path):
     write_action(tmp_path, "Root.yaml", "steps:\n  - echo root\n  - action_Sub\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "Root", "target": "train/a.jpg"}).get_json()
     assert payload["ok"] is True
     assert "root" in payload["stdout"] and "sub" in payload["stdout"]
 
@@ -1100,7 +1122,7 @@ def test_api_action_run_bare_action_name_is_a_shell_command(clean_state, tmp_pat
     write_action(tmp_path, "Root.yaml", "steps:\n  - Sub\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "Root", "target": "train/a.jpg"}).get_json()
     assert payload["ok"] is False
     assert "sub" not in payload["stdout"]
 
@@ -1114,7 +1136,7 @@ def test_api_action_run_hook_steps_can_include_client_action(clean_state, tmp_pa
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
     first = client.post(
-        "/api/actions/run", json={"action": "on_after_save", "idx": 0}
+        "/api/actions/run", json={"action": "on_after_save", "target": "train/a.jpg"}
     ).get_json()
     assert first["ok"] is True
     assert first["client_action"] == "app_refresh_image"
@@ -1133,7 +1155,7 @@ def test_api_action_run_preserves_mixed_after_success_order(clean_state, tmp_pat
     )
     client = ybe.app.test_client()
     load_dataset(client, root)
-    first = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    first = client.post("/api/actions/run", json={"action": "Root", "target": "train/a.jpg"}).get_json()
     assert first["client_action"] == "app_refresh_image"
     # only the server action before the client action has run so far
     assert log.read_text(encoding="utf-8").split() == ["A"]
@@ -1152,7 +1174,7 @@ def test_api_action_run_client_action_failure_aborts(clean_state, tmp_path):
     write_action(tmp_path, "Root.yaml", "after_success:\n  - app_refresh_image\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    first = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    first = client.post("/api/actions/run", json={"action": "Root", "target": "train/a.jpg"}).get_json()
     pipe = first["pipe_path"]
     payload = client.post(
         "/api/actions/run",
@@ -1168,7 +1190,7 @@ def test_api_action_run_unknown_after_success_entry(clean_state, tmp_path):
     write_action(tmp_path, "Root.yaml", "steps:\n  - echo hi\nafter_success:\n  - action_Nope\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "Root", "target": "train/a.jpg"}).get_json()
     assert payload["ok"] is False
     assert "unknown action" in payload["error"]
     assert not Path(payload["pipe_path"]).exists()
@@ -1183,7 +1205,7 @@ def test_api_action_run_after_success_accepts_shell_and_action(clean_state, tmp_
     )
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "Root", "target": "train/a.jpg"}).get_json()
     assert payload["ok"] is True
     assert "shell" in payload["stdout"] and "sub" in payload["stdout"]
 
@@ -1196,7 +1218,7 @@ def test_api_action_run_cascade_limit(clean_state, tmp_path):
         write_action(tmp_path, f"Chain{i}.yaml", body)
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    payload = client.post("/api/actions/run", json={"action": "Chain0", "idx": 0}).get_json()
+    payload = client.post("/api/actions/run", json={"action": "Chain0", "target": "train/a.jpg"}).get_json()
     assert payload["ok"] is False
     assert "cascade exceeded" in payload["error"]
 
@@ -1237,7 +1259,7 @@ def test_api_images_rescan_resets_empty_active_split(clean_state, tmp_path):
 def test_api_image_no_store_header(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    resp = client.get("/api/image/0")
+    resp = client.get("/api/image?key=train/a.jpg")
     assert resp.status_code == 200
     assert resp.headers["Cache-Control"] == "no-store"
 
@@ -1468,15 +1490,95 @@ def test_api_images_rescan_reruns_filter(clean_state, tmp_path):
     assert data["images"] == []
 
 
-def test_api_image_uses_filtered_index(clean_state, tmp_path):
+def test_api_image_resolves_by_key_regardless_of_filter(clean_state, tmp_path):
     root = make_dataset(tmp_path, splits=("train",), images=("a", "b"))
     write_filter(clean_state, "OnlyB.py", "print('train/b.jpg')\n")
     client = ybe.app.test_client()
     load_dataset(client, root)
     cfg = client.post("/api/filter", json={"filter": "OnlyB"}).get_json()
     assert [e["name"] for e in cfg["images"]] == ["b.jpg"]
-    assert client.get("/api/image/0").status_code == 200
-    assert client.get("/api/image/1").status_code == 404
+    # identity reads are not affected by the filter: both files still resolve
+    assert client.get("/api/image?key=train/a.jpg").status_code == 200
+    assert client.get("/api/image?key=train/b.jpg").status_code == 200
+
+
+# --------------------------------------------------------------------------- #
+# routes: in-memory image list + backend actions
+# --------------------------------------------------------------------------- #
+def test_api_images_get_returns_current_list(clean_state, tmp_path):
+    root = make_dataset(tmp_path, splits=("train",), images=("a", "b"))
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    data = client.get("/api/images").get_json()
+    assert data["ok"] is True
+    assert [e["name"] for e in data["images"]] == ["a.jpg", "b.jpg"]
+    # it reads memory, not the disk: a deleted file stays listed until a rescan
+    (root / "images" / "train" / "b.jpg").unlink()
+    assert len(client.get("/api/images").get_json()["images"]) == 2
+    assert len(client.post("/api/images/rescan").get_json()["images"]) == 1
+
+
+def test_app_reload_images_list_registered():
+    assert "app_reload_images_list" in ybe.APP_ACTIONS
+
+
+def test_backend_rescan_images_action_entry(clean_state, tmp_path):
+    # a `backend_*` entry runs inline server-side (no client pause)
+    root = make_dataset(tmp_path, splits=("train",), images=("a", "b"))
+    write_action(tmp_path, "Rescan.yaml", "after_success:\n  - backend_rescan_images\n")
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    (root / "images" / "train" / "b.jpg").unlink()
+    payload = client.post(
+        "/api/actions/run", json={"action": "Rescan", "target": "train/a.jpg"}
+    ).get_json()
+    assert payload["ok"] is True
+    assert "client_action" not in payload
+    assert [e["name"] for e in ybe.STATE["images"]] == ["a.jpg"]
+
+
+def test_backend_unknown_action_entry_errors(clean_state, tmp_path):
+    write_action(tmp_path, "Root.yaml", "after_success:\n  - backend_nope\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    payload = client.post(
+        "/api/actions/run", json={"action": "Root", "target": "train/a.jpg"}
+    ).get_json()
+    assert payload["ok"] is False
+    assert "unknown backend action" in payload["error"]
+    assert not Path(payload["pipe_path"]).exists()
+
+
+# --------------------------------------------------------------------------- #
+# per-dataset view persistence
+# --------------------------------------------------------------------------- #
+def test_view_state_saved_on_split_and_filter(clean_state, tmp_path):
+    root = make_dataset(tmp_path, splits=("train",), images=("a",))
+    write_filter(clean_state, "OnlyA.py", "print('train/a.jpg')\n")
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    client.post("/api/split", json={"split": "train"})
+    client.post("/api/filter", json={"filter": "OnlyA"})
+    assert ybe._load_views()[str(root / "data.yaml")] == {
+        "split": "train",
+        "filter": "OnlyA",
+    }
+
+
+def test_resume_restores_saved_view(clean_state, tmp_path):
+    root = make_dataset(tmp_path, splits=("train",), images=("a",))
+    write_filter(clean_state, "OnlyA.py", "print('train/a.jpg')\n")
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    client.post("/api/split", json={"split": "train"})
+    client.post("/api/filter", json={"filter": "OnlyA"})
+    # simulate a server restart: in-memory state resets, then resume reopens the
+    # last dataset (RECENT_FILE persists) and must restore its split/filter
+    ybe.STATE.clear()
+    ybe.STATE.update(DEFAULT_STATE)
+    assert ybe._resume_last_dataset() == str(root / "data.yaml")
+    assert ybe.STATE["active_split"] == "train"
+    assert ybe.STATE["active_filter"] == "OnlyA"
 
 
 # --------------------------------------------------------------------------- #
