@@ -10,9 +10,10 @@
 #   steps:                      # shell commands, run in order; execution
 #     - rm -f {IMAGE_PATH}      # stops at the first failure
 #     - rm -f {LABEL_PATH}
-#   after_success:              # optional, run client-side after all steps
-#     - app_refresh_images_list # succeeded (stop at first error). Entries may
-#                               # be app actions (app_*) or other actions.
+#   after_success:              # optional, run after all steps succeeded
+#     - app_refresh_images_list # (stop at first error). Entries may be app
+#                               # actions (app_*, run in the UI) or other
+#                               # actions (run by the backend); order is kept.
 #
 # `steps` and `after_success` may also be a single value on the key line.
 #

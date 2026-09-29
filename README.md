@@ -232,9 +232,10 @@ Placeholders (leave them unquoted):
 `{PIPE_PATH}` is a per-run scratch file: it starts empty and every step of the
 run — plus every action reached through `after_success` — shares the same file,
 so steps can hand data to each other (e.g. `printf '%s\n' {IMAGE_PATH} > {PIPE_PATH}`,
-then a later step or chained action reads it back). The app deletes it when the
-whole run (steps + `after_success` chain) has finished, whether it succeeded or
-failed. Pass `--keep-pipe` to keep the file instead, e.g. for debugging.
+then a later step or chained action reads it back). The backend owns the run, so
+it deletes the file when the whole chain (steps + `after_success`) has finished,
+whether it succeeded or failed. Pass `--keep-pipe` to keep the file instead,
+e.g. for debugging.
 
 Files ending in `.a.yaml` are *yours*: they are read after the shipped files,
 win on a name clash (matched by action name, so `name:` can retarget an
@@ -248,10 +249,13 @@ Helper programs called by those steps live in the `scripts/` folder (next to
 runs only when a `steps` command names it.
 
 **`after_success`** is a list of *app actions* (the same `app_*` names used for
-keyboard shortcuts) **or other non-hook actions** that run client-side after
-every step succeeded. They run in order; on an error the chain stops, the
-message is shown and logged to the browser console. An action can therefore
-chain into another action (a cascade is capped at 8 levels). Useful app actions:
+keyboard shortcuts) **or other non-hook actions**, run in order once every step
+succeeded. The backend drives the chain: it runs the server-side actions itself
+and pauses only when it reaches a client-side `app_*` entry, which it hands to
+the UI and waits for before continuing (so a mixed list keeps its exact order).
+On an error the chain stops, the message is shown and logged to the browser
+console. An action can therefore chain into another action (a cascade is capped
+at 8 actions per run). Useful app actions:
 
 - `app_refresh_images_list` — re-scan the image folders; the current image is
   kept **by path**, not by index, so the display survives list changes from an

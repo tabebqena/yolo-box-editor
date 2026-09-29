@@ -56,6 +56,7 @@ def clean_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "PIPE_DIR", str(tmp_path / "pipes"))
     ybe.STATE.clear()
     ybe.STATE.update(DEFAULT_STATE)
+    ybe.EXECUTIONS.clear()
     return tmp_path
 
 
@@ -910,7 +911,9 @@ def test_api_action_run_steps_success(clean_state, tmp_path):
     assert payload["ok"] is True
     assert payload["exit_code"] == 0
     assert "one" in payload["stdout"] and "two" in payload["stdout"]
-    assert payload["after_success"] == ["app_refresh_images_list"]
+    # the app action pauses the server-side chain and is handed to the client
+    assert payload["client_action"] == "app_refresh_images_list"
+    assert payload["uid"]
 
 
 def test_api_action_run_stops_on_first_failure(clean_state, tmp_path):
@@ -968,7 +971,7 @@ def test_api_action_run_can_run_a_hook_by_name(clean_state, tmp_path):
     ).get_json()
     assert payload["ok"] is True
     assert "hooked" in payload["stdout"]
-    assert payload["after_success"] == ["app_refresh_image"]
+    assert payload["client_action"] == "app_refresh_image"
 
 
 def test_api_action_run_substitutes_app_dir(clean_state, tmp_path):
@@ -995,7 +998,7 @@ def test_api_action_run_sets_cwd_to_app_dir(clean_state, tmp_path):
     assert ybe.BASE_DIR in payload["stdout"]
 
 
-def test_api_action_run_pipe_path_is_a_file(clean_state, tmp_path):
+def test_api_action_run_pipe_path_is_deleted_when_done(clean_state, tmp_path):
     write_action(
         tmp_path,
         "Pipe.yaml",
@@ -1006,75 +1009,139 @@ def test_api_action_run_pipe_path_is_a_file(clean_state, tmp_path):
     payload = client.post("/api/actions/run", json={"action": "Pipe", "idx": 0}).get_json()
     assert payload["ok"] is True
     assert "{PIPE_PATH}" not in payload["command"]
-    pipe = payload["pipe_path"]
-    assert ybe.is_pipe_path(pipe)
-    assert Path(pipe).is_file()
     assert "hello" in payload["stdout"]
-    # the server keeps the file: the client deletes it when the run ends
-    assert Path(pipe).is_file()
-
-
-def test_api_action_run_reuses_forwarded_pipe_path(clean_state, tmp_path):
-    write_action(tmp_path, "Write.yaml", "steps:\n  - echo one > {PIPE_PATH}\n")
-    write_action(tmp_path, "Read.yaml", "steps:\n  - cat {PIPE_PATH}\n")
-    client = ybe.app.test_client()
-    load_dataset(client, make_dataset(tmp_path))
-    first = client.post("/api/actions/run", json={"action": "Write", "idx": 0}).get_json()
-    pipe = first["pipe_path"]
-    second = client.post(
-        "/api/actions/run", json={"action": "Read", "idx": 0, "pipe_path": pipe}
-    ).get_json()
-    assert second["ok"] is True
-    assert second["pipe_path"] == pipe
-    assert "one" in second["stdout"]
-
-
-def test_api_action_run_ignores_foreign_pipe_path(clean_state, tmp_path):
-    write_action(tmp_path, "Write.yaml", "steps:\n  - echo x > {PIPE_PATH}\n")
-    client = ybe.app.test_client()
-    load_dataset(client, make_dataset(tmp_path))
-    payload = client.post(
-        "/api/actions/run",
-        json={"action": "Write", "idx": 0, "pipe_path": "/etc/passwd"},
-    ).get_json()
-    assert payload["ok"] is True
-    assert payload["pipe_path"] != "/etc/passwd"
+    # the backend owns the run and removes the file once it has finished
     assert ybe.is_pipe_path(payload["pipe_path"])
+    assert not Path(payload["pipe_path"]).exists()
 
 
-def test_pipe_cleanup_removes_file(clean_state, tmp_path):
-    write_action(tmp_path, "Write.yaml", "steps:\n  - echo x > {PIPE_PATH}\n")
-    client = ybe.app.test_client()
-    load_dataset(client, make_dataset(tmp_path))
-    pipe = client.post(
-        "/api/actions/run", json={"action": "Write", "idx": 0}
-    ).get_json()["pipe_path"]
-    assert Path(pipe).is_file()
-    resp = client.post("/api/actions/pipe/cleanup", json={"pipe_path": pipe})
-    assert resp.get_json() == {"ok": True, "removed": True}
-    assert not Path(pipe).exists()
-
-
-def test_pipe_cleanup_keep_pipe_keeps_file(clean_state, tmp_path):
+def test_api_action_run_keep_pipe_keeps_file(clean_state, tmp_path):
     ybe.STATE["keep_pipe"] = True
     write_action(tmp_path, "Write.yaml", "steps:\n  - echo x > {PIPE_PATH}\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    pipe = client.post(
-        "/api/actions/run", json={"action": "Write", "idx": 0}
-    ).get_json()["pipe_path"]
-    resp = client.post("/api/actions/pipe/cleanup", json={"pipe_path": pipe})
-    assert resp.get_json() == {"ok": True, "kept": True}
-    assert Path(pipe).is_file()
+    payload = client.post("/api/actions/run", json={"action": "Write", "idx": 0}).get_json()
+    assert Path(payload["pipe_path"]).is_file()
 
 
-def test_pipe_cleanup_ignores_foreign_path(clean_state, tmp_path):
-    victim = tmp_path / "victim.txt"
-    victim.write_text("keep me", encoding="utf-8")
+def test_api_action_run_after_success_action_shares_pipe(clean_state, tmp_path):
+    # a server-side after_success action runs in the same execution and sees what
+    # the root action wrote to the pipe
+    write_action(tmp_path, "Write.yaml", "steps:\n  - echo one > {PIPE_PATH}\n")
+    write_action(tmp_path, "Read.yaml", "steps:\n  - cat {PIPE_PATH}\n")
+    write_action(tmp_path, "Root.yaml", "after_success:\n  - Write\n  - Read\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    resp = client.post("/api/actions/pipe/cleanup", json={"pipe_path": str(victim)})
-    assert resp.get_json() == {"ok": True, "removed": False}
+    payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    assert payload["ok"] is True
+    assert "one" in payload["stdout"]
+    assert not Path(payload["pipe_path"]).exists()
+
+
+def test_api_action_run_pauses_at_client_action(clean_state, tmp_path):
+    write_action(
+        tmp_path,
+        "Root.yaml",
+        "steps:\n  - echo root\nafter_success:\n  - app_refresh_image\n",
+    )
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    first = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    assert first["ok"] is True
+    assert first["client_action"] == "app_refresh_image"
+    assert first["uid"] in ybe.EXECUTIONS
+    pipe = first["pipe_path"]
+    assert Path(pipe).is_file()
+    # the client reports back; the chain has no more entries, so it finishes
+    done = client.post(
+        "/api/actions/run", json={"uid": first["uid"], "result": {"ok": True}}
+    ).get_json()
+    assert done["ok"] is True
+    assert "client_action" not in done
+    assert first["uid"] not in ybe.EXECUTIONS
+    assert not Path(pipe).exists()
+
+
+def test_api_action_run_preserves_mixed_after_success_order(clean_state, tmp_path):
+    root = make_dataset(tmp_path, splits=("train",), images=("a",))
+    log = root / "order.log"
+    write_action(tmp_path, "ServerA.yaml", "steps:\n  - echo A >> {DATASET_PATH}/order.log\n")
+    write_action(tmp_path, "ServerB.yaml", "steps:\n  - echo B >> {DATASET_PATH}/order.log\n")
+    write_action(
+        tmp_path,
+        "Root.yaml",
+        "after_success:\n  - ServerA\n  - app_refresh_image\n  - ServerB\n",
+    )
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    first = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    assert first["client_action"] == "app_refresh_image"
+    # only the server action before the client action has run so far
+    assert log.read_text(encoding="utf-8").split() == ["A"]
+    client.post("/api/actions/run", json={"uid": first["uid"], "result": {"ok": True}})
+    assert log.read_text(encoding="utf-8").split() == ["A", "B"]
+
+
+def test_api_action_run_resume_unknown_uid(clean_state, tmp_path):
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    resp = client.post("/api/actions/run", json={"uid": "nope", "result": {"ok": True}})
+    assert resp.status_code == 400
+
+
+def test_api_action_run_client_action_failure_aborts(clean_state, tmp_path):
+    write_action(tmp_path, "Root.yaml", "after_success:\n  - app_refresh_image\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    first = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    pipe = first["pipe_path"]
+    payload = client.post(
+        "/api/actions/run",
+        json={"uid": first["uid"], "result": {"ok": False, "error": "boom"}},
+    ).get_json()
+    assert payload["ok"] is False
+    assert "boom" in payload["error"]
+    assert first["uid"] not in ybe.EXECUTIONS
+    assert not Path(pipe).exists()
+
+
+def test_api_action_run_unknown_after_success_entry(clean_state, tmp_path):
+    write_action(tmp_path, "Root.yaml", "steps:\n  - echo hi\nafter_success:\n  - Nope\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    assert payload["ok"] is False
+    assert "unknown action" in payload["error"]
+    assert not Path(payload["pipe_path"]).exists()
+
+
+def test_api_action_run_rejects_hook_in_after_success(clean_state, tmp_path):
+    write_hook(tmp_path, "on_after_save.yaml", "steps:\n  - echo hooked\n")
+    write_action(tmp_path, "Root.yaml", "after_success:\n  - on_after_save\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    payload = client.post("/api/actions/run", json={"action": "Root", "idx": 0}).get_json()
+    assert payload["ok"] is False
+    assert "event hook" in payload["error"]
+
+
+def test_api_action_run_cascade_limit(clean_state, tmp_path):
+    for i in range(9):
+        body = f"steps:\n  - echo {i}\n"
+        if i < 8:
+            body += f"after_success:\n  - Chain{i + 1}\n"
+        write_action(tmp_path, f"Chain{i}.yaml", body)
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    payload = client.post("/api/actions/run", json={"action": "Chain0", "idx": 0}).get_json()
+    assert payload["ok"] is False
+    assert "cascade exceeded" in payload["error"]
+
+
+def test_remove_pipe_ignores_foreign_path(clean_state, tmp_path):
+    victim = tmp_path / "victim.txt"
+    victim.write_text("keep me", encoding="utf-8")
+    assert ybe.remove_pipe(str(victim)) is False
     assert victim.read_text(encoding="utf-8") == "keep me"
 
 

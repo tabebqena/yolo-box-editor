@@ -7,7 +7,6 @@ const el = (id) => document.getElementById(id);
 
 const HANDLE_SIZE = 8;
 const DEL_BTN = 16;
-const MAX_CASCADE_DEPTH = 8; // action -> after_success -> action ... recursion cap
 const AUTO_SAVE_DELAY = 400; // ms to coalesce rapid edits into one auto-save
 
 let images = [];
@@ -43,7 +42,6 @@ let imageTags = [];         // current image's tags
 let boxesVisible = true;    // `app_show_hide`: draw the box overlay or not
 let currentDataYaml = '';   // data.yaml of the loaded dataset (for resume)
 let hooksByName = new Set(); // event hooks defined in hooks/ (on_<event>)
-let userActions = new Set(); // non-hook action names (for after_success cascades)
 let hookInFlight = new Set(); // hooks currently running (re-entrancy guard)
 let autoSave = false;        // save labels automatically after each edit
 let autoSaveTimer = null;    // debounce timer for auto-save
@@ -745,7 +743,6 @@ async function loadConfig(startIdx = 0, opts = {}) {
   shortcutErrors = cfg.shortcut_errors || [];
   hookErrors = cfg.hook_errors || [];
   hooksByName = new Set(cfg.hooks || []);
-  userActions = new Set(cfg.actions || []);
   renderShortcutErrors();
   populateActions(cfg.actions || []);
   renderShortcuts();
@@ -1379,15 +1376,13 @@ function setHookStatus(msg) {
 }
 
 // Run one user action (or event hook) on the current image. `confirm: false`
-// skips the confirmation prompt — hooks run automatically. `pipePath` is the
-// {PIPE_PATH} file of an ongoing run, forwarded to after_success actions so
-// they share the same scratch file. Returns true when the action succeeded (or
-// there was nothing to run), false on failure.
+// skips the confirmation prompt — hooks run automatically. The backend owns the
+// steps + after_success chain and pauses whenever an app action is needed: it
+// returns `client_action` + a `uid`, which we run and report back. Returns true
+// when the whole run succeeded (or there was nothing to run), false on failure.
 async function runAction(name, opts = {}) {
   const ask = opts.confirm !== false;
-  const depth = opts.depth || 0;
   const isHook = !!opts.hook;
-  const pipePath = opts.pipePath || null;
   if (!name || currentIndex < 0 || !images[currentIndex]) {
     dbg('runAction skipped', { name, currentIndex });
     return false;
@@ -1395,18 +1390,22 @@ async function runAction(name, opts = {}) {
   const target = `${images[currentIndex].split}/${images[currentIndex].name}`;
   if (ask && !confirm(`Run action "${name}" on ${target}?`)) return false;
   setActionButtonsDisabled(true);
-  dbg(`run ${isHook ? 'hook' : 'action'} "${name}"`, { target, index: currentIndex, depth });
-  let activePipe = pipePath;
+  dbg(`run ${isHook ? 'hook' : 'action'} "${name}"`, { target, index: currentIndex });
   try {
-    const body = { action: name, idx: currentIndex };
-    if (pipePath) body.pipe_path = pipePath;
-    const res = await fetch('/api/actions/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    activePipe = data.pipe_path || pipePath;
+    let data = await postActionRun({ action: name, idx: currentIndex });
+    // The server-side chain pauses at each client action (app_*): run it here,
+    // then resume the server with the same uid.
+    while (data.ok && data.client_action) {
+      dbg('run after_success client action', data.client_action, { uid: data.uid });
+      let result;
+      try {
+        await runAppAction(data.client_action);
+        result = { ok: true };
+      } catch (err) {
+        result = { ok: false, error: err.message };
+      }
+      data = await postActionRun({ uid: data.uid, result });
+    }
     dbg(`"${name}" response`, data);
     if (!data.ok) {
       // failures always use the modal
@@ -1419,33 +1418,23 @@ async function runAction(name, opts = {}) {
     }
     if (isHook) setHookStatus(`${name} succeeded`);
     else showActionResult(data);
-    // YAML actions may return an after_success chain to integrate with the app
-    // (app_refresh_* or another action). Run it one after another; on the first
-    // error report it, show a message and stop the chain.
-    return await runAfterSuccessChain(data.after_success || [], depth, isHook, activePipe);
+    return true;
   } catch (err) {
     dbgWarn(`"${name}" request error`, err);
     showActionResult({ ok: false, action: name, error: 'Error: ' + err.message });
     return false;
   } finally {
     setActionButtonsDisabled(readonly);
-    // only the top-level run owns the {PIPE_PATH} file: delete it once the whole
-    // after_success chain has finished (the server honours --keep-pipe)
-    if (depth === 0 && activePipe) await cleanupPipe(activePipe);
   }
 }
 
-// Ask the server to drop a run's {PIPE_PATH} file (no-op with --keep-pipe).
-async function cleanupPipe(pipePath) {
-  try {
-    await fetch('/api/actions/pipe/cleanup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pipe_path: pipePath }),
-    });
-  } catch (err) {
-    dbgWarn('pipe cleanup failed', err);
-  }
+async function postActionRun(body) {
+  const res = await fetch('/api/actions/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return res.json();
 }
 
 // Fire an event hook if it is defined and an image is loaded. No-op otherwise.
@@ -1460,70 +1449,6 @@ async function runHook(name) {
     return await runAction(name, { confirm: false, hook: true });
   } finally {
     hookInFlight.delete(name);
-  }
-}
-
-// Run an after_success chain: app actions or other (non-hook) actions.
-async function runAfterSuccessChain(chain, depth, isHook, pipePath) {
-  dbg('after_success chain', chain);
-  for (const name of chain) {
-    try {
-      await runAfterSuccess(name, depth, isHook, pipePath);
-    } catch (err) {
-      const msg = `after_success "${name}" failed: ${err.message}`;
-      console.error(msg, err);
-      showActionHookError(msg);
-      return false;
-    }
-  }
-  return true;
-}
-
-async function runAfterSuccess(name, depth, isHook, pipePath) {
-  // hooks are event-driven only: they cannot be triggered from after_success
-  if (hooksByName.has(name)) {
-    throw new Error(`"${name}" is an event hook; hooks cannot run from after_success`);
-  }
-  if (APP_SHORTCUT_HANDLERS[name]) {
-    dbg(`after_success -> app action ${name}`);
-    return runAppAction(name);
-  }
-  if (userActions.has(name)) {
-    if (depth >= MAX_CASCADE_DEPTH) {
-      throw new Error(`action cascade exceeded ${MAX_CASCADE_DEPTH} levels`);
-    }
-    dbg(`after_success -> action ${name} (depth ${depth + 1})`);
-    const ok = await runAction(name, {
-      confirm: false,
-      depth: depth + 1,
-      hook: isHook,
-      pipePath,
-    });
-    if (!ok) throw new Error(`action "${name}" failed`);
-    return true;
-  }
-  throw new Error(`unknown app action: ${name}`);
-}
-
-function showActionHookError(msg) {
-  const box = el('actionResult');
-  if (box.classList.contains('hidden')) {
-    // the parent (hook) succeeded silently, so start a fresh error modal
-    const title = el('actionResultTitle');
-    title.textContent = 'after_success failed';
-    title.style.color = 'var(--red)';
-    setResultText('actionResultCmd', '');
-    setResultText('actionResultExit', '');
-    setResultText('actionResultOut', '');
-    setResultText('actionResultErr', '');
-  }
-  box.classList.remove('hidden');
-  const errNode = el('actionResultErr');
-  errNode.textContent = errNode.textContent
-    ? errNode.textContent + '\n' + msg
-    : msg;
-  if (errNode.classList && errNode.classList.contains('modal-empty')) {
-    errNode.classList.remove('modal-empty');
   }
 }
 

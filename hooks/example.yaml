@@ -28,9 +28,9 @@
 #
 #   steps:                  # shell commands, run in order; execution stops
 #     - touch {DATASET_PATH}/saved.log   # at the first failure
-#   after_success:          # optional, run client-side after all steps
-#     - app_refresh_image   # succeed (stop at first error). Entries may be
-#                           # app actions (app_*) or other actions.
+#   after_success:          # optional, run after all steps succeeded. Entries
+#     - app_refresh_image   # may be app actions (app_*, run in the UI) or other
+#                           # actions (run by the backend); order is kept.
 #
 # Optional keys:
 #

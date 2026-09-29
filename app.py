@@ -29,6 +29,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import uuid
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
 
@@ -68,6 +69,7 @@ APP_ACTIONS = {
 MAX_RECENT = 10
 ACTION_TIMEOUT = 120  # seconds
 FILTER_TIMEOUT = 120  # seconds
+MAX_CASCADE_DEPTH = 8  # max actions run by one execution (root + after_success)
 
 # Event hooks live in the hooks/ folder and fire on app events (never from a
 # toolbar button or a shortcut). A hook file is named `on_<event>.yaml`; when the
@@ -111,6 +113,11 @@ STATE = {
     "debug": False,  # --debug: the UI logs verbose messages to the browser console
     "keep_pipe": False,  # --keep-pipe: do not delete the {PIPE_PATH} file after a run
 }
+
+# In-flight action executions, paused at a client-side (app_*) after_success
+# entry: uid -> execution state (see _begin_execution / _advance_execution). The
+# backend owns the whole chain, so it also owns the run's {PIPE_PATH} file.
+EXECUTIONS = {}
 
 
 # --------------------------------------------------------------------------- #
@@ -471,10 +478,10 @@ def create_pipe():
 
 
 def is_pipe_path(path):
-    """True when `path` is a pipe file we are allowed to reuse or delete.
+    """True when `path` is a pipe file the app may delete.
 
-    Only paths inside PIPE_DIR qualify, so a client cannot use the cleanup route
-    to delete arbitrary files.
+    Only paths inside PIPE_DIR qualify, so a stray path can never make the app
+    remove an unrelated file.
     """
     if not path:
         return False
@@ -495,6 +502,133 @@ def remove_pipe(path):
         return True
     except OSError:
         return False
+
+
+# --------------------------------------------------------------------------- #
+# action executions: the backend runs the whole steps + after_success chain,
+# pausing only when it reaches a client-side (app_*) entry, which it hands to
+# the UI by execution uid. The client runs it and calls back to resume.
+# --------------------------------------------------------------------------- #
+def _run_commands(state, commands):
+    """Run one action's shell commands, accumulating output in `state`.
+
+    Returns "ok", "failed", "timeout" or "error". `state["exit_code"]` holds the
+    failing command's code on "failed".
+    """
+    for command in commands:
+        try:
+            proc = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=ACTION_TIMEOUT,
+                cwd=BASE_DIR,
+            )
+        except subprocess.TimeoutExpired:
+            state["stderr"].append(f"$ {command}\ntimed out")
+            return "timeout"
+        except OSError as exc:
+            state["stderr"].append(f"$ {command}\n{exc}")
+            return "error"
+        state["commands"].append(command)
+        if proc.stdout.strip():
+            state["stdout"].append(f"$ {command}\n{proc.stdout.rstrip()}")
+        if proc.stderr.strip():
+            state["stderr"].append(f"$ {command}\n{proc.stderr.rstrip()}")
+        if proc.returncode != 0:
+            state["exit_code"] = proc.returncode
+            return "failed"
+    return "ok"
+
+
+def _resolve_after_success(names):
+    """Split after_success entries into server actions (dicts) / app names (str).
+
+    Returns (entries, error): entries preserves the given order; `error` is a
+    message for the first entry that is neither an app action nor a known
+    action. Event hooks are rejected (they are event-driven only).
+    """
+    entries = []
+    for name in names:
+        if name in APP_ACTIONS:
+            entries.append(name)  # runs client-side; handed to the UI
+            continue
+        if is_hook_name(name):
+            return None, f'"{name}" is an event hook; hooks cannot run from after_success'
+        action = next((a for a in load_actions() if a["name"] == name), None)
+        if action is None:
+            return None, f"unknown action: {name}"
+        entries.append(action)
+    return entries, None
+
+
+def _advance_execution(state):
+    """Run queued server actions until a client action is reached or the end.
+
+    Returns (status, detail):
+        ("client", name)  the named app action must run in the UI next
+        ("done", None)    the whole chain finished successfully
+        ("failed", None)  a command failed (see state["exit_code"])
+        ("timeout", None) a command timed out
+        ("error", msg)    a bad after_success entry / cascade limit
+    """
+    while state["stack"]:
+        entry = state["stack"].pop(0)
+        if isinstance(entry, str):  # an app action: pause for the client
+            return "client", entry
+        state["runs"] += 1
+        if state["runs"] > MAX_CASCADE_DEPTH:
+            return "error", f"action cascade exceeded {MAX_CASCADE_DEPTH} levels"
+        commands = [
+            build_command(s, state["values"]) for s in (entry.get("steps") or [])
+        ]
+        status = _run_commands(state, commands)
+        if status != "ok":
+            return status, None
+        entries, error = _resolve_after_success(entry.get("after_success") or [])
+        if error:
+            return "error", error
+        state["stack"][0:0] = entries
+    return "done", None
+
+
+def begin_execution(action, action_name, values, pipe_path):
+    """Start a run: execute the root action, then advance the chain.
+
+    Returns (state, status, detail) as `_advance_execution` does. The root's
+    after_success is only resolved after its steps succeed, matching the old
+    "stop at the first failure" behaviour.
+    """
+    state = {
+        "action": action_name,
+        "values": values,
+        "pipe_path": pipe_path,
+        "stack": [],
+        "stdout": [],
+        "stderr": [],
+        "commands": [],
+        "exit_code": 0,
+        "runs": 1,
+    }
+    commands = [build_command(s, values) for s in (action.get("steps") or [])]
+    status = _run_commands(state, commands)
+    if status != "ok":
+        return state, status, None
+    entries, error = _resolve_after_success(action.get("after_success") or [])
+    if error:
+        return state, "error", error
+    state["stack"] = entries
+    return state, *_advance_execution(state)
+
+
+def finish_execution(state):
+    """Delete the run's pipe file (unless --keep-pipe) and forget the run."""
+    uid = state.get("uid")
+    if uid:
+        EXECUTIONS.pop(uid, None)
+    if not STATE["keep_pipe"]:
+        remove_pipe(state.get("pipe_path"))
 
 
 SHORTCUTS_FILE_DOC = (
@@ -1112,13 +1246,20 @@ def api_images_rescan():
 
 @app.route("/api/actions/run", methods=["POST"])
 def api_action_run():
-    """Run a user-defined action for the current image.
+    """Start (or resume) a user action execution for the current image.
 
-    An action runs its `steps` sequentially and stops at the first failure. On
-    full success the `after_success` app-action names are returned so the
-    client can trigger them.
+    The backend owns the whole `steps` + `after_success` chain: it runs the
+    server-side entries inline and, when it reaches a client-side app action,
+    returns it as `client_action` together with an execution `uid`. The UI runs
+    that action and posts back `{uid, result}` to resume the chain. The run's
+    {PIPE_PATH} file is created here and deleted when the chain ends (or aborts)
+    unless `--keep-pipe` was passed.
     """
     data = request.get_json(silent=True) or {}
+    uid = (data.get("uid") or "").strip()
+    if uid:
+        return _resume_execution(uid, data)
+
     name = (data.get("action") or "").strip()
     idx = data.get("idx")
 
@@ -1137,12 +1278,7 @@ def api_action_run():
     if action is None:
         return jsonify({"ok": False, "error": f"unknown action: {name}"}), 400
 
-    # One pipe file per top-level run: reuse the one forwarded by the client when
-    # this request is an after_success step of an ongoing run, else create it.
-    pipe_path = (data.get("pipe_path") or "").strip()
-    if not is_pipe_path(pipe_path):
-        pipe_path = create_pipe()
-
+    pipe_path = create_pipe()
     values = {
         "IMAGE_PATH": os.path.join(split["images_dir"], entry["name"]),
         "LABEL_PATH": label_path(entry),
@@ -1156,73 +1292,67 @@ def api_action_run():
         # scratch file shared by every step and after_success action of this run
         "PIPE_PATH": pipe_path or "",
     }
-    steps = action.get("steps") if isinstance(action.get("steps"), list) else []
-    commands = [build_command(s, values) for s in steps]
+    state, status, detail = begin_execution(action, name, values, pipe_path)
+    return _execution_response(state, status, detail)
 
-    stdout_parts, stderr_parts = [], []
-    ok, exit_code = True, 0
-    for i, command in enumerate(commands):
-        try:
-            proc = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=ACTION_TIMEOUT,
-                cwd=BASE_DIR,
-            )
-        except subprocess.TimeoutExpired:
-            return (
-                jsonify({"ok": False, "error": "command timed out", "pipe_path": pipe_path}),
-                500,
-            )
-        except OSError as exc:
-            return (
-                jsonify(
-                    {
-                        "ok": False,
-                        "error": f"could not run command: {exc}",
-                        "pipe_path": pipe_path,
-                    }
-                ),
-                500,
-            )
-        if proc.stdout.strip():
-            stdout_parts.append(f"$ {command}\n{proc.stdout.rstrip()}")
-        if proc.stderr.strip():
-            stderr_parts.append(f"$ {command}\n{proc.stderr.rstrip()}")
-        if proc.returncode != 0:
-            ok, exit_code = False, proc.returncode
-            break
 
-    payload = {
-        "ok": ok,
-        "action": name,
-        "command": " && ".join(commands),
-        "exit_code": exit_code,
-        "stdout": "\n".join(stdout_parts),
-        "stderr": "\n".join(stderr_parts),
-        "pipe_path": pipe_path,
+def _resume_execution(uid, data):
+    """Resume a paused execution after the UI ran its `client_action`."""
+    state = EXECUTIONS.get(uid)
+    if state is None:
+        return jsonify({"ok": False, "error": "unknown or expired execution"}), 400
+
+    result = data.get("result") or {}
+    if not result.get("ok", True):
+        failed = state.get("pending") or "after_success"
+        error = result.get("error") or "app action failed"
+        finish_execution(state)
+        payload = _execution_payload(state)
+        payload["ok"] = False
+        payload["error"] = f'after_success "{failed}" failed: {error}'
+        return jsonify(payload), 200
+
+    state["pending"] = None
+    status, detail = _advance_execution(state)
+    return _execution_response(state, status, detail)
+
+
+def _execution_response(state, status, detail):
+    """Reply for a start/advance result: pause at a client action, or finish."""
+    if status == "client":
+        uid = uuid.uuid4().hex
+        state["uid"] = uid
+        state["pending"] = detail
+        EXECUTIONS[uid] = state
+        payload = {"ok": True, "uid": uid, "client_action": detail}
+        payload.update(_execution_payload(state))
+        return jsonify(payload)
+
+    finish_execution(state)
+    payload = _execution_payload(state)
+    if status == "done":
+        payload["ok"] = True
+        return jsonify(payload)
+    payload["ok"] = False
+    if status == "timeout":
+        payload["error"] = "command timed out"
+        return jsonify(payload), 500
+    if status == "failed":
+        return jsonify(payload), 200
+    payload["error"] = detail or "action failed"
+    return jsonify(payload), 400
+
+
+def _execution_payload(state):
+    """The user-visible result shared by the paused and final replies."""
+    return {
+        "action": state["action"],
+        "command": " && ".join(state["commands"]),
+        "exit_code": state["exit_code"],
+        "stdout": "\n".join(state["stdout"]),
+        "stderr": "\n".join(state["stderr"]),
+        "pipe_path": state["pipe_path"],
     }
-    if ok:
-        if action.get("after_success"):
-            payload["after_success"] = action["after_success"]
-    return jsonify(payload)
-
-
-@app.route("/api/actions/pipe/cleanup", methods=["POST"])
-def api_pipe_cleanup():
-    """Delete the run's `{PIPE_PATH}` file once its execution has ended.
-
-    The client calls this for the top-level action/hook only, after its whole
-    `after_success` chain has run. `--keep-pipe` makes this a no-op so the file
-    can be inspected. A path outside the pipe dir is ignored.
-    """
-    data = request.get_json(silent=True) or {}
-    path = (data.get("pipe_path") or "").strip()
-    if STATE["keep_pipe"]:
-        return jsonify({"ok": True, "kept": True})
-    return jsonify({"ok": True, "removed": remove_pipe(path)})
 
 
 @app.route("/api/image/<int:idx>")

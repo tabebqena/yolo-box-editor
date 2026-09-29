@@ -1,23 +1,27 @@
 # Task: `{PIPE_PATH}` action/hook placeholder
 
 ## Plan
-- [x] Backend: `PIPE_DIR`, create/validate/reuse pipe file, add `{PIPE_PATH}` to
-      action values, `POST /api/actions/pipe/cleanup`, `--keep-pipe` CLI flag.
-- [x] Frontend: forward the run's pipe path through the `after_success` chain and
-      delete it when the top-level run ends (skipped when `--keep-pipe`).
-- [x] Tests: placeholder resolves to a real file, path reused across
-      `after_success`, cleanup removes it, `keep_pipe` keeps it, invalid path not
-      reused/deleted.
+- [x] Backend: `PIPE_DIR`, create/validate/delete pipe file, `{PIPE_PATH}` value,
+      `--keep-pipe` CLI flag.
+- [x] Backend owns the run: `POST /api/actions/run` runs `steps` + the whole
+      `after_success` chain, executing server-side actions inline and pausing at
+      each client-side `app_*` entry (returned with a `uid`). The client posts
+      `{uid, result}` to resume; the backend deletes the pipe at the end.
+- [x] Frontend: `runAction` loops over `client_action`/`resume` instead of
+      driving the chain itself; removed the old client-side after_success code
+      and cleanup route/call.
+- [x] Tests: mixed-order chain, pause/resume, unknown uid, client-action abort,
+      unknown/hook after_success entry, cascade cap, pipe cleanup/keep.
 - [x] Docs: README, `actions/example.yaml`, `hooks/example.yaml`, CHANGELOG,
       VERSION bump (minor 0.7.2 → 0.8.0).
 
 ## Design
-One pipe file per *top-level* action/hook run. The server creates it (in a temp
-dir) on the first `/api/actions/run` and returns `pipe_path`; the client forwards
-it on nested `after_success` action requests so every step and chained action
-shares the same file. When the top-level run finishes (success or failure) the
-client asks the server to delete it; `--keep-pipe` makes the server keep it.
+One pipe file per run. The backend holds execution state (uid → remaining
+after_success work) in `EXECUTIONS`. It runs server-side actions until an
+`app_*` entry, returns it as `client_action` + `uid`, and resumes when the UI
+posts the result back. Because the backend drives and finishes the run, it
+deletes the `{PIPE_PATH}` file itself (unless `--keep-pipe`).
 
 ## Status
-Implemented. `python -m pytest -q` → 131 passed. AGENTS.md was left untouched
+Implemented. `python -m pytest -q` → 136 passed. AGENTS.md was left untouched
 (AI rule file) — its run-command line does not list `--keep-pipe` yet.
