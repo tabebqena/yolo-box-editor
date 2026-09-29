@@ -12,6 +12,9 @@ hand-rolled — no PyYAML at runtime. User files live in `YBX_HOME` (below).
   block writes, `--debug` for verbose browser-console logging, `--home` for a
   custom user folder; `--host`/`--port`, default `127.0.0.1:5000`; Flask runs
   with `debug=True`).
+- Install/update: `ybx.sh` (`install` / `upgrade` / `version` / `check-update`);
+  e.g. `./ybx.sh install --from .`. It replaces only `<dir>/app/` atomically
+  and leaves user files and `.venv` alone. (Replaces the old `install.sh`.)
 - Tests (from repo root): `python -m pytest -q`; single test
   `python -m pytest tests/test_app.py::test_name -q`. `pytest.ini` puts `app/`
   on `pythonpath`.

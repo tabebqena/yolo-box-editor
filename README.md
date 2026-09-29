@@ -148,7 +148,7 @@ The app is split into a relocatable **code folder** and your **user folder**:
 
 ```
 <root>/
-├── .venv/                    virtual environment (created by install.sh)
+├── .venv/                    virtual environment (created by ybx.sh)
 ├── actions/ hooks/ filters/ scripts/ shortcuts.txt   your files
 ├── .recent_data_yamls.json .view_state.json          your app state
 └── app/                      the shipped app (replaced on upgrade)
@@ -163,24 +163,43 @@ behave the same with no flags. Your files are read after the shipped ones and
 win on a name clash. The app creates the folders when they are missing and logs
 `[ybe] user dir: …` (override with `--home`).
 
-## Run
+## Install
 
-On Linux, `install.sh` sets up an isolated virtual environment and installs the
-requirements:
+The installer is `ybx.sh`. It downloads the latest version, sets up an isolated
+`.venv` and adds a `yolo-box-editor` command to `~/.local/bin`. It works straight
+from the internet (no clone needed) or from a checkout:
 
 ```bash
+# one-liner; installs to ~/.local/share/yolo-box-editor
+curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | bash -s -- install
+
+# or from a clone (offline, uses this checkout):
 git clone git@github.com:tabebqena/yolo-box-editor.git
 cd yolo-box-editor
-bash install.sh              # creates ./.venv and installs app/requirements.txt
-bash install.sh --link       # also adds a `yolo-box-editor` command to ~/.local/bin
+./ybx.sh install --from .
 ```
+
+Common commands:
+
+```bash
+ybx.sh version                     # print the installed version
+ybx.sh check-update                # 3 lines; exit 0 = update available, 1 = current
+ybx.sh upgrade                     # update the app, keeping your files and venv
+ybx.sh install --dir ~/ybx --no-link
+```
+
+`ybx.sh` only ever replaces `<dir>/app/` (atomically); your `actions/`, `hooks/`,
+`filters/`, `scripts/`, `shortcuts.txt` and the `.venv` are never touched. It
+picks the latest GitHub release, else the newest tag, else the `main` branch
+(override with `--version <tag|branch|commit>`).
 
 Then run the app:
 
 ```bash
-.venv/bin/python app/app.py --data /path/to/data.yaml   # after install.sh
-yolo-box-editor --data /path/to/data.yaml               # if installed with --link
+yolo-box-editor --data /path/to/data.yaml
 ```
+
+## Run
 
 If you prefer to manage Python yourself, `pip install -r app/requirements.txt`
 and run `python app/app.py`:

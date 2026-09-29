@@ -4,6 +4,23 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] - 2026-09-30
+
+### Added
+
+- **`ybx.sh` installer** (replaces `install.sh`): subcommands `install`,
+  `upgrade`, `version` and `check-update`. It downloads the latest GitHub
+  release, else the newest tag, else the `main` branch, and can install from a
+  local checkout or a `.tar.gz` with `--from`. Options `--dir`/`--home`,
+  `--version`, `--link`/`--no-link` (link on by default) and `--python`.
+- Upgrades replace only `<dir>/app/` **atomically** (staged, validated, then
+  swapped with rollback); the user folders and `.venv` are never touched.
+- `check-update` prints exactly three lines (`exit code:`, `current_version:`,
+  `latest_version:`), exiting `0` when an update is available and `1` when
+  current (`2` when the latest version cannot be determined).
+- The installer saves a copy of itself to `<dir>/ybx.sh` so the installed app
+  can be updated in place.
+
 ## [2.0.0] - 2026-09-30
 
 ### Changed

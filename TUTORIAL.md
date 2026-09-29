@@ -56,6 +56,15 @@ save.
 
 ## 3. Start the app
 
+The easy way is the installer (no clone needed):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | bash -s -- install
+yolo-box-editor --data /path/to/dataset/data.yaml
+```
+
+Or run it straight from a clone:
+
 ```bash
 git clone git@github.com:tabebqena/yolo-box-editor.git
 cd yolo-box-editor
