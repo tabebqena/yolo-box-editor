@@ -42,6 +42,11 @@ upgrade can replace only `app/` without touching user files.
 
 ## Status
 
-- [ ] implemented
+- [x] implemented (commit `e594012`)
 - [ ] deferred
 - [ ] cancelled
+
+Notes:
+- `.a.*` files are no longer read; move them into the user folder without the
+  suffix. The user's own files in the repo root still need renaming.
+- `AGENTS.md` is a rule file and was left for the user to update.
