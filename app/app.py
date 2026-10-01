@@ -554,22 +554,28 @@ def fetch_breaking_notes(timeout=UPDATE_CHECK_TIMEOUT):
 def applicable_breaking(entries, current, latest):
     """Breaking notes that apply to the running user.
 
-    Covers the installed version itself (so a *fresh install* of a breaking
-    release is still warned) and every version in the update range
-    `current < version <= latest`.
+    With an update available: every entry in the range
+    `current < version <= latest`. Otherwise (a *fresh install* at, or ahead
+    of, the newest version): the newest breaking entry the installed version
+    already contains (`version <= current`), so a fresh install is warned too.
     """
     current_ver = _parse_version(current)
-    notes = []
+    has_update = bool(latest) and _version_newer(latest, current)
+    if has_update:
+        return [
+            f"{version}: {note}"
+            for version, note in entries
+            if _version_newer(version, current) and not _version_newer(version, latest)
+        ]
+
+    best = None  # (parsed_version, version, note) -> highest entry <= current
     for version, note in entries:
-        is_current = _parse_version(version) == current_ver and current_ver is not None
-        in_range = (
-            bool(latest)
-            and _version_newer(version, current)
-            and not _version_newer(version, latest)
-        )
-        if is_current or in_range:
-            notes.append(f"{version}: {note}")
-    return notes
+        parsed = _parse_version(version)
+        if parsed is None or current_ver is None or parsed > current_ver:
+            continue
+        if best is None or parsed > best[0]:
+            best = (parsed, version, note)
+    return [f"{best[1]}: {best[2]}"] if best else []
 
 
 def _load_update_cache():

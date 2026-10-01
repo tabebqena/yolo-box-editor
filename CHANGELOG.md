@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.7.1] - 2026-10-01
+
+### Fixed
+
+- Breaking-change notes now actually reach a **fresh install**: when no update
+  is available the *newest* entry the installed version already contains
+  (`version <= current`) is shown (previously only an exact `current` match
+  was, so a fresh install of a later release showed nothing). With an update
+  available the range `current < version <= latest` is shown as before.
+
 ## [2.7.0] - 2026-10-01
 
 ### Added

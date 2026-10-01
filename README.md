@@ -208,9 +208,11 @@ runs, and `install` warns about the installed version's own breaking changes.
 
 `app/BREAKING.md` lists breaking changes, one per line as
 `<version> | <note>`. `check-update`, `upgrade`, `install` and the in-app update
-notice read it and warn about the installed version's own entry plus every
-entry in the update range (`current < version <= latest`) — so a fresh install
-of a breaking release is warned too. Example:
+notice read it. With an update available they warn about every entry in the
+range (`current < version <= latest`); otherwise (a fresh install) they warn
+about the newest entry the installed version already contains
+(`version <= current`), so a fresh install of a breaking release is warned too.
+Example:
 
 ```
 2.6.0 | `ybe` / `yolo-box-editor` no longer run the app directly: use `ybe start OPTIONS`.

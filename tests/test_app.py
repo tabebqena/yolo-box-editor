@@ -2087,20 +2087,22 @@ def test_load_breaking_notes_reads_shipped_file(clean_state):
     assert ybe.load_breaking_notes() == [("2.6.0", "note")]
 
 
-def test_applicable_breaking_covers_current_and_update_range():
+def test_applicable_breaking_update_range_vs_fresh_install():
     entries = [("2.5.0", "old"), ("2.6.0", "mid"), ("2.7.0", "new")]
-    # fresh install: the installed version's own entry still shows
-    assert ybe.applicable_breaking(entries, "2.6.0", "2.6.0") == ["2.6.0: mid"]
-    assert ybe.applicable_breaking(entries, "2.7.0", "2.7.0") == ["2.7.0: new"]
-    # upgrade: current entry (if any) plus everything up to latest
-    assert ybe.applicable_breaking(entries, "2.5.0", "2.6.0") == [
-        "2.5.0: old", "2.6.0: mid",
-    ]
+    # update available: only the range current < version <= latest
+    assert ybe.applicable_breaking(entries, "2.5.0", "2.6.0") == ["2.6.0: mid"]
     assert ybe.applicable_breaking(entries, "2.5.0", "2.7.0") == [
-        "2.5.0: old", "2.6.0: mid", "2.7.0: new",
+        "2.6.0: mid", "2.7.0: new",
     ]
-    # a clean version with no update and no entry: nothing
-    assert ybe.applicable_breaking(entries, "2.8.0", None) == []
+    assert ybe.applicable_breaking(entries, "2.6.0", "2.7.0") == ["2.7.0: new"]
+    # fresh install (no update): the newest breaking entry the version contains
+    assert ybe.applicable_breaking(entries, "2.5.0", "2.5.0") == ["2.5.0: old"]
+    assert ybe.applicable_breaking(entries, "2.6.0", "2.6.0") == ["2.6.0: mid"]
+    # a later version without its own entry still warns about the newest one
+    assert ybe.applicable_breaking(entries, "2.8.0", "2.8.0") == ["2.7.0: new"]
+    assert ybe.applicable_breaking(entries, "2.8.0", None) == ["2.7.0: new"]
+    # a version before any breaking entry: nothing
+    assert ybe.applicable_breaking(entries, "2.4.0", "2.4.0") == []
 
 
 def test_check_for_update_reports_fresh_install_breaking(clean_state, monkeypatch):

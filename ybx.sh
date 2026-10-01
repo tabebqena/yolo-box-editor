@@ -433,12 +433,14 @@ breaking_text() {
   printf '%s' "$text"
 }
 
-# Echo the breaking notes that apply to this user: the installed `current`
-# version itself (a fresh install of a breaking release is still warned) plus
-# every entry in the update range current < version <= latest. Joined by `sep`.
+# Echo the breaking notes that apply to this user, joined by `sep`.
+#   update available -> every entry in the range current < version <= latest;
+#   otherwise (fresh install) -> the newest entry the version already contains
+#   (version <= current), so a fresh install of a breaking release is warned.
 collect_breaking() {
   local current="$1" latest="$2" text="$3" sep="${4:-$'\n'}"
-  local line ver note out=""
+  local line ver note out="" bestver="" bestnote="" has_update=0
+  if [ -n "$latest" ] && is_newer "$latest" "$current"; then has_update=1; fi
   while IFS= read -r line; do
     case "$line" in ''|'#'*) continue ;; esac
     case "$line" in *"|"*) ;; *) continue ;; esac
@@ -447,13 +449,21 @@ collect_breaking() {
     ver=$(trim "$ver")
     note=$(trim "$note")
     [ -n "$ver" ] && [ -n "$note" ] || continue
-    if [ "$ver" = "$current" ] \
-      || { is_newer "$ver" "$current" && ! is_newer "$ver" "$latest"; }; then
-      out="${out:+$out$sep}${ver}: ${note}"
+    if [ "$has_update" -eq 1 ]; then
+      if is_newer "$ver" "$current" && ! is_newer "$ver" "$latest"; then
+        out="${out:+$out$sep}${ver}: ${note}"
+      fi
+    elif ! is_newer "$ver" "$current"; then
+      if [ -z "$bestver" ] || is_newer "$ver" "$bestver"; then
+        bestver="$ver"; bestnote="$note"
+      fi
     fi
   done <<EOF
 $text
 EOF
+  if [ "$has_update" -eq 0 ] && [ -n "$bestver" ]; then
+    out="${bestver}: ${bestnote}"
+  fi
   printf '%s' "$out"
 }
 
