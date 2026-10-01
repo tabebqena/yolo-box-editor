@@ -167,8 +167,9 @@ win on a name clash. The app creates the folders when they are missing and logs
 ## Install
 
 The installer is `ybx.sh`. It downloads the latest version, sets up an isolated
-`.venv` and adds a `yolo-box-editor` command to `~/.local/bin`. It works straight
-from the internet (no clone needed) or from a checkout:
+`.venv` and adds a `yolo-box-editor` command (with the short alias `ybe`) to
+`~/.local/bin`. It works straight from the internet (no clone needed) or from a
+checkout:
 
 ```bash
 # one-liner; installs to ~/.local/share/yolo-box-editor
@@ -207,7 +208,8 @@ then `pip install -r app/requirements.txt`. Disable the check with
 Then run the app:
 
 ```bash
-yolo-box-editor --data /path/to/data.yaml
+yolo-box-editor --data /path/to/data.yaml   # or the short alias:
+ybe --data /path/to/data.yaml
 ```
 
 ## Run

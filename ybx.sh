@@ -14,8 +14,8 @@
 #   --version REF   tag/branch/commit to install (default: latest release, then
 #                   the newest tag, then the main branch)
 #   --from PATH     install from a local clone/folder or a .tar.gz (offline)
-#   --link          create ~/.local/bin/yolo-box-editor (default)
-#   --no-link       do not create the launcher
+#   --link          add yolo-box-editor and ybe to ~/.local/bin (default)
+#   --no-link       do not create the launchers
 #   --python CMD    python used to build the venv (default: python3)
 #   -h, --help      show this help
 #
@@ -69,8 +69,8 @@ Options:
   --version REF   tag/branch/commit to install (default: latest release, then
                   the newest tag, then the main branch)
   --from PATH     install from a local clone/folder or a .tar.gz (offline)
-  --link          create ~/.local/bin/yolo-box-editor (default)
-  --no-link       do not create the launcher
+  --link          add yolo-box-editor and ybe to ~/.local/bin (default)
+  --no-link       do not create the launchers
   --python CMD    python used to build the venv (default: python3)
   -h, --help      show this help
 
@@ -254,7 +254,8 @@ make_launcher() {
 exec "$venv/bin/python" "$DIR/app/app.py" --home "$DIR" "\$@"
 EOF
   chmod +x "$launcher"
-  say "Launcher: $launcher"
+  ln -sf yolo-box-editor "$BIN_DIR/ybe"
+  say "Launchers: $launcher (and ybe)"
   case ":$PATH:" in
     *":$BIN_DIR:"*) ;;
     *) warn "$BIN_DIR is not on your PATH; add it or use the full path." ;;
@@ -287,7 +288,7 @@ do_install() {
   say "Done: yolo-box-editor $(cat "$DIR/app/VERSION")"
   echo "User folder: $DIR"
   if [ "$LINK" -eq 1 ]; then
-    echo "Run:         yolo-box-editor --data /path/to/data.yaml"
+    echo "Run:         yolo-box-editor --data /path/to/data.yaml   (or: ybe …)"
   else
     echo "Run:         \"$DIR/.venv/bin/python\" \"$DIR/app/app.py\" --data /path/to/data.yaml"
   fi

@@ -4,6 +4,13 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.4.0] - 2026-10-01
+
+### Added
+
+- The installed launcher can now also be run as **`ybe`**: `ybx.sh install` /
+  `upgrade` (`--link`) add a `ybe` symlink next to `~/.local/bin/yolo-box-editor`.
+
 ## [2.3.0] - 2026-10-01
 
 ### Added
