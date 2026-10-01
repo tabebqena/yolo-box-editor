@@ -5,6 +5,7 @@
 # Subcommands:
 #   install        download and install (or reinstall) the app
 #   upgrade        install a newer version, keeping your files and venv
+#   update         alias of upgrade
 #   version        print the installed version
 #   check-update   compare the installed version with the latest one
 #
@@ -59,7 +60,7 @@ ybx.sh - install and update yolo-box-editor.
 
 Usage:
   ybx.sh install        [options]   install or reinstall the app
-  ybx.sh upgrade        [options]   install a newer version
+  ybx.sh upgrade        [options]   install a newer version (alias: update)
   ybx.sh version        [--dir DIR] print the installed version
   ybx.sh check-update   [--dir DIR] compare installed vs latest
 
@@ -85,7 +86,7 @@ need_curl() {
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    install|upgrade|version|check-update) CMD="$1" ;;
+    install|upgrade|update|version|check-update) CMD="$1" ;;
     --dir|--home) DIR="${2:?$1 needs a value}"; shift ;;
     --version) REF_ARG="${2:?--version needs a value}"; shift ;;
     --from) FROM="${2:?--from needs a value}"; shift ;;
@@ -231,10 +232,18 @@ setup_venv() {
   "$venv/bin/python" -m pip install -r "$DIR/app/requirements.txt"
 }
 
+same_file() {
+  [ "$1" = "$2" ] && return 0
+  local a b
+  a=$(cd "$(dirname -- "$1")" 2>/dev/null && pwd)/$(basename -- "$1")
+  b=$(cd "$(dirname -- "$2")" 2>/dev/null && pwd)/$(basename -- "$2")
+  [ "$a" = "$b" ]
+}
+
 install_self() {
   local ref="$1" target="$DIR/ybx.sh"
   if [ -f "$0" ] && [ "$(basename -- "$0")" = "ybx.sh" ]; then
-    cp "$0" "$target"
+    same_file "$0" "$target" || cp "$0" "$target"
   elif [ -n "$FROM" ] && [ -f "$FROM/ybx.sh" ]; then
     cp "$FROM/ybx.sh" "$target"
   else
@@ -251,7 +260,29 @@ make_launcher() {
   mkdir -p "$BIN_DIR"
   cat > "$launcher" <<EOF
 #!/usr/bin/env bash
-exec "$venv/bin/python" "$DIR/app/app.py" --home "$DIR" "\$@"
+# yolo-box-editor launcher (also reachable as \`ybe\`).
+# "version", "check-update" and "update" are handled by ybx.sh; anything else
+# is passed to the Flask app (e.g. --data /path/to/data.yaml).
+DIR="$DIR"
+VENV="$venv"
+case "\${1:-}" in
+  version|check-update|update|upgrade)
+    cmd="\$1"
+    shift
+    if [ ! -f "\$DIR/ybx.sh" ] && command -v curl >/dev/null 2>&1; then
+      curl -fsSL "https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh" -o "\$DIR/ybx.sh" 2>/dev/null || true
+      chmod +x "\$DIR/ybx.sh" 2>/dev/null || true
+    fi
+    if [ ! -f "\$DIR/ybx.sh" ]; then
+      echo "yolo-box-editor: cannot find \$DIR/ybx.sh (reinstall with 'ybx.sh install')" >&2
+      exit 1
+    fi
+    exec "\$DIR/ybx.sh" "\$cmd" --dir "\$DIR" "\$@"
+    ;;
+  *)
+    exec "\$VENV/bin/python" "\$DIR/app/app.py" --home "\$DIR" "\$@"
+    ;;
+esac
 EOF
   chmod +x "$launcher"
   ln -sf yolo-box-editor "$BIN_DIR/ybe"
@@ -304,8 +335,12 @@ cmd_upgrade() {
   current=$(cat "$DIR/app/VERSION")
   if [ -z "$FROM" ] && [ -z "$REF_ARG" ]; then
     resolve_target
-    if [ -n "$resolved_version" ] && [ "$resolved_version" = "$current" ]; then
-      say "Already at $current; nothing to do."
+    if [ -z "$resolved_version" ]; then
+      say "Could not determine the latest version; nothing to do."
+      return 0
+    fi
+    if ! is_newer "$resolved_version" "$current"; then
+      say "Already at $current (latest: $resolved_version); nothing to do."
       return 0
     fi
   fi
@@ -351,7 +386,7 @@ cmd_check_update() {
 
 case "$CMD" in
   install) cmd_install ;;
-  upgrade) cmd_upgrade ;;
+  upgrade|update) cmd_upgrade ;;
   version) cmd_version ;;
   check-update) cmd_check_update ;;
   *) usage; exit 0 ;;

@@ -186,8 +186,17 @@ Common commands:
 ```bash
 ybx.sh version                     # print the installed version
 ybx.sh check-update                # 3 lines; exit 0 = update available, 1 = current
-ybx.sh upgrade                     # update the app, keeping your files and venv
+ybx.sh upgrade                     # update the app, keeping your files and venv (alias: update)
 ybx.sh install --dir ~/ybx --no-link
+```
+
+The installed command (`yolo-box-editor` or its short alias `ybe`) accepts the
+same maintenance subcommands:
+
+```bash
+ybe version        # print the installed version
+ybe check-update   # exit 0 = update available, 1 = current, 2 = unknown
+ybe update         # update in place, keeping your files and venv
 ```
 
 `ybx.sh` only ever replaces `<dir>/app/` (atomically); your `actions/`, `hooks/`,

@@ -4,6 +4,23 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.5.0] - 2026-10-01
+
+### Added
+
+- The launchers (`yolo-box-editor` and `ybe`) now handle the maintenance
+  subcommands **`version`**, **`check-update`** and **`update`** directly by
+  delegating to the installed `ybx.sh`; any other argument still goes to the
+  app (e.g. `ybe --data …`). `ybx.sh` accepts `update` as an alias of `upgrade`.
+
+### Fixed
+
+- `ybx.sh upgrade` no longer **downgrades** when the newest published version is
+  older than the installed one (e.g. a local/dev build): it now reports "already
+  at" and stops.
+- Calling `upgrade`/`update` through the installed launcher no longer fails
+  copying `ybx.sh` onto itself (`cp: … are the same file`).
+
 ## [2.4.0] - 2026-10-01
 
 ### Added
