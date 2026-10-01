@@ -9,6 +9,7 @@ constant to disposable paths under tmp_path, and STATE is reset per test.
 """
 
 import json
+import logging
 import os
 import sys
 import time
@@ -2003,3 +2004,60 @@ def test_configure_home_repoints_update_file(clean_state, tmp_path):
     target = tmp_path / "elsewhere"
     ybe.configure_home(str(target))
     assert ybe.UPDATE_CHECK_FILE == str(target / ".update_check.json")
+
+
+# --------------------------------------------------------------------------- #
+# logging / daemon
+# --------------------------------------------------------------------------- #
+def test_presence_filter_drops_heartbeat():
+    flt = ybe._SkipPresenceFilter()
+    heartbeat = logging.LogRecord(
+        "werkzeug", logging.INFO, __file__, 1,
+        '127.0.0.1 - - "GET /api/presence HTTP/1.1" 200 -', None, None,
+    )
+    normal = logging.LogRecord(
+        "werkzeug", logging.INFO, __file__, 1,
+        '127.0.0.1 - - "GET /api/config HTTP/1.1" 200 -', None, None,
+    )
+    assert flt.filter(heartbeat) is False
+    assert flt.filter(normal) is True
+
+
+def test_setup_logging_writes_to_file(clean_state, tmp_path):
+    root = logging.getLogger()
+    saved_handlers = root.handlers[:]
+    saved_level = root.level
+    try:
+        logfile = tmp_path / "ybe.log"
+        log = ybe.setup_logging(str(logfile), debug=False)
+        assert log.name == "ybe"
+        log.info("hello daemon")
+        for handler in root.handlers:
+            handler.flush()
+        assert "hello daemon" in logfile.read_text(encoding="utf-8")
+    finally:
+        for handler in root.handlers:
+            handler.close()
+        root.handlers = saved_handlers
+        root.setLevel(saved_level)
+
+
+def test_setup_logging_installs_presence_filter():
+    root = logging.getLogger()
+    werkzeug = logging.getLogger("werkzeug")
+    saved_root = root.handlers[:]
+    saved_wz = werkzeug.filters[:]
+    saved_level = root.level
+    try:
+        ybe.setup_logging(None)
+        assert any(isinstance(f, ybe._SkipPresenceFilter) for f in werkzeug.filters)
+        # configuring twice must not stack duplicate filters
+        ybe.setup_logging(None)
+        count = sum(1 for f in werkzeug.filters if isinstance(f, ybe._SkipPresenceFilter))
+        assert count == 1
+    finally:
+        for handler in list(root.handlers):
+            handler.close()
+        root.handlers = saved_root
+        root.setLevel(saved_level)
+        werkzeug.filters = saved_wz

@@ -257,33 +257,21 @@ install_self() {
 make_launcher() {
   [ "$LINK" -eq 1 ] || return 0
   local launcher="$BIN_DIR/yolo-box-editor" venv="$DIR/.venv"
+  local template="$DIR/app/launcher.sh.in" line
   mkdir -p "$BIN_DIR"
-  cat > "$launcher" <<EOF
+  if [ -f "$template" ]; then
+    # Bake the install dir + venv into the shipped launcher template.
+    while IFS= read -r line || [ -n "$line" ]; do
+      line="${line//@DIR@/$DIR}"
+      line="${line//@VENV@/$venv}"
+      printf '%s\n' "$line"
+    done < "$template" > "$launcher"
+  else
+    cat > "$launcher" <<EOF
 #!/usr/bin/env bash
-# yolo-box-editor launcher (also reachable as \`ybe\`).
-# "version", "check-update" and "update" are handled by ybx.sh; anything else
-# is passed to the Flask app (e.g. --data /path/to/data.yaml).
-DIR="$DIR"
-VENV="$venv"
-case "\${1:-}" in
-  version|check-update|update|upgrade)
-    cmd="\$1"
-    shift
-    if [ ! -f "\$DIR/ybx.sh" ] && command -v curl >/dev/null 2>&1; then
-      curl -fsSL "https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh" -o "\$DIR/ybx.sh" 2>/dev/null || true
-      chmod +x "\$DIR/ybx.sh" 2>/dev/null || true
-    fi
-    if [ ! -f "\$DIR/ybx.sh" ]; then
-      echo "yolo-box-editor: cannot find \$DIR/ybx.sh (reinstall with 'ybx.sh install')" >&2
-      exit 1
-    fi
-    exec "\$DIR/ybx.sh" "\$cmd" --dir "\$DIR" "\$@"
-    ;;
-  *)
-    exec "\$VENV/bin/python" "\$DIR/app/app.py" --home "\$DIR" "\$@"
-    ;;
-esac
+exec "$venv/bin/python" "$DIR/app/app.py" --home "$DIR" "\$@"
 EOF
+  fi
   chmod +x "$launcher"
   ln -sf yolo-box-editor "$BIN_DIR/ybe"
   say "Launchers: $launcher (and ybe)"

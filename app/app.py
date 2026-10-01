@@ -24,6 +24,7 @@ with the `images` path segment replaced by `labels`
 
 import argparse
 import json
+import logging
 import os
 import re
 import shlex
@@ -117,6 +118,57 @@ def ensure_user_dirs():
             os.makedirs(dirpath, exist_ok=True)
         except OSError:
             pass
+
+
+# --------------------------------------------------------------------------- #
+# logging (stderr by default; a file when daemonized with --log-file)
+# --------------------------------------------------------------------------- #
+class _SkipPresenceFilter(logging.Filter):
+    """Drop the frequent `/api/presence` access-log lines (client heartbeat)."""
+
+    def filter(self, record):
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - never let logging fail on formatting
+            return True
+        return "/api/presence" not in message
+
+
+def setup_logging(log_file=None, debug=False):
+    """Configure logging; with `log_file`, daemon-mode output goes to that file.
+
+    Returns the app logger. Werkzeug's access logger is routed through the same
+    handler, minus the `/api/presence` heartbeat.
+    """
+    level = logging.DEBUG if debug else logging.INFO
+    root = logging.getLogger()
+    root.setLevel(level)
+    for handler in list(root.handlers):
+        root.removeHandler(handler)
+    formatter = logging.Formatter(
+        "%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    handler = None
+    if log_file:
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(log_file)), exist_ok=True)
+            handler = logging.FileHandler(log_file, encoding="utf-8")
+        except OSError:
+            handler = None
+    if handler is None:
+        handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(formatter)
+    root.addHandler(handler)
+
+    werkzeug = logging.getLogger("werkzeug")
+    werkzeug.setLevel(level)
+    werkzeug.handlers = []  # use the root handler instead of its own console one
+    werkzeug.propagate = True
+    werkzeug.filters = [f for f in werkzeug.filters if not isinstance(f, _SkipPresenceFilter)]
+    werkzeug.addFilter(_SkipPresenceFilter())
+
+    return logging.getLogger("ybe")
 
 # Built-in app actions; may be rebound in shortcuts.txt but cannot be renamed.
 APP_ACTIONS = {
@@ -1990,12 +2042,25 @@ def main():
         action="store_true",
         help="do not check GitHub for a newer version",
     )
+    parser.add_argument(
+        "--log-file",
+        help="write logs to this file instead of stderr (used by daemon mode)",
+    )
+    parser.add_argument(
+        "--no-reload",
+        action="store_true",
+        help="disable the Werkzeug auto-reloader (used by daemon mode)",
+    )
     args = parser.parse_args()
 
     if args.home:
         configure_home(args.home)
     ensure_user_dirs()
-    print(f"[ybe] user dir: {YBX_HOME} (override with --home)", file=sys.stderr)
+
+    log = setup_logging(args.log_file, args.debug)
+    log.info(
+        "yolo-box-editor %s | user dir: %s (override with --home)", read_version(), YBX_HOME
+    )
 
     STATE["readonly"] = args.readonly
     STATE["debug"] = args.debug
@@ -2011,7 +2076,8 @@ def main():
     elif not args.no_resume:
         _resume_last_dataset()
 
-    app.run(host=args.host, port=args.port, debug=True)
+    log.info("serving on http://%s:%s", args.host, args.port)
+    app.run(host=args.host, port=args.port, debug=True, use_reloader=not args.no_reload)
 
 
 if __name__ == "__main__":

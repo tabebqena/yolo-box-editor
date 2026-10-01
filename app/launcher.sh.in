@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+# yolo-box-editor launcher (also reachable as `ybe`).
+#
+# This is a template: ybx.sh replaces @DIR@ (the install/user folder) and
+# @VENV@ (its virtual environment) with the real paths when installing.
+#
+#   ybe                         print this help
+#   ybe start [--fg] [OPTIONS]  run the app (background by default)
+#   ybe start --fg [OPTIONS]    run it in the foreground
+#   ybe stop|restart|status     manage the background process
+#   ybe logs [-f]               show / follow the log file
+#   ybe version|check-update|update|upgrade   installation management (ybx.sh)
+
+DIR="@DIR@"
+VENV="@VENV@"
+
+PY="$VENV/bin/python"
+APP="$DIR/app/app.py"
+PIDFILE="$DIR/ybe.pid"
+LOGFILE="$DIR/ybe.log"
+
+say() { printf '%s\n' "$*"; }
+die() { printf 'yolo-box-editor: %s\n' "$*" >&2; exit 1; }
+
+pid_alive() {
+  [ -f "$PIDFILE" ] || return 1
+  local p
+  p=$(cat "$PIDFILE" 2>/dev/null) || return 1
+  [ -n "$p" ] && kill -0 "$p" 2>/dev/null
+}
+
+ensure_ybx() {
+  if [ ! -f "$DIR/ybx.sh" ] && command -v curl >/dev/null 2>&1; then
+    curl -fsSL "https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh" \
+      -o "$DIR/ybx.sh" 2>/dev/null || true
+    chmod +x "$DIR/ybx.sh" 2>/dev/null || true
+  fi
+  [ -f "$DIR/ybx.sh" ] || die "cannot find $DIR/ybx.sh (reinstall with 'ybx.sh install')"
+}
+
+do_start() {
+  local fg=0 args=() a
+  for a in "$@"; do
+    case "$a" in
+      --fg|--foreground) fg=1 ;;
+      -h|--help) fg=1; args+=("$a") ;;
+      *) args+=("$a") ;;
+    esac
+  done
+
+  if pid_alive; then
+    say "yolo-box-editor is already running (pid $(cat "$PIDFILE")); 'ybe restart' to restart."
+    return 0
+  fi
+
+  [ -x "$PY" ] || die "virtual environment missing at $VENV (run 'ybx.sh install')"
+
+  if [ "$fg" -eq 1 ]; then
+    exec "$PY" "$APP" --home "$DIR" "${args[@]}"
+  fi
+
+  mkdir -p "$DIR"
+  : > "$LOGFILE" 2>/dev/null || true
+
+  local cmd=("$PY" "$APP" --home "$DIR" --no-reload --log-file "$LOGFILE")
+  cmd+=("${args[@]}")
+  nohup "${cmd[@]}" >>"$LOGFILE" 2>&1 </dev/null &
+  local pid=$!
+  echo "$pid" > "$PIDFILE"
+
+  local i=0
+  while [ "$i" -lt 20 ] && ! pid_alive; do sleep 0.1; i=$((i + 1)); done
+  if pid_alive; then
+    say "yolo-box-editor started (pid $pid)."
+    say "Log:  $LOGFILE"
+    say "Stop: ybe stop"
+  else
+    rm -f "$PIDFILE"
+    die "failed to start; see $LOGFILE"
+  fi
+}
+
+do_stop() {
+  if ! pid_alive; then
+    rm -f "$PIDFILE"
+    say "yolo-box-editor is not running."
+    return 0
+  fi
+  local p i=0
+  p=$(cat "$PIDFILE")
+  kill "$p" 2>/dev/null || true
+  while [ "$i" -lt 50 ] && pid_alive; do sleep 0.1; i=$((i + 1)); done
+  if pid_alive; then kill -9 "$p" 2>/dev/null || true; sleep 0.2; fi
+  rm -f "$PIDFILE"
+  say "yolo-box-editor stopped."
+}
+
+do_restart() {
+  do_stop >/dev/null 2>&1 || true
+  do_start "$@"
+}
+
+do_status() {
+  if pid_alive; then
+    say "yolo-box-editor is running (pid $(cat "$PIDFILE"))."
+    say "Log: $LOGFILE"
+  else
+    say "yolo-box-editor is not running."
+    return 1
+  fi
+}
+
+do_logs() {
+  [ -f "$LOGFILE" ] || die "no log file yet ($LOGFILE)"
+  case "${1:-}" in
+    -f|--follow) tail -f "$LOGFILE" ;;
+    *) tail -n 100 "$LOGFILE" ;;
+  esac
+}
+
+usage() {
+  cat <<'USAGE'
+yolo-box-editor (alias: ybe)
+
+Usage:
+  ybe                         show this help
+  ybe start [--fg] [OPTIONS]  start in the background (default)
+  ybe start --fg [OPTIONS]    run in the foreground (visible here)
+  ybe stop                    stop the background process
+  ybe restart [OPTIONS]       stop, then start again
+  ybe status                  report whether it is running
+  ybe logs [-f]               show the last log lines (or follow with -f)
+  ybe version                 print the installed version
+  ybe check-update            check for a newer version (via ybx.sh)
+  ybe update                  update in place (via ybx.sh)
+
+OPTIONS are the app's flags, e.g.:
+  --data /path/to/data.yaml   dataset to open
+  --readonly                  viewer only (no saving)
+  --debug                     verbose browser-console logging
+  --host 0.0.0.0 --port 5000  bind address
+  --no-resume                 skip reopening the last dataset
+  --no-update-check           do not check GitHub for updates
+USAGE
+}
+
+cmd="${1:-}"
+case "$cmd" in
+  start|daemon)  shift; do_start "$@" ;;
+  fg)            shift; do_start --fg "$@" ;;
+  stop)          shift; do_stop ;;
+  restart)       shift; do_restart "$@" ;;
+  status)        shift; do_status ;;
+  logs)          shift; do_logs "$@" ;;
+  version|check-update|update|upgrade)
+                 shift; ensure_ybx; exec "$DIR/ybx.sh" "$cmd" --dir "$DIR" "$@" ;;
+  help|-h|--help|"") usage ;;
+  *)             usage >&2; exit 2 ;;
+esac

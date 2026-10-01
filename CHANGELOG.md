@@ -4,6 +4,21 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.6.0] - 2026-10-01
+
+### Added
+
+- **Daemon mode**: `ybe` / `yolo-box-editor` now run the app **in the
+  background by default**. New commands: `ybe start [--fg] [OPTIONS]`
+  (`daemon`/`fg` aliases), `stop`, `restart`, `status` and `logs [-f]`; running
+  `ybe` with no arguments prints the help. Foreground stays available via
+  `ybe start --fg`. The launcher logic is a shipped template
+  (`app/launcher.sh.in`) that `ybx.sh` bakes the install paths into.
+- **File logging**: a `setup_logging()` logger plus `--log-file PATH` and
+  `--no-reload` flags. Daemon runs log to `<home>/ybe.log` with the PID in
+  `<home>/ybe.pid` (both git-ignored); the noisy `/api/presence` heartbeat is
+  filtered out of the access log.
+
 ## [2.5.0] - 2026-10-01
 
 ### Added

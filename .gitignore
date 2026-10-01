@@ -3,6 +3,8 @@
 /.recent_data_yamls.json
 /.view_state.json
 /.update_check.json
+/ybe.log
+/ybe.pid
 /actions/
 /hooks/
 /filters/

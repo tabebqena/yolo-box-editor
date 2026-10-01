@@ -214,12 +214,20 @@ macOS that is `ybx.sh upgrade`; for a manual/Windows install it is `git pull`
 then `pip install -r app/requirements.txt`. Disable the check with
 `--no-update-check`.
 
-Then run the app:
+Then run the app (it starts **in the background by default**):
 
 ```bash
-yolo-box-editor --data /path/to/data.yaml   # or the short alias:
-ybe --data /path/to/data.yaml
+ybe start --data /path/to/data.yaml   # start in the background (or: yolo-box-editor …)
+ybe status                            # is it running?
+ybe logs -f                           # follow the log file
+ybe stop                              # stop it
 ```
+
+`ybe` with no arguments prints a short help. Run it in the foreground (visible
+in the terminal, as before) with `ybe start --fg --data /path/to/data.yaml`.
+While daemonized, logs are written to `<home>/ybe.log` and the PID to
+`<home>/ybe.pid` (both git-ignored); the frequent `/api/presence` heartbeat is
+excluded from the log.
 
 ## Run
 
@@ -235,6 +243,8 @@ python app/app.py --data /path/to/data.yaml --keep-pipe  # keep each run's {PIPE
 python app/app.py --data /path/to/data.yaml --keep-filter-pipes  # keep filter-chain pipe files
 python app/app.py --data /path/to/data.yaml --home ./my-user-files  # custom user folder
 python app/app.py --no-update-check                      # never check GitHub for updates
+python app/app.py --data /path/to/data.yaml --no-reload  # disable the auto-reloader
+python app/app.py --data /path/to/data.yaml --log-file ./ybe.log  # log to a file
 ```
 
 Open <http://127.0.0.1:5000>. You can also leave out `--data` and paste the
