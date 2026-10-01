@@ -4,6 +4,23 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.3.0] - 2026-10-01
+
+### Added
+
+- **Update check**: the app now looks for a newer version on GitHub at every
+  start and re-checks at most once a week (result cached in
+  `<home>/.update_check.json`; a check is skipped while the cache is fresh).
+  `/api/update-check` reports the cached result and `POST {"force": true}`
+  refreshes it; disable the whole check with `--no-update-check`.
+- When a newer version is found, a **daily notification** appears (once per day,
+  deduped, also recorded behind the bell) with a **How to update** button that
+  opens step-by-step instructions for Linux/macOS (`ybx.sh upgrade`) and for
+  manual/Windows installs (`git pull` + `pip install -r app/requirements.txt`).
+- The **Settings** dialog gained an **Updates** group with the current/latest
+  version, a **Check now** button and the **How to update** guide. Toasts can
+  now carry an optional action button.
+
 ## [2.2.0] - 2026-09-30
 
 ### Changed

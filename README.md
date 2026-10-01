@@ -194,6 +194,16 @@ ybx.sh install --dir ~/ybx --no-link
 picks the latest GitHub release, else the newest tag, else the `main` branch
 (override with `--version <tag|branch|commit>`).
 
+### Update notices in the app
+
+The app checks GitHub for a newer version at every start and at most once a
+week (the result is cached in `<home>/.update_check.json`). When one is found it
+shows a **daily notification** with a **How to update** button, and the same
+info lives in **Settings → Updates** (with a manual **Check now**). On Linux/
+macOS that is `ybx.sh upgrade`; for a manual/Windows install it is `git pull`
+then `pip install -r app/requirements.txt`. Disable the check with
+`--no-update-check`.
+
 Then run the app:
 
 ```bash
@@ -213,6 +223,7 @@ python app/app.py --no-resume                            # Settings dialog, no a
 python app/app.py --data /path/to/data.yaml --keep-pipe  # keep each run's {PIPE_PATH} file
 python app/app.py --data /path/to/data.yaml --keep-filter-pipes  # keep filter-chain pipe files
 python app/app.py --data /path/to/data.yaml --home ./my-user-files  # custom user folder
+python app/app.py --no-update-check                      # never check GitHub for updates
 ```
 
 Open <http://127.0.0.1:5000>. You can also leave out `--data` and paste the

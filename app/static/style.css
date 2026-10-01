@@ -678,6 +678,42 @@ canvas {
 .settings-modal #recentSelect { max-width: 240px; }
 .settings-modal .hint { color: var(--muted); font-size: 12px; }
 .settings-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.update-row { align-items: center; }
+.update-row .hint { flex: 1 1 auto; min-width: 0; }
+
+/* update modal */
+.update-modal-body {
+  padding: 12px 16px 16px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.update-modal-body .update-summary { margin: 0 0 4px; color: var(--text); }
+.update-modal-body .update-heading {
+  margin: 12px 0 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.update-modal-body .update-note { margin: 2px 0; color: var(--muted); font-size: 13px; }
+.update-modal-body .update-note code {
+  background: #20212a;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.update-modal-body .update-code {
+  margin: 4px 0 0;
+  background: #1b1c24;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 /* shortcuts modal */
 .shortcut-modal-body {
@@ -756,6 +792,16 @@ canvas {
   cursor: pointer;
 }
 .toast-close:hover { color: var(--text); background: transparent; }
+.toast-action {
+  flex: 0 0 auto;
+  align-self: center;
+  background: #334680;
+  border-color: #3f5198;
+  font-size: 12px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.toast-action:hover { background: #3d5097; }
 .toast-info { border-left-color: var(--accent); }
 .toast-success { border-left-color: var(--green); }
 .toast-warning { border-left-color: var(--yellow); }

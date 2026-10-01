@@ -47,10 +47,13 @@ let autoSave = false;        // save labels automatically after each edit
 let autoSaveTimer = null;    // debounce timer for auto-save
 let debugMode = false;       // --debug: log verbose messages to the browser console
 let resumeSplitTried = false; // guard: resumeLastImage switches split at most once
+let updateInfo = null;        // latest update-check result (see refreshUpdateInfo)
 const LAST_IMAGE_KEY = 'ybe_last_image'; // localStorage key: last image reached
 const VIEW_KEY = 'ybe_view';             // localStorage key: last split + filter per dataset
 const SHOW_BOXES_KEY = 'ybe_show_boxes'; // localStorage key: box overlay shown/hidden
 const CLIENT_ID_KEY = 'ybe_client_id';   // sessionStorage key: this tab's presence id
+const UPDATE_NOTIFIED_KEY = 'ybe_update_notified'; // localStorage: version@date last shown
+const UPDATE_POLL_MS = [4000, 12000]; // retries to pick up the start-thread result
 
 // One id per tab, so the server can count concurrent clients (see /api/presence).
 // sessionStorage keeps it across reloads but not across tabs; fall back to a
@@ -138,14 +141,21 @@ function toast(msg, opts = {}) {
   const sticky = opts.sticky !== undefined
     ? !!opts.sticky
     : (type === 'error' || type === 'warning');
-  if (type === 'error' || type === 'warning') {
-    notifLog.unshift({ type, msg: text, at: Date.now() });
-    if (notifLog.length > NOTIF_LOG_MAX) notifLog.length = NOTIF_LOG_MAX;
+  // errors/warnings are always recorded (recent ones count as unread); `log`
+  // records an info/success message too (e.g. the daily update notice).
+  const record = type === 'error' || type === 'warning' || opts.log;
+  if (record) {
+    const newest = notifLog[0];
+    if (!(newest && newest.type === type && newest.msg === text)) {
+      notifLog.unshift({ type, msg: text, at: Date.now() });
+      if (notifLog.length > NOTIF_LOG_MAX) notifLog.length = NOTIF_LOG_MAX;
+    }
     notifUnread += 1;
     updateNotifBadge();
     const panel = el('notifPanel');
     if (panel && !panel.classList.contains('hidden')) renderNotifPanel();
-    if (!sticky) { notifUnread = Math.max(0, notifUnread - 1); updateNotifBadge(); }
+    // an auto-dismissing warning is history-only; it must not stay "unread"
+    if (!sticky && !opts.log) { notifUnread = Math.max(0, notifUnread - 1); updateNotifBadge(); }
   }
   if (!container) return null;
   const node = document.createElement('div');
@@ -165,7 +175,18 @@ function toast(msg, opts = {}) {
     if (typeof opts.onClose === 'function') opts.onClose();
   };
   close.addEventListener('click', dismiss);
-  node.append(body, close);
+  node.append(body);
+  if (opts.action && opts.action.label) {
+    const action = document.createElement('button');
+    action.className = 'toast-action';
+    action.textContent = opts.action.label;
+    action.addEventListener('click', () => {
+      if (typeof opts.action.onClick === 'function') opts.action.onClick();
+      dismiss();
+    });
+    node.append(action);
+  }
+  node.append(close);
   container.appendChild(node);
   while (container.children.length > TOAST_MAX) container.firstChild.remove();
   if (!sticky) {
@@ -173,6 +194,87 @@ function toast(msg, opts = {}) {
   }
   dbg('toast', { type, sticky, msg: text });
   return { node, dismiss };
+}
+
+// ------------------------------------------------------------------------- //
+// update check (see /api/update-check; cached server-side, checked weekly)
+// ------------------------------------------------------------------------- //
+function renderUpdateStatus() {
+  const status = el('updateStatus');
+  if (!status) return;
+  const how = el('updateHowBtn');
+  if (!updateInfo) {
+    status.textContent = 'Checking…';
+    if (how) how.classList.add('hidden');
+    return;
+  }
+  const cur = updateInfo.current_version || 'unknown';
+  const latest = updateInfo.latest_version;
+  if (updateInfo.update_available) {
+    status.textContent = `Update available: ${latest} (you have ${cur})`;
+    if (how) how.classList.remove('hidden');
+  } else if (latest) {
+    status.textContent = `Up to date (${cur})`;
+    if (how) how.classList.add('hidden');
+  } else {
+    status.textContent = `Version ${cur} — latest unknown (offline?)`;
+    if (how) how.classList.add('hidden');
+  }
+}
+
+async function refreshUpdateInfo(force = false) {
+  try {
+    const res = force
+      ? await fetch('/api/update-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force: true }),
+        })
+      : await fetch('/api/update-check');
+    const data = await res.json();
+    if (data && data.update) updateInfo = data.update;
+  } catch (e) {
+    dbgWarn('update check failed', e);
+  }
+  renderUpdateStatus();
+  notifyUpdateDaily();
+}
+
+// One sticky notice per day (and per new version) with a How-to-update button.
+function notifyUpdateDaily() {
+  if (!updateInfo || !updateInfo.update_available) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const key = `${updateInfo.latest_version}@${today}`;
+  let seen = null;
+  try { seen = localStorage.getItem(UPDATE_NOTIFIED_KEY); } catch (e) { /* ignore */ }
+  if (seen === key) return;
+  try { localStorage.setItem(UPDATE_NOTIFIED_KEY, key); } catch (e) { /* ignore */ }
+  dbg('update notice', updateInfo);
+  toast(
+    `A new version of YOLO Box Editor is available: ${updateInfo.latest_version} `
+      + `(you have ${updateInfo.current_version}).`,
+    {
+      type: 'info',
+      sticky: true,
+      log: true,
+      action: { label: 'How to update', onClick: openUpdateModal },
+    },
+  );
+}
+
+function openUpdateModal() {
+  const summary = el('updateModalSummary');
+  if (summary) {
+    summary.textContent = (updateInfo && updateInfo.update_available)
+      ? `Version ${updateInfo.latest_version} is available (you have ${updateInfo.current_version}). `
+        + 'Update with the steps for your setup:'
+      : 'Update with the steps for your setup:';
+  }
+  el('updateModal').classList.remove('hidden');
+}
+
+function closeUpdateModal() {
+  el('updateModal').classList.add('hidden');
 }
 
 // interaction state
@@ -927,6 +1029,7 @@ function populateClasses() {
 async function loadConfig(startIdx = 0, opts = {}) {
   const cfg0 = await (await fetch('/api/config')).json();
   debugMode = !!cfg0.debug;
+  if (cfg0.update) updateInfo = cfg0.update;
   if (debugMode) console.log('[ybe] debug mode on — verbose logging enabled (--debug)');
   const cfg = opts.skipFilterRestore ? cfg0 : await maybeRestoreView(cfg0);
   dbg('config loaded', {
@@ -999,6 +1102,8 @@ async function loadConfig(startIdx = 0, opts = {}) {
     renderSidePanel();
     renderTagBar();
   }
+  renderUpdateStatus();
+  notifyUpdateDaily();
   runHook('on_images_list_loaded');
 }
 
@@ -2184,6 +2289,15 @@ el('shortcutsModalClose').addEventListener('click', closeShortcutsModal);
 el('shortcutsModal').addEventListener('click', (e) => {
   if (e.target === el('shortcutsModal')) closeShortcutsModal();
 });
+el('updateCheckBtn').addEventListener('click', () => {
+  el('updateStatus').textContent = 'Checking…';
+  refreshUpdateInfo(true);
+});
+el('updateHowBtn').addEventListener('click', openUpdateModal);
+el('updateModalClose').addEventListener('click', closeUpdateModal);
+el('updateModal').addEventListener('click', (e) => {
+  if (e.target === el('updateModal')) closeUpdateModal();
+});
 el('notifBtn').addEventListener('click', (e) => {
   e.stopPropagation();
   toggleNotifPanel();
@@ -2515,6 +2629,10 @@ document.addEventListener('keydown', (e) => {
       closeSettingsModal();
       return;
     }
+    if (!el('updateModal').classList.contains('hidden')) {
+      closeUpdateModal();
+      return;
+    }
     if (!el('notifPanel').classList.contains('hidden')) {
       toggleNotifPanel(false);
       return;
@@ -2580,3 +2698,7 @@ window.addEventListener('unhandledrejection', (e) => dbgWarn('unhandled rejectio
 loadConfig();
 initSidePanel();
 startPresence();
+// The start-thread check may not have finished when the page loads; retry so a
+// freshly found update still reaches the user without a reload.
+refreshUpdateInfo();
+UPDATE_POLL_MS.forEach((ms) => setTimeout(() => refreshUpdateInfo(), ms));

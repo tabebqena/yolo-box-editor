@@ -25,6 +25,7 @@ with the `images` path segment replaced by `labels`
 import argparse
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -32,6 +33,8 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 import uuid
 
 from flask import Flask, abort, jsonify, render_template, request, send_from_directory
@@ -62,6 +65,7 @@ HOOKS_DIR = os.path.join(BASE_DIR, "hooks")  # one YAML file per event hook
 FILTERS_DIR = os.path.join(BASE_DIR, "filters")  # one Python script per filter
 APP_SCRIPT_DIR = os.path.join(BASE_DIR, "scripts")  # shipped helper programs
 SHORTCUTS_FILE = os.path.join(BASE_DIR, "shortcuts.txt")
+VERSION_FILE = os.path.join(BASE_DIR, "VERSION")  # shipped app version
 
 # User files (inside YBX_HOME); read after the built-ins and win on a clash.
 USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
@@ -71,6 +75,18 @@ USER_SCRIPT_DIR = os.path.join(YBX_HOME, "scripts")
 USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
 RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
 VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")  # active split/filter per dataset
+UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")  # cached update result
+
+# Update check: compare the shipped VERSION with the newest GitHub one. A check
+# is skipped while the cache is fresh (< UPDATE_CHECK_INTERVAL) and the running
+# version is unchanged; the start thread polls, so the network is only hit after
+# the interval has passed.
+UPDATE_REPO = "tabebqena/yolo-box-editor"
+UPDATE_API = f"https://api.github.com/repos/{UPDATE_REPO}"
+UPDATE_RAW = f"https://raw.githubusercontent.com/{UPDATE_REPO}"
+UPDATE_CHECK_INTERVAL = 7 * 24 * 60 * 60  # re-check at most once a week
+UPDATE_POLL_INTERVAL = 6 * 60 * 60  # how often the start thread wakes up
+UPDATE_CHECK_TIMEOUT = 5  # seconds per network request
 
 # Per-run {PIPE_PATH} files live in the system temp dir (never in the repo).
 PIPE_DIR = os.path.join(tempfile.gettempdir(), "yolo-box-editor-pipes")
@@ -82,6 +98,7 @@ def configure_home(path):
     """Point the user folders at `path` (the `--home` override)."""
     global YBX_HOME, USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR
     global USER_SCRIPT_DIR, USER_SHORTCUTS_FILE, RECENT_FILE, VIEW_FILE
+    global UPDATE_CHECK_FILE
     YBX_HOME = os.path.abspath(os.path.expanduser(path))
     USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
     USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
@@ -90,6 +107,7 @@ def configure_home(path):
     USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
     RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
     VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")
+    UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")
 
 
 def ensure_user_dirs():
@@ -179,6 +197,7 @@ STATE = {
     "debug": False,  # --debug: the UI logs verbose messages to the browser console
     "keep_pipe": False,  # --keep-pipe: do not delete the {PIPE_PATH} file after a run
     "keep_filter_pipes": False,  # --keep-filter-pipes: keep the filter scratch dir
+    "no_update_check": False,  # --no-update-check: never check GitHub for updates
 }
 
 # In-flight action executions, paused at a client-side (app_*) after_success
@@ -362,6 +381,163 @@ def _restore_view(data_yaml):
     names = [n for n in names if n and n in load_filters()]
     if names:
         apply_filters(names)
+
+
+# --------------------------------------------------------------------------- #
+# update check (newest GitHub version vs. this app's VERSION)
+# --------------------------------------------------------------------------- #
+_UPDATE_THREAD = None
+
+
+def read_version():
+    """The shipped app version, from app/VERSION (never raises)."""
+    try:
+        with open(VERSION_FILE, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    return line.strip()
+    except OSError:
+        pass
+    return "unknown"
+
+
+def _parse_version(value):
+    """`v2.2.0` -> (2, 2, 0); None when there is no leading numeric part."""
+    if value is None:
+        return None
+    match = re.match(r"\s*[vV]?(\d+(?:\.\d+)*)", str(value))
+    if not match:
+        return None
+    return tuple(int(part) for part in match.group(1).split("."))
+
+
+def _version_newer(candidate, current):
+    """True when `candidate` is a strictly newer version than `current`."""
+    a, b = _parse_version(candidate), _parse_version(current)
+    if a is None or b is None:
+        return False
+    width = max(len(a), len(b))
+    a = a + (0,) * (width - len(a))
+    b = b + (0,) * (width - len(b))
+    return a > b
+
+
+def _http_get_text(url, timeout=UPDATE_CHECK_TIMEOUT):
+    """GET a URL and return its body as text (GitHub needs a User-Agent)."""
+    req = urllib.request.Request(url, headers={"User-Agent": f"yolo-box-editor/{read_version()}"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read().decode("utf-8", "replace")
+
+
+def fetch_latest_version(timeout=UPDATE_CHECK_TIMEOUT):
+    """Newest published version, or None when it cannot be determined.
+
+    Mirrors ybx.sh: the latest release tag, else the newest tag, else the
+    `main` branch's VERSION. Any network/parse error is swallowed.
+    """
+    try:
+        data = json.loads(_http_get_text(f"{UPDATE_API}/releases/latest", timeout))
+        tag = str(data.get("tag_name") or "").strip().lstrip("vV")
+        if tag:
+            return tag
+    except (urllib.error.URLError, OSError, ValueError, AttributeError):
+        pass
+    try:
+        data = json.loads(_http_get_text(f"{UPDATE_API}/tags", timeout))
+        if isinstance(data, list) and data:
+            name = str(data[0].get("name") or "").strip().lstrip("vV")
+            if name:
+                return name
+    except (urllib.error.URLError, OSError, ValueError, AttributeError, IndexError):
+        pass
+    try:
+        text = _http_get_text(f"{UPDATE_RAW}/main/app/VERSION", timeout).strip()
+        if text:
+            return text.splitlines()[0].strip()
+    except (urllib.error.URLError, OSError):
+        pass
+    return None
+
+
+def _load_update_cache():
+    """The last update-check result, or {} when missing/invalid."""
+    try:
+        with open(UPDATE_CHECK_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _update_payload(info):
+    """A stable UI shape built from a (possibly empty) cache entry."""
+    current = info.get("current_version") or read_version()
+    latest = info.get("latest_version")
+    return {
+        "current_version": current,
+        "latest_version": latest,
+        "update_available": bool(latest) and _version_newer(latest, current),
+        "checked_at": info.get("checked_at"),
+    }
+
+
+def update_status():
+    """The cached update info; never touches the network (fast for /api/config)."""
+    return _update_payload(_load_update_cache())
+
+
+def check_for_update(force=False, now=None):
+    """Check for a newer version, using/storing the cache, and return its payload.
+
+    A network request is made only when `force` is set, the cache is missing, it
+    is older than UPDATE_CHECK_INTERVAL, or the running version changed.
+    """
+    now = time.time() if now is None else now
+    current = read_version()
+    cache = _load_update_cache()
+    checked_at = cache.get("checked_at")
+    fresh = (
+        isinstance(checked_at, (int, float))
+        and now - checked_at < UPDATE_CHECK_INTERVAL
+        and cache.get("current_version") == current
+    )
+    if fresh and not force:
+        return _update_payload(cache)
+
+    info = {
+        "checked_at": now,
+        "current_version": current,
+        "latest_version": fetch_latest_version(),
+    }
+    try:
+        os.makedirs(os.path.dirname(UPDATE_CHECK_FILE), exist_ok=True)
+        with open(UPDATE_CHECK_FILE, "w", encoding="utf-8") as f:
+            json.dump(info, f, indent=2)
+            f.write("\n")
+    except OSError:
+        pass
+    return _update_payload(info)
+
+
+def _update_check_loop():
+    """Check now, then wake up periodically (the cache enforces the weekly gap)."""
+    while True:
+        try:
+            check_for_update()
+        except Exception:  # noqa: BLE001 - the checker must never crash the app
+            pass
+        time.sleep(UPDATE_POLL_INTERVAL)
+
+
+def start_update_checker():
+    """Start the background update checker once (no-op when disabled)."""
+    global _UPDATE_THREAD
+    if STATE.get("no_update_check"):
+        return
+    if _UPDATE_THREAD is not None and _UPDATE_THREAD.is_alive():
+        return
+    _UPDATE_THREAD = threading.Thread(target=_update_check_loop, name="update-check", daemon=True)
+    _UPDATE_THREAD.start()
 
 
 # --------------------------------------------------------------------------- #
@@ -1382,6 +1558,8 @@ def api_config():
             "shortcut_errors": shortcut_errors,
             "readonly": STATE["readonly"],
             "debug": STATE["debug"],
+            "version": read_version(),
+            "update": update_status(),
             "splits": [
                 {
                     "name": s["name"],
@@ -1393,6 +1571,20 @@ def api_config():
             ],
         }
     )
+
+
+@app.route("/api/update-check", methods=["GET", "POST"])
+def api_update_check():
+    """Report (or, with `{"force": true}`, refresh) the cached update info.
+
+    GET is cheap and offline; the start thread populates the cache. POST with
+    `force` is the manual "Check now" path and may hit the network.
+    """
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        if data.get("force"):
+            return jsonify({"ok": True, "update": check_for_update(force=True)})
+    return jsonify({"ok": True, "update": update_status()})
 
 
 @app.route("/api/presence", methods=["POST"])
@@ -1793,6 +1985,11 @@ def main():
         action="store_true",
         help="keep the filter-chain input/output pipe files instead of deleting them",
     )
+    parser.add_argument(
+        "--no-update-check",
+        action="store_true",
+        help="do not check GitHub for a newer version",
+    )
     args = parser.parse_args()
 
     if args.home:
@@ -1804,6 +2001,9 @@ def main():
     STATE["debug"] = args.debug
     STATE["keep_pipe"] = args.keep_pipe
     STATE["keep_filter_pipes"] = args.keep_filter_pipes
+    STATE["no_update_check"] = args.no_update_check
+
+    start_update_checker()
 
     if args.data:
         _load_dataset(args.data)

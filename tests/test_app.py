@@ -61,6 +61,7 @@ DEFAULT_STATE = {
     "debug": False,
     "keep_pipe": False,
     "keep_filter_pipes": False,
+    "no_update_check": False,
 }
 
 
@@ -81,6 +82,8 @@ def clean_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "YBX_HOME", str(tmp_path))
     monkeypatch.setattr(ybe, "RECENT_FILE", str(tmp_path / "recent.json"))
     monkeypatch.setattr(ybe, "VIEW_FILE", str(tmp_path / "view.json"))
+    monkeypatch.setattr(ybe, "UPDATE_CHECK_FILE", str(tmp_path / "update.json"))
+    monkeypatch.setattr(ybe, "VERSION_FILE", str(tmp_path / "VERSION"))
     monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "app-actions"))
     monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "actions"))
     monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "app-hooks"))
@@ -1862,3 +1865,141 @@ def test_presence_requires_client_id(clean_state):
     resp = client.post("/api/presence", json={})
     assert resp.status_code == 400
     assert resp.get_json()["ok"] is False
+
+# --------------------------------------------------------------------------- #
+# update check
+# --------------------------------------------------------------------------- #
+def _write_version(root, value):
+    (Path(root) / "VERSION").write_text(value + "\n", encoding="utf-8")
+
+
+def test_read_version(clean_state):
+    _write_version(clean_state, "9.9.9")
+    assert ybe.read_version() == "9.9.9"
+
+
+def test_read_version_missing_is_unknown(clean_state):
+    assert ybe.read_version() == "unknown"
+
+
+def test_parse_version_forms():
+    assert ybe._parse_version("v2.3.0") == (2, 3, 0)
+    assert ybe._parse_version("2.2.0-rc1") == (2, 2, 0)
+    assert ybe._parse_version("") is None
+    assert ybe._parse_version("abc") is None
+    assert ybe._parse_version(None) is None
+
+
+def test_version_newer_compares_numerically():
+    assert ybe._version_newer("2.10.0", "2.9.0") is True
+    assert ybe._version_newer("2.2.0", "2.2.0") is False
+    assert ybe._version_newer("2.1.0", "2.2.0") is False
+    assert ybe._version_newer(None, "2.2.0") is False
+
+
+def test_check_for_update_writes_cache(clean_state, monkeypatch):
+    _write_version(clean_state, "2.2.0")
+    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.3.0")
+    info = ybe.check_for_update(now=1000)
+    assert info["update_available"] is True
+    cached = json.loads((clean_state / "update.json").read_text(encoding="utf-8"))
+    assert cached["latest_version"] == "2.3.0"
+    assert cached["checked_at"] == 1000
+
+
+def test_check_for_update_uses_fresh_cache(clean_state, monkeypatch):
+    _write_version(clean_state, "2.2.0")
+    (clean_state / "update.json").write_text(json.dumps({
+        "checked_at": 1000, "current_version": "2.2.0",
+        "latest_version": "2.3.0", "update_available": True,
+    }), encoding="utf-8")
+    calls = []
+
+    def fake(timeout=None):
+        calls.append(1)
+        return "9.9.9"
+
+    monkeypatch.setattr(ybe, "fetch_latest_version", fake)
+    info = ybe.check_for_update(now=1000 + ybe.UPDATE_CHECK_INTERVAL - 1)
+    assert info["latest_version"] == "2.3.0"
+    assert calls == []
+
+
+def test_check_for_update_refetches_after_interval(clean_state, monkeypatch):
+    _write_version(clean_state, "2.2.0")
+    (clean_state / "update.json").write_text(json.dumps({
+        "checked_at": 1000, "current_version": "2.2.0", "latest_version": "2.3.0",
+    }), encoding="utf-8")
+    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.4.0")
+    info = ybe.check_for_update(now=1000 + ybe.UPDATE_CHECK_INTERVAL + 1)
+    assert info["latest_version"] == "2.4.0"
+
+
+def test_check_for_update_force_bypasses_cache(clean_state, monkeypatch):
+    _write_version(clean_state, "2.2.0")
+    (clean_state / "update.json").write_text(json.dumps({
+        "checked_at": 10, "current_version": "2.2.0", "latest_version": "2.3.0",
+    }), encoding="utf-8")
+    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.4.0")
+    info = ybe.check_for_update(force=True, now=11)
+    assert info["latest_version"] == "2.4.0"
+
+
+def test_check_for_update_offline_marks_not_available(clean_state, monkeypatch):
+    _write_version(clean_state, "2.2.0")
+    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: None)
+    info = ybe.check_for_update(now=1000)
+    assert info["update_available"] is False
+    assert info["latest_version"] is None
+
+
+def test_check_for_update_version_change_refetches(clean_state, monkeypatch):
+    _write_version(clean_state, "2.3.0")
+    (clean_state / "update.json").write_text(json.dumps({
+        "checked_at": 1000, "current_version": "2.2.0", "latest_version": "2.3.0",
+    }), encoding="utf-8")
+    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.3.0")
+    info = ybe.check_for_update(now=1001)
+    assert info["update_available"] is False
+
+
+def test_update_status_reads_cache(clean_state):
+    _write_version(clean_state, "2.2.0")
+    (clean_state / "update.json").write_text(json.dumps({
+        "checked_at": 5, "current_version": "2.2.0", "latest_version": "2.3.0",
+    }), encoding="utf-8")
+    status = ybe.update_status()
+    assert status["update_available"] is True
+    assert status["latest_version"] == "2.3.0"
+
+
+def test_api_config_includes_version_and_update(clean_state):
+    _write_version(clean_state, "2.2.0")
+    cfg = ybe.app.test_client().get("/api/config").get_json()
+    assert cfg["version"] == "2.2.0"
+    assert cfg["update"]["update_available"] is False
+
+
+def test_api_update_check_returns_cached(clean_state):
+    _write_version(clean_state, "2.2.0")
+    (clean_state / "update.json").write_text(json.dumps({
+        "checked_at": 5, "current_version": "2.2.0", "latest_version": "2.3.0",
+    }), encoding="utf-8")
+    data = ybe.app.test_client().get("/api/update-check").get_json()
+    assert data["ok"] is True
+    assert data["update"]["latest_version"] == "2.3.0"
+
+
+def test_api_update_check_post_forces_refresh(clean_state, monkeypatch):
+    _write_version(clean_state, "2.2.0")
+    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.5.0")
+    data = ybe.app.test_client().post(
+        "/api/update-check", json={"force": True}
+    ).get_json()
+    assert data["update"]["latest_version"] == "2.5.0"
+
+
+def test_configure_home_repoints_update_file(clean_state, tmp_path):
+    target = tmp_path / "elsewhere"
+    ybe.configure_home(str(target))
+    assert ybe.UPDATE_CHECK_FILE == str(target / ".update_check.json")

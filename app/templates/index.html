@@ -154,6 +154,43 @@
           <h3 class="settings-group-title">Shortcuts</h3>
           <button id="shortcutsModalBtn" title="Show all keyboard and mouse shortcuts">Show all shortcuts</button>
         </section>
+
+        <section class="settings-group">
+          <h3 class="settings-group-title">Updates</h3>
+          <div class="settings-actions update-row">
+            <span id="updateStatus" class="hint">Checking…</span>
+            <button id="updateCheckBtn" title="Check GitHub for a newer version">Check now</button>
+            <button id="updateHowBtn" class="primary hidden" title="How to update">How to update</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="updateModal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span class="modal-title">How to update</span>
+        <button id="updateModalClose" class="modal-close" title="Close (Esc)">&#10005;</button>
+      </div>
+      <div class="update-modal-body">
+        <p id="updateModalSummary" class="update-summary"></p>
+
+        <h4 class="update-heading">Linux / macOS (installed with ybx.sh)</h4>
+        <p class="update-note">If you installed with the one-liner, run the upgrade command:</p>
+        <pre class="modal-out update-code">ybx.sh upgrade</pre>
+        <p class="update-note">No <code>ybx.sh</code> command? Run the installer again (it upgrades in place):</p>
+        <pre class="modal-out update-code">curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | bash -s -- upgrade</pre>
+
+        <h4 class="update-heading">Windows / manual install (git clone + pip)</h4>
+        <p class="update-note">From your yolo-box-editor folder, pull the new code and reinstall dependencies:</p>
+        <pre class="modal-out update-code">git pull
+python -m pip install -r app/requirements.txt</pre>
+        <p class="update-note">Windows PowerShell (using the app's virtual environment):</p>
+        <pre class="modal-out update-code">git pull
+.\.venv\Scripts\python.exe -m pip install -r app\requirements.txt</pre>
+
+        <p class="update-note">Your <code>actions/</code>, <code>hooks/</code>, <code>filters/</code>, <code>scripts/</code> and <code>shortcuts.txt</code> are never touched by an update. Restart the app afterwards.</p>
       </div>
     </div>
   </div>
