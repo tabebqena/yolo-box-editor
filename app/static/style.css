@@ -699,6 +699,16 @@ canvas {
   letter-spacing: 0.08em;
 }
 .update-modal-body .update-note { margin: 2px 0; color: var(--muted); font-size: 13px; }
+.update-breaking {
+  border: 1px solid var(--yellow);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: rgba(210, 170, 50, 0.08);
+  padding: 8px 12px 10px;
+}
+.update-breaking .update-heading { margin-top: 0; color: var(--yellow); }
+.update-breaking-list { margin: 4px 0 0; padding-left: 20px; }
+.update-breaking-list li { color: var(--text); font-size: 13px; margin: 4px 0; }
 .update-modal-body .update-note code {
   background: #20212a;
   border: 1px solid var(--border);

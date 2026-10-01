@@ -185,7 +185,7 @@ Common commands:
 
 ```bash
 ybx.sh version                     # print the installed version
-ybx.sh check-update                # 3 lines; exit 0 = update available, 1 = current
+ybx.sh check-update                # exit 0 = update available, 1 = current, 2 = unknown
 ybx.sh upgrade                     # update the app, keeping your files and venv (alias: update)
 ybx.sh install --dir ~/ybx --no-link
 ```
@@ -197,6 +197,23 @@ same maintenance subcommands:
 ybe version        # print the installed version
 ybe check-update   # exit 0 = update available, 1 = current, 2 = unknown
 ybe update         # update in place, keeping your files and venv
+```
+
+`check-update` prints five lines; besides `exit code:`, `current_version:` and
+`latest_version:` it adds `breaking_changes:` (`yes`/`no`) and `breaking_notes:`
+(one line, `;`-separated). `upgrade` prints the same notes as a warning before it
+runs, and `install` warns about the installed version's own breaking changes.
+
+### Breaking changes
+
+`app/BREAKING.md` lists breaking changes, one per line as
+`<version> | <note>`. `check-update`, `upgrade`, `install` and the in-app update
+notice read it and warn about the installed version's own entry plus every
+entry in the update range (`current < version <= latest`) — so a fresh install
+of a breaking release is warned too. Example:
+
+```
+2.6.0 | `ybe` / `yolo-box-editor` no longer run the app directly: use `ybe start OPTIONS`.
 ```
 
 `ybx.sh` only ever replaces `<dir>/app/` (atomically); your `actions/`, `hooks/`,

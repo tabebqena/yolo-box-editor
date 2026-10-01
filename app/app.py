@@ -67,6 +67,7 @@ FILTERS_DIR = os.path.join(BASE_DIR, "filters")  # one Python script per filter
 APP_SCRIPT_DIR = os.path.join(BASE_DIR, "scripts")  # shipped helper programs
 SHORTCUTS_FILE = os.path.join(BASE_DIR, "shortcuts.txt")
 VERSION_FILE = os.path.join(BASE_DIR, "VERSION")  # shipped app version
+BREAKING_FILE = os.path.join(BASE_DIR, "BREAKING.md")  # breaking notes per version
 
 # User files (inside YBX_HOME); read after the built-ins and win on a clash.
 USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
@@ -85,6 +86,7 @@ UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")  # cached updat
 UPDATE_REPO = "tabebqena/yolo-box-editor"
 UPDATE_API = f"https://api.github.com/repos/{UPDATE_REPO}"
 UPDATE_RAW = f"https://raw.githubusercontent.com/{UPDATE_REPO}"
+UPDATE_BREAKING_URL = f"{UPDATE_RAW}/main/app/BREAKING.md"
 UPDATE_CHECK_INTERVAL = 7 * 24 * 60 * 60  # re-check at most once a week
 UPDATE_POLL_INTERVAL = 6 * 60 * 60  # how often the start thread wakes up
 UPDATE_CHECK_TIMEOUT = 5  # seconds per network request
@@ -484,31 +486,90 @@ def _http_get_text(url, timeout=UPDATE_CHECK_TIMEOUT):
 def fetch_latest_version(timeout=UPDATE_CHECK_TIMEOUT):
     """Newest published version, or None when it cannot be determined.
 
-    Mirrors ybx.sh: the latest release tag, else the newest tag, else the
-    `main` branch's VERSION. Any network/parse error is swallowed.
+    Considers the latest release **and** every tag and returns the highest
+    version (so a newer tag is not hidden by an older release), else the `main`
+    branch's VERSION. Any network/parse error is swallowed.
     """
+    candidates = []
     try:
         data = json.loads(_http_get_text(f"{UPDATE_API}/releases/latest", timeout))
         tag = str(data.get("tag_name") or "").strip().lstrip("vV")
         if tag:
-            return tag
+            candidates.append(tag)
     except (urllib.error.URLError, OSError, ValueError, AttributeError):
         pass
     try:
         data = json.loads(_http_get_text(f"{UPDATE_API}/tags", timeout))
-        if isinstance(data, list) and data:
-            name = str(data[0].get("name") or "").strip().lstrip("vV")
-            if name:
-                return name
-    except (urllib.error.URLError, OSError, ValueError, AttributeError, IndexError):
+        if isinstance(data, list):
+            for entry in data:
+                name = str((entry or {}).get("name") or "").strip().lstrip("vV")
+                if name:
+                    candidates.append(name)
+    except (urllib.error.URLError, OSError, ValueError, AttributeError):
         pass
+
+    parsed = [(v, name) for name, v in ((n, _parse_version(n)) for n in candidates) if v]
+    if parsed:
+        return max(parsed)[1]
     try:
         text = _http_get_text(f"{UPDATE_RAW}/main/app/VERSION", timeout).strip()
         if text:
             return text.splitlines()[0].strip()
     except (urllib.error.URLError, OSError):
         pass
-    return None
+    return candidates[0] if candidates else None
+
+
+def parse_breaking_notes(text):
+    """Parse BREAKING.md: each non-comment `<version> | <note>` line -> tuple."""
+    entries = []
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "|" not in line:
+            continue
+        version, note = line.split("|", 1)
+        version, note = version.strip(), note.strip()
+        if version and note:
+            entries.append((version, note))
+    return entries
+
+
+def load_breaking_notes():
+    """The shipped BREAKING.md entries (empty on error)."""
+    try:
+        with open(BREAKING_FILE, encoding="utf-8") as f:
+            return parse_breaking_notes(f.read())
+    except OSError:
+        return []
+
+
+def fetch_breaking_notes(timeout=UPDATE_CHECK_TIMEOUT):
+    """BREAKING.md from `main` (empty when offline/unavailable)."""
+    try:
+        return parse_breaking_notes(_http_get_text(UPDATE_BREAKING_URL, timeout))
+    except (urllib.error.URLError, OSError, ValueError):
+        return []
+
+
+def applicable_breaking(entries, current, latest):
+    """Breaking notes that apply to the running user.
+
+    Covers the installed version itself (so a *fresh install* of a breaking
+    release is still warned) and every version in the update range
+    `current < version <= latest`.
+    """
+    current_ver = _parse_version(current)
+    notes = []
+    for version, note in entries:
+        is_current = _parse_version(version) == current_ver and current_ver is not None
+        in_range = (
+            bool(latest)
+            and _version_newer(version, current)
+            and not _version_newer(version, latest)
+        )
+        if is_current or in_range:
+            notes.append(f"{version}: {note}")
+    return notes
 
 
 def _load_update_cache():
@@ -525,10 +586,15 @@ def _update_payload(info):
     """A stable UI shape built from a (possibly empty) cache entry."""
     current = info.get("current_version") or read_version()
     latest = info.get("latest_version")
+    breaking = info.get("breaking")
+    if not isinstance(breaking, list):
+        breaking = []
     return {
         "current_version": current,
         "latest_version": latest,
         "update_available": bool(latest) and _version_newer(latest, current),
+        "breaking_changes": bool(breaking),
+        "breaking": breaking,
         "checked_at": info.get("checked_at"),
     }
 
@@ -556,10 +622,18 @@ def check_for_update(force=False, now=None):
     if fresh and not force:
         return _update_payload(cache)
 
+    latest = fetch_latest_version()
+    if latest and _version_newer(latest, current):
+        entries = fetch_breaking_notes() or load_breaking_notes()
+    else:
+        # No update: still surface the installed version's own breaking entry.
+        entries = load_breaking_notes()
+    breaking = applicable_breaking(entries, current, latest)
     info = {
         "checked_at": now,
         "current_version": current,
-        "latest_version": fetch_latest_version(),
+        "latest_version": latest,
+        "breaking": breaking,
     }
     try:
         os.makedirs(os.path.dirname(UPDATE_CHECK_FILE), exist_ok=True)

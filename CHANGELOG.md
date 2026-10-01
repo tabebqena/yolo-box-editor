@@ -4,6 +4,26 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.7.0] - 2026-10-01
+
+### Added
+
+- **Breaking-change warnings** driven by a new shipped `app/BREAKING.md`
+  (`<version> | <note>` per line). `ybx.sh check-update` now prints
+  `breaking_changes:` and `breaking_notes:` lines, `upgrade` prints the notes as
+  a warning before it runs, `install` warns about the installed version's own
+  breaking changes, and the in-app update notice shows a **Breaking changes**
+  section with the notes. The installed version's own entry is included, so a
+  *fresh install* of a breaking release is warned as well.
+- `2.6.0` is recorded as a breaking release (`ybe OPTIONS` became
+  `ybe start OPTIONS`).
+
+### Fixed
+
+- **Latest-version detection** now takes the highest of the latest release and
+  every tag (both in `ybx.sh` and the app), so a newer tag is no longer hidden
+  by an older release.
+
 ## [2.6.0] - 2026-10-01
 
 ### Added

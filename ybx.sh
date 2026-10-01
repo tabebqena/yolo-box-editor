@@ -117,17 +117,30 @@ resolve_target() {
     return 0
   fi
   need_curl
-  local tag v
-  tag=$(curl -fsSL "$API/releases/latest" 2>/dev/null \
+  # Latest release + every tag; the highest version wins (a newer tag must not
+  # be hidden by an older release). `resolved_ref` keeps the real tag (incl. a
+  # leading `v`) so it can be downloaded; `resolved_version` drops the `v`.
+  local release tags names name ver best="" bestver="" tag v
+  release=$(curl -fsSL "$API/releases/latest" 2>/dev/null \
     | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1 || true)
-  if [ -n "$tag" ]; then
-    resolved_ref="$tag"; resolved_version="${tag#v}"; return 0
-  fi
-  tag=$(curl -fsSL "$API/tags" 2>/dev/null \
-    | grep -o '"name":[[:space:]]*"[^"]*"' | head -n1 \
+  tags=$(curl -fsSL "$API/tags" 2>/dev/null \
+    | grep -o '"name":[[:space:]]*"[^"]*"' \
     | sed 's/.*"name":[[:space:]]*"//; s/"$//' || true)
-  if [ -n "$tag" ]; then
-    resolved_ref="$tag"; resolved_version="${tag#v}"; return 0
+  names=$(printf '%s\n%s\n' "$release" "$tags")
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    ver="${name#v}"
+    case "$ver" in [0-9]*) ;; *) continue ;; esac
+    if [ -z "$bestver" ] \
+      || { [ "$ver" != "$bestver" ] \
+           && [ "$(printf '%s\n%s\n' "$bestver" "$ver" | sort -V | tail -n1)" = "$ver" ]; }; then
+      best="$name"; bestver="$ver"
+    fi
+  done <<EOF
+$names
+EOF
+  if [ -n "$best" ]; then
+    resolved_ref="$best"; resolved_version="$bestver"; return 0
   fi
   if command -v git >/dev/null 2>&1; then
     tag=$(git ls-remote --tags --refs "$BASE.git" 2>/dev/null \
@@ -307,14 +320,32 @@ do_install() {
   say "Done: yolo-box-editor $(cat "$DIR/app/VERSION")"
   echo "User folder: $DIR"
   if [ "$LINK" -eq 1 ]; then
-    echo "Run:         yolo-box-editor --data /path/to/data.yaml   (or: ybe …)"
+    echo "Run:         yolo-box-editor start --data /path/to/data.yaml   (or: ybe start …)"
   else
     echo "Run:         \"$DIR/.venv/bin/python\" \"$DIR/app/app.py\" --data /path/to/data.yaml"
   fi
 }
 
+# Warn about the installed version's own breaking entry (fresh installs).
+warn_breaking_installed() {
+  local installed notes
+  installed=$(cat "$DIR/app/VERSION" 2>/dev/null || true)
+  [ -n "$installed" ] || return 0
+  notes=$(collect_breaking "$installed" "$installed" \
+    "$(cat "$DIR/app/BREAKING.md" 2>/dev/null || true)")
+  if [ -n "$notes" ]; then
+    warn "breaking changes in $installed:"
+    while IFS= read -r note; do
+      printf '  - %s\n' "$note" >&2
+    done <<EOF
+$notes
+EOF
+  fi
+}
+
 cmd_install() {
   do_install
+  warn_breaking_installed
 }
 
 cmd_upgrade() {
@@ -332,7 +363,26 @@ cmd_upgrade() {
       return 0
     fi
   fi
-  say "Upgrading $current -> ${resolved_version:-${REF_ARG:-local}}"
+  local target="${resolved_version:-${REF_ARG:-}}"
+  if [ -z "$target" ] && [ -n "$FROM" ] && [ -f "$FROM/app/VERSION" ]; then
+    target=$(cat "$FROM/app/VERSION")
+  fi
+  if [ -n "$target" ]; then
+    [ -n "$resolved_ref" ] || resolved_ref="$target"
+    local notes btext
+    btext=$(breaking_text)
+    notes=$(collect_breaking "$current" "$target" "$btext")
+    if [ -n "$notes" ]; then
+      warn "breaking changes in $target:"
+      while IFS= read -r note; do
+        printf '  - %s\n' "$note" >&2
+      done <<EOF
+$notes
+EOF
+      printf '  (see app/BREAKING.md in the installed folder)\n' >&2
+    fi
+  fi
+  say "Upgrading $current -> ${resolved_version:-${REF_ARG:-${target:-local}}}"
   do_install
 }
 
@@ -358,17 +408,70 @@ is_newer() {
   [ "$highest" = "$a" ]
 }
 
+trim() {
+  local s="$1"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  printf '%s' "$s"
+}
+
+# Echo the BREAKING.md contents to use for the current operation (local --from
+# folder wins, then the resolved tag, then main, then the installed copy).
+breaking_text() {
+  if [ -n "$FROM" ] && [ -f "$FROM/app/BREAKING.md" ]; then
+    cat "$FROM/app/BREAKING.md"
+    return 0
+  fi
+  local text=""
+  if [ -n "$resolved_ref" ]; then
+    text=$(curl -fsSL "$RAW/$resolved_ref/app/BREAKING.md" 2>/dev/null || true)
+  fi
+  [ -n "$text" ] || text=$(curl -fsSL "$RAW/main/app/BREAKING.md" 2>/dev/null || true)
+  if [ -z "$text" ]; then
+    text=$(cat "$DIR/app/BREAKING.md" 2>/dev/null || true)
+  fi
+  printf '%s' "$text"
+}
+
+# Echo the breaking notes that apply to this user: the installed `current`
+# version itself (a fresh install of a breaking release is still warned) plus
+# every entry in the update range current < version <= latest. Joined by `sep`.
+collect_breaking() {
+  local current="$1" latest="$2" text="$3" sep="${4:-$'\n'}"
+  local line ver note out=""
+  while IFS= read -r line; do
+    case "$line" in ''|'#'*) continue ;; esac
+    case "$line" in *"|"*) ;; *) continue ;; esac
+    ver="${line%%|*}"
+    note="${line#*|}"
+    ver=$(trim "$ver")
+    note=$(trim "$note")
+    [ -n "$ver" ] && [ -n "$note" ] || continue
+    if [ "$ver" = "$current" ] \
+      || { is_newer "$ver" "$current" && ! is_newer "$ver" "$latest"; }; then
+      out="${out:+$out$sep}${ver}: ${note}"
+    fi
+  done <<EOF
+$text
+EOF
+  printf '%s' "$out"
+}
+
 cmd_check_update() {
-  local current latest rc
+  local current latest rc notes breaking btext
   current=$(cat "$DIR/app/VERSION" 2>/dev/null || true)
   resolve_target
   latest="$resolved_version"
   if [ -z "$latest" ]; then
-    printf 'exit code: 2\ncurrent_version: %s\nlatest_version: unknown\n' "$current"
+    printf 'exit code: 2\ncurrent_version: %s\nlatest_version: unknown\nbreaking_changes: unknown\nbreaking_notes: \n' "$current"
     exit 2
   fi
   if is_newer "$latest" "$current"; then rc=0; else rc=1; fi
-  printf 'exit code: %s\ncurrent_version: %s\nlatest_version: %s\n' "$rc" "$current" "$latest"
+  btext=$(breaking_text)
+  notes=$(collect_breaking "$current" "$latest" "$btext" '; ')
+  if [ -n "$notes" ]; then breaking=yes; else breaking=no; fi
+  printf 'exit code: %s\ncurrent_version: %s\nlatest_version: %s\nbreaking_changes: %s\nbreaking_notes: %s\n' \
+    "$rc" "$current" "$latest" "$breaking" "$notes"
   exit "$rc"
 }
 

@@ -210,8 +210,13 @@ function renderUpdateStatus() {
   }
   const cur = updateInfo.current_version || 'unknown';
   const latest = updateInfo.latest_version;
+  const breaking = !!updateInfo.breaking_changes;
   if (updateInfo.update_available) {
-    status.textContent = `Update available: ${latest} (you have ${cur})`;
+    status.textContent = `Update available: ${latest} (you have ${cur})`
+      + (breaking ? ' — includes breaking changes' : '');
+    if (how) how.classList.remove('hidden');
+  } else if (breaking) {
+    status.textContent = `Version ${cur} — this release has breaking changes`;
     if (how) how.classList.remove('hidden');
   } else if (latest) {
     status.textContent = `Up to date (${cur})`;
@@ -240,36 +245,64 @@ async function refreshUpdateInfo(force = false) {
   notifyUpdateDaily();
 }
 
-// One sticky notice per day (and per new version) with a How-to-update button.
+// One sticky notice per day (and per version) with a details button. Also fires
+// for a fresh install of a release whose own version has breaking changes.
 function notifyUpdateDaily() {
-  if (!updateInfo || !updateInfo.update_available) return;
+  if (!updateInfo) return;
+  const hasUpdate = !!updateInfo.update_available;
+  const breaking = !!updateInfo.breaking_changes;
+  if (!hasUpdate && !breaking) return;
+  const version = updateInfo.latest_version || updateInfo.current_version || '';
   const today = new Date().toISOString().slice(0, 10);
-  const key = `${updateInfo.latest_version}@${today}`;
+  const key = `${version}@${today}`;
   let seen = null;
   try { seen = localStorage.getItem(UPDATE_NOTIFIED_KEY); } catch (e) { /* ignore */ }
   if (seen === key) return;
   try { localStorage.setItem(UPDATE_NOTIFIED_KEY, key); } catch (e) { /* ignore */ }
   dbg('update notice', updateInfo);
-  toast(
-    `A new version of YOLO Box Editor is available: ${updateInfo.latest_version} `
-      + `(you have ${updateInfo.current_version}).`,
-    {
-      type: 'info',
-      sticky: true,
-      log: true,
-      action: { label: 'How to update', onClick: openUpdateModal },
+  let msg;
+  if (hasUpdate) {
+    msg = `A new version of YOLO Box Editor is available: ${updateInfo.latest_version} `
+      + `(you have ${updateInfo.current_version}).`;
+    if (breaking) msg += ' It has breaking changes — check what changed before updating.';
+  } else {
+    msg = `YOLO Box Editor ${updateInfo.current_version} has breaking changes — check what changed.`;
+  }
+  toast(msg, {
+    type: breaking ? 'warning' : 'info',
+    sticky: true,
+    log: true,
+    action: {
+      label: breaking ? 'What changed?' : 'How to update',
+      onClick: openUpdateModal,
     },
-  );
+  });
 }
 
 function openUpdateModal() {
   const summary = el('updateModalSummary');
   if (summary) {
-    summary.textContent = (updateInfo && updateInfo.update_available)
-      ? `Version ${updateInfo.latest_version} is available (you have ${updateInfo.current_version}). `
-        + 'Update with the steps for your setup:'
-      : 'Update with the steps for your setup:';
+    if (updateInfo && updateInfo.update_available) {
+      summary.textContent = `Version ${updateInfo.latest_version} is available `
+        + `(you have ${updateInfo.current_version}). Update with the steps for your setup:`;
+    } else if (updateInfo && updateInfo.breaking_changes) {
+      summary.textContent = `Your version (${updateInfo.current_version}) has breaking changes:`;
+    } else {
+      summary.textContent = 'Update with the steps for your setup:';
+    }
   }
+  const breaking = (updateInfo && Array.isArray(updateInfo.breaking)) ? updateInfo.breaking : [];
+  const wrap = el('updateBreaking');
+  const list = el('updateBreakingList');
+  if (list) {
+    list.innerHTML = '';
+    breaking.forEach((note) => {
+      const li = document.createElement('li');
+      li.textContent = note;
+      list.appendChild(li);
+    });
+  }
+  if (wrap) wrap.classList.toggle('hidden', breaking.length === 0);
   el('updateModal').classList.remove('hidden');
 }
 
