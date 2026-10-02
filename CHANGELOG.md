@@ -30,6 +30,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   read-only mode.
 - Shipped filters declare `api_version: 1`. Files without it still load.
 
+### Fixed
+
+- Undo/Redo now cover the common canvas edits — drawing a box, moving it,
+  resizing it and changing its class from the canvas picker. Those edits left the
+  history empty, so the Undo button stayed disabled and the `Z` shortcut did
+  nothing; auto-save was not involved.
+
 ## [5.0.0] - 2026-10-02
 
 ### Added

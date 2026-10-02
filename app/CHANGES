@@ -7,6 +7,7 @@
 - Click a placeholder button to insert tokens like {IMAGE_PATH} or {INPUT_PIPE} into a command, so you do not have to memorise their spelling.
 - Extension YAML files now carry an `api_version`. Files with a missing/older version can be opened in a raw YAML editor and saved (comments are preserved and the version is bumped); files newer than the app are blocked with a warning.
 - Files without `api_version` still load; the editor is how you bring them up to date. The shipped filters declare `api_version: 1`.
+- Fixed: Undo/Redo now work for drawing a box, moving, resizing and changing a box's class from the canvas picker. These edits previously left the undo history empty, so Undo and the Z shortcut did nothing.
 
 ## 5.0.0
 - Filters are now defined by YAML in filters/: name, description, active, arguments (name/required/default/options) and steps. Put the filter's script under scripts/ and call it from a step.
