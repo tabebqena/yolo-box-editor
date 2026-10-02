@@ -194,6 +194,8 @@ Common commands:
 ybx.sh version                     # print the installed version
 ybx.sh check-update                # exit 0 = update available, 1 = current, 2 = unknown
 ybx.sh upgrade                     # update the app, keeping your files and venv (alias: update)
+ybx.sh update --latest             # latest commit on main (unreleased; no git needed)
+ybx.sh update --commit 1a2b3c4     # a specific commit (no git needed)
 ybx.sh install --dir ~/ybx --no-link
 ```
 
@@ -219,7 +221,9 @@ changelog lives in `CHANGELOG.md`.
 `ybx.sh` only ever replaces `<dir>/app/` (atomically); your `actions/`, `hooks/`,
 `filters/`, `scripts/`, `shortcuts.txt` and the `.venv` are never touched. It
 picks the latest GitHub release, else the newest tag, else the `main` branch
-(override with `--version <tag|branch|commit>`).
+(override with `--version <tag|branch|commit>`). To move to unreleased code
+instead, use `--latest` (the newest commit on `main`) or pin one with
+`--commit <sha>`; both download over HTTP and need no `git`.
 
 ### Update notices in the app
 

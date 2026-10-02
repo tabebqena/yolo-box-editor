@@ -4,6 +4,14 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.11.0] - 2026-10-02
+
+### Added
+
+- `ybx.sh update --latest` installs the newest commit on the `main` branch, and
+  `ybx.sh update --commit <sha>` pins a specific commit. Both download the
+  GitHub archive over HTTP (curl only) — no `git` required.
+
 ## [2.10.0] - 2026-10-02
 
 ### Added

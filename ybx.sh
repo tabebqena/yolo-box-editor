@@ -14,6 +14,8 @@
 #   --home DIR      alias for --dir
 #   --version REF   tag/branch/commit to install (default: latest release, then
 #                   the newest tag, then the main branch)
+#   --latest        install the latest commit on the main branch (no git needed)
+#   --commit SHA    install a specific commit (no git needed)
 #   --from PATH     install from a local clone/folder or a .tar.gz (offline)
 #   --link          add yolo-box-editor and ybe to ~/.local/bin (default)
 #   --no-link       do not create the launchers
@@ -35,6 +37,8 @@ RAW="https://raw.githubusercontent.com/$OWNER/$REPO"
 DEFAULT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/$REPO"
 DIR="$DEFAULT_DIR"
 REF_ARG=""
+COMMIT=""
+LATEST=0
 FROM=""
 LINK=1
 START=1
@@ -71,6 +75,8 @@ Options:
   --home DIR      alias for --dir
   --version REF   tag/branch/commit to install (default: latest release, then
                   the newest tag, then the main branch)
+  --latest        install the latest commit on the main branch (no git needed)
+  --commit SHA    install a specific commit (no git needed)
   --from PATH     install from a local clone/folder or a .tar.gz (offline)
   --link          add yolo-box-editor and ybe to ~/.local/bin (default)
   --no-link       do not create the launchers
@@ -95,6 +101,8 @@ while [ $# -gt 0 ]; do
     install|upgrade|update|version|check-update) CMD="$1" ;;
     --dir|--home) DIR="${2:?$1 needs a value}"; shift ;;
     --version) REF_ARG="${2:?--version needs a value}"; shift ;;
+    --latest) LATEST=1 ;;
+    --commit) COMMIT="${2:?--commit needs a value}"; shift ;;
     --from) FROM="${2:?--from needs a value}"; shift ;;
     --link) LINK=1 ;;
     --no-link) LINK=0 ;;
@@ -118,6 +126,25 @@ resolved_ref=""
 resolved_version=""
 
 resolve_target() {
+  # A specific commit wins over everything; download it by SHA (no git needed).
+  if [ -n "$COMMIT" ]; then
+    resolved_ref="$COMMIT"
+    resolved_version="${COMMIT:0:12}"
+    return 0
+  fi
+  # --latest: the newest commit on the main branch. Best-effort label with its
+  # short SHA (GitHub API), then download `main` itself.
+  if [ "$LATEST" -eq 1 ]; then
+    need_curl
+    resolved_ref="main"
+    local head_sha
+    head_sha=$(curl -fsSL "$API/commits/main" 2>/dev/null \
+      | grep -o '"sha":[[:space:]]*"[0-9a-f][0-9a-f]*"' | head -n1 \
+      | sed 's/.*"sha":[[:space:]]*"//; s/"$//' || true)
+    resolved_version="${head_sha:0:12}"
+    [ -n "$resolved_version" ] || resolved_version="main"
+    return 0
+  fi
   if [ -n "$REF_ARG" ]; then
     resolved_ref="$REF_ARG"
     resolved_version="${REF_ARG#v}"
@@ -377,7 +404,7 @@ cmd_upgrade() {
   [ -f "$DIR/app/VERSION" ] || die "not installed in $DIR; run 'ybx.sh install' first."
   local current
   current=$(cat "$DIR/app/VERSION")
-  if [ -z "$FROM" ] && [ -z "$REF_ARG" ]; then
+  if [ -z "$FROM" ] && [ -z "$REF_ARG" ] && [ -z "$COMMIT" ] && [ "$LATEST" -eq 0 ]; then
     resolve_target
     if [ -z "$resolved_version" ]; then
       say "Could not determine the latest version; nothing to do."
@@ -387,6 +414,9 @@ cmd_upgrade() {
       say "Already at $current (latest: $resolved_version); nothing to do."
       return 0
     fi
+  elif [ -n "$COMMIT" ] || [ "$LATEST" -eq 1 ]; then
+    # Explicit commit/HEAD: always (re)install, no version comparison.
+    resolve_target
   fi
   local target="${resolved_version:-${REF_ARG:-}}"
   if [ -z "$target" ] && [ -n "$FROM" ] && [ -f "$FROM/app/VERSION" ]; then

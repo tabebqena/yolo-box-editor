@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 2.11.0
+- Added `ybx.sh update --latest` (newest commit on main) and `ybx.sh update --commit <sha>`; both work over HTTP without git.
+
 ## 2.10.0
 - `ybx.sh install` / `upgrade` now start the app automatically (background) and restart a running instance; use `--no-start` to skip.
 
