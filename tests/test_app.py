@@ -682,11 +682,17 @@ def test_index_serves_page():
     assert "id=\"filterPanelApply\"" in html
     assert "id=\"tagFloat\"" in html
     assert "id=\"boxFloat\"" in html
+    assert "id=\"navFloat\"" in html
+    assert "id=\"saveFloat\"" in html
+    assert "id=\"actionsFloat\"" in html
     assert "id=\"dockSide\"" in html
     assert "id=\"dockBottom\"" in html
     assert "id=\"panelSideSel\"" in html
     assert "id=\"tagsDockSel\"" in html
     assert "id=\"boxesDockSel\"" in html
+    assert "id=\"actionsDockSel\"" in html
+    assert "id=\"navDockSel\"" in html
+    assert "id=\"saveDockSel\"" in html
 
 
 def test_api_config_defaults(clean_state):

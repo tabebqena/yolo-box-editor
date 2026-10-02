@@ -94,9 +94,11 @@ canvas.
 - **Bottom panel** — one row with the tag controls (when Tags is on) plus image
   navigation (Prev / Next, counter) and Undo / Redo / Save. It can be resized
   from its top edge.
-- **Tags / Boxes** can also be docked into the left, right or bottom panel (or a
-  floating window) from _Settings → Layout_ or the buttons on their title bar; a
-  panel only appears while it holds a widget.
+- **Widgets** — Tags, Boxes, Actions, Navigation (Prev / counter / Next) and
+  Save / Undo — can be docked into the left, right or bottom panel, or a floating
+  window, from _Settings → Layout_ or the buttons on their title bar. A panel
+  only appears while it holds a widget (the bottom panel also disappears once
+  its widgets are moved away).
 - **Settings** (⚙) — tabs for _View_, _Layout_, _Dataset_, _Filters_, _Shortcuts_
   and _Updates_; the _Filters_ tab chains filter scripts and the _Shortcuts_ tab
   lists every binding in a scrollable panel.

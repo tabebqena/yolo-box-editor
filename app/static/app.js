@@ -1393,7 +1393,7 @@ function renderTagBar() {
   const bar = el('tagBar');
   const show = taggingEnabled && datasetLoaded && currentIndex >= 0;
   bar.classList.toggle('hidden', !show);
-  if (tagsDock !== 'default') el('tagFloat').classList.toggle('hidden', !show);
+  if (getDock('tags') !== 'default') el('tagFloat').classList.toggle('hidden', !show);
   if (!show) {
     bar.classList.remove('expanded');
     el('tagExpandBtn').classList.add('hidden');
@@ -1986,8 +1986,6 @@ function toggleSidePanel(show) {
 // visible child.
 // ------------------------------------------------------------------------- //
 const PANEL_SIDE_KEY = 'ybe_panel_side';
-const TAGS_DOCK_KEY = 'ybe_tags_dock';
-const BOXES_DOCK_KEY = 'ybe_boxes_dock';
 const DOCK_SIDE_W_KEY = 'ybe_dock_side_w';
 const DOCK_BOTTOM_H_KEY = 'ybe_dock_bottom_h';
 const LEGACY_DETACH_TAGS_KEY = 'ybe_detach_tags';
@@ -1999,8 +1997,45 @@ const DOCK_BOTTOM_MIN = 100;
 const DOCK_LOCATIONS = ['default', 'float', 'left', 'right', 'bottom'];
 
 let panelSide = 'right';
-let tagsDock = 'default';
-let boxesDock = 'default';
+
+// The dockable widgets. `default` puts the content back where it lives in the
+// markup; the other locations are the floating window or an edge panel.
+const WIDGETS = {
+  tags: {
+    frame: 'tagFloat', body: 'tagFloatBody',
+    content: () => el('tagBar'),
+    parent: () => document.querySelector('#dockBottom .imagebar'),
+    key: 'ybe_tags_dock', select: 'tagsDockSel',
+  },
+  boxes: {
+    frame: 'boxFloat', body: 'boxFloatBody',
+    content: () => document.querySelector('.boxes-section'),
+    parent: () => document.querySelector('#sidebar .sidebar-body'),
+    key: 'ybe_boxes_dock', select: 'boxesDockSel',
+  },
+  actions: {
+    frame: 'actionsFloat', body: 'actionsFloatBody',
+    content: () => document.querySelector('.actionbox'),
+    parent: () => document.querySelector('#sidebar .sidebar-body'),
+    anchor: () => el('actionsSep'),
+    key: 'ybe_actions_dock', select: 'actionsDockSel',
+  },
+  nav: {
+    frame: 'navFloat', body: 'navFloatBody',
+    content: () => document.querySelector('.imagebar-nav'),
+    parent: () => document.querySelector('#dockBottom .imagebar'),
+    key: 'ybe_nav_dock', select: 'navDockSel',
+  },
+  save: {
+    frame: 'saveFloat', body: 'saveFloatBody',
+    content: () => document.querySelector('.imagebar-right'),
+    parent: () => document.querySelector('#dockBottom .imagebar'),
+    key: 'ybe_save_dock', select: 'saveDockSel',
+  },
+};
+
+const dockState = {};
+Object.keys(WIDGETS).forEach((name) => { dockState[name] = 'default'; });
 
 function applyPanelSide() {
   document.body.classList.toggle('panel-left', panelSide === 'left');
@@ -2038,7 +2073,10 @@ function defaultFloatPos(win) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   if (win.id === 'boxFloat') return { x: Math.max(20, vw - 340), y: 90 };
-  return { x: 24, y: Math.max(20, vh - 200) };
+  // stagger the bottom-left windows so several do not open on top of each other
+  const order = ['tagFloat', 'navFloat', 'saveFloat', 'actionsFloat'];
+  const i = Math.max(0, order.indexOf(win.id));
+  return { x: 24 + i * 28, y: Math.max(20, vh - 260 - i * 28) };
 }
 
 function restoreFloatPos(win) {
@@ -2053,39 +2091,40 @@ function restoreFloatPos(win) {
 }
 
 // ---- widget <-> DOM helpers ---------------------------------------------- //
+function widgetNames() { return Object.keys(WIDGETS); }
 function widgetNameForFrame(win) {
-  return win && win.id === 'boxFloat' ? 'boxes' : 'tags';
+  if (!win) return 'tags';
+  return widgetNames().find((n) => WIDGETS[n].frame === win.id) || 'tags';
 }
-function dockKey(name) { return name === 'tags' ? TAGS_DOCK_KEY : BOXES_DOCK_KEY; }
-function dockSelectId(name) { return name === 'tags' ? 'tagsDockSel' : 'boxesDockSel'; }
-function getDock(name) { return name === 'tags' ? tagsDock : boxesDock; }
-function setDockState(name, loc) {
-  if (name === 'tags') tagsDock = loc; else boxesDock = loc;
-}
-function widgetFrame(name) { return el(name === 'tags' ? 'tagFloat' : 'boxFloat'); }
-function widgetFrameBody(name) { return el(name === 'tags' ? 'tagFloatBody' : 'boxFloatBody'); }
-function widgetContent(name) {
-  return name === 'tags' ? el('tagBar') : document.querySelector('.boxes-section');
-}
-function widgetDefaultParent(name) {
-  return name === 'tags'
-    ? document.querySelector('#dockBottom .imagebar')
-    : document.querySelector('#sidebar .sidebar-body');
-}
+function dockKey(name) { return WIDGETS[name].key; }
+function dockSelectId(name) { return WIDGETS[name].select; }
+function getDock(name) { return dockState[name] || 'default'; }
+function setDockState(name, loc) { dockState[name] = loc; }
+function widgetFrame(name) { return el(WIDGETS[name].frame); }
+function widgetFrameBody(name) { return el(WIDGETS[name].body); }
+function widgetContent(name) { return WIDGETS[name].content(); }
+function widgetDefaultParent(name) { return WIDGETS[name].parent(); }
 function widgetDockTarget(name, loc) {
   if (loc === 'bottom') return el('dockBottomBody');
   if (loc === panelSide) return document.querySelector('#sidebar .sidebar-body');
   return el('dockSideBody');
 }
 
-// A dock panel exists only while it holds a visible child.
+// A panel exists only while it holds a visible child.
 function updateDockPanels() {
-  const visible = (body) => Array.from(body.children).some((c) => !c.classList.contains('hidden'));
+  const hasChild = (node) => !!node
+    && Array.from(node.children).some((c) => !c.classList.contains('hidden'));
   const panel = el('dockSide');
   const body = el('dockSideBody');
-  if (panel && body) panel.classList.toggle('hidden', !visible(body));
+  if (panel && body) panel.classList.toggle('hidden', !hasChild(body));
+
   const bottomBody = el('dockBottomBody');
-  if (bottomBody) bottomBody.classList.toggle('empty', !visible(bottomBody));
+  if (bottomBody) bottomBody.classList.toggle('empty', !hasChild(bottomBody));
+
+  // the bottom panel itself disappears once nothing is left in it
+  const bottom = el('dockBottom');
+  const imagebar = document.querySelector('#dockBottom .imagebar');
+  if (bottom) bottom.classList.toggle('hidden', !hasChild(bottomBody) && !hasChild(imagebar));
 }
 
 function placeWidget(name, loc) {
@@ -2105,8 +2144,9 @@ function placeWidget(name, loc) {
     restoreFloatPos(frame);
   } else if (loc === 'default') {
     const parent = widgetDefaultParent(name);
+    const anchor = WIDGETS[name].anchor ? WIDGETS[name].anchor() : null;
     if (parent && content.parentElement !== parent) {
-      if (name === 'tags') parent.insertBefore(content, parent.firstChild);
+      if (anchor && anchor.parentElement === parent) parent.insertBefore(content, anchor);
       else parent.appendChild(content);
     }
     frame.style.left = frame.style.top = '';
@@ -2129,8 +2169,7 @@ function applyWidget(name) {
 }
 
 function applyAllWidgets() {
-  applyWidget('tags');
-  applyWidget('boxes');
+  widgetNames().forEach(applyWidget);
 }
 
 function setWidgetDock(name, loc) {
@@ -2268,8 +2307,10 @@ function initFloatWindow(win) {
 
 function setAppearanceControls() {
   el('panelSideSel').value = panelSide;
-  el('tagsDockSel').value = tagsDock;
-  el('boxesDockSel').value = boxesDock;
+  widgetNames().forEach((name) => {
+    const sel = el(dockSelectId(name));
+    if (sel) sel.value = getDock(name);
+  });
 }
 
 function savedDock(key) {
@@ -2279,19 +2320,19 @@ function savedDock(key) {
 
 function initAppearance() {
   panelSide = localStorage.getItem(PANEL_SIDE_KEY) === 'left' ? 'left' : 'right';
-  tagsDock = savedDock(TAGS_DOCK_KEY);
-  boxesDock = savedDock(BOXES_DOCK_KEY);
+  widgetNames().forEach((name) => { dockState[name] = savedDock(dockKey(name)); });
   // migrate the old "detach into a floating window" checkboxes
-  if (!localStorage.getItem(TAGS_DOCK_KEY) && localStorage.getItem(LEGACY_DETACH_TAGS_KEY) === '1') tagsDock = 'float';
-  if (!localStorage.getItem(BOXES_DOCK_KEY) && localStorage.getItem(LEGACY_DETACH_BOXES_KEY) === '1') boxesDock = 'float';
+  const tagsKey = dockKey('tags');
+  const boxesKey = dockKey('boxes');
+  if (!localStorage.getItem(tagsKey) && localStorage.getItem(LEGACY_DETACH_TAGS_KEY) === '1') dockState.tags = 'float';
+  if (!localStorage.getItem(boxesKey) && localStorage.getItem(LEGACY_DETACH_BOXES_KEY) === '1') dockState.boxes = 'float';
   try {
     localStorage.removeItem(LEGACY_DETACH_TAGS_KEY);
     localStorage.removeItem(LEGACY_DETACH_BOXES_KEY);
   } catch (e) { /* ignore */ }
 
   applyPanelSide();
-  initFloatWindow(el('tagFloat'));
-  initFloatWindow(el('boxFloat'));
+  widgetNames().forEach((name) => initFloatWindow(widgetFrame(name)));
   initDockResizers();
 
   const sideW = parseInt(localStorage.getItem(DOCK_SIDE_W_KEY) || '', 10);
@@ -2311,8 +2352,10 @@ function initAppearance() {
     // a widget's left/right location resolves against the new control side
     applyAllWidgets();
   });
-  el('tagsDockSel').addEventListener('change', () => setWidgetDock('tags', el('tagsDockSel').value));
-  el('boxesDockSel').addEventListener('change', () => setWidgetDock('boxes', el('boxesDockSel').value));
+  widgetNames().forEach((name) => {
+    const sel = el(dockSelectId(name));
+    if (sel) sel.addEventListener('change', () => setWidgetDock(name, sel.value));
+  });
 }
 
 function selectFromPanel(i) {

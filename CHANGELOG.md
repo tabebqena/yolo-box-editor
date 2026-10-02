@@ -4,6 +4,21 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.1.0] - 2026-10-02
+
+### Added
+
+- More dockable widgets: **Actions**, **Navigation** (Prev / counter / Next) and
+  **Save / Undo** now dock exactly like Tags and Boxes (default, floating, left,
+  right or bottom) from **Settings → Layout** or their title bar. All five are
+  listed in the Layout tab.
+
+### Changed
+
+- The bottom panel now disappears when it holds no widget (previously it always
+  showed the navigation/save row).
+- The box list no longer adds inner padding.
+
 ## [3.0.0] - 2026-10-02
 
 ### Changed

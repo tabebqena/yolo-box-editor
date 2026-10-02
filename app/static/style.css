@@ -283,22 +283,27 @@ body.panel-left .notif-panel { left: 10px; right: auto; }
   padding: 6px 14px;
   background: #20212a;
 }
-.imagebar .imagebar-nav {
+.imagebar-nav {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.imagebar .imagebar-right {
+.imagebar-right {
   flex: 0 0 auto;
-  margin-left: auto;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 14px;
 }
-/* the tag controls share the single bottom row with the nav / save controls */
+.imagebar .imagebar-right { margin-left: auto; }
+/* the tag / nav / save widgets share the bottom row; flex order keeps the
+   layout stable even when they are detached and re-attached out of order */
+.imagebar #tagBar { order: 0; }
+.imagebar .imagebar-nav { order: 1; }
+.imagebar .imagebar-right { order: 2; }
 .imagebar .tagbar {
+  order: 0;
   flex: 1 1 auto;
   min-width: 0;
   padding: 0;
@@ -484,7 +489,6 @@ button#sidePanelToggle.active { background: #334680; }
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 6px;
 }
 .box-row {
   display: flex;

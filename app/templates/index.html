@@ -59,7 +59,7 @@
           </div>
         </div>
 
-        <div class="sidebar-sep"></div>
+        <div id="actionsSep" class="sidebar-sep"></div>
 
         <div class="sidebar-section boxes-section">
           <div class="boxes-head">
@@ -140,6 +140,48 @@
     <div id="boxFloatBody" class="float-body"></div>
   </div>
 
+  <div id="navFloat" class="float-window hidden">
+    <div class="float-head">
+      <span class="float-title">Navigation</span>
+      <div class="float-actions">
+        <button type="button" class="float-dock" data-dock="float" title="Float freely">&#10697;</button>
+        <button type="button" class="float-dock" data-dock="left" title="Dock to the left panel">&#8676;</button>
+        <button type="button" class="float-dock" data-dock="right" title="Dock to the right panel">&#8677;</button>
+        <button type="button" class="float-dock" data-dock="bottom" title="Dock to the bottom panel">&#8681;</button>
+        <button type="button" class="float-close" data-float-close="nav" title="Back to the default position">&#10005;</button>
+      </div>
+    </div>
+    <div id="navFloatBody" class="float-body"></div>
+  </div>
+
+  <div id="saveFloat" class="float-window hidden">
+    <div class="float-head">
+      <span class="float-title">Save / Undo</span>
+      <div class="float-actions">
+        <button type="button" class="float-dock" data-dock="float" title="Float freely">&#10697;</button>
+        <button type="button" class="float-dock" data-dock="left" title="Dock to the left panel">&#8676;</button>
+        <button type="button" class="float-dock" data-dock="right" title="Dock to the right panel">&#8677;</button>
+        <button type="button" class="float-dock" data-dock="bottom" title="Dock to the bottom panel">&#8681;</button>
+        <button type="button" class="float-close" data-float-close="save" title="Back to the default position">&#10005;</button>
+      </div>
+    </div>
+    <div id="saveFloatBody" class="float-body"></div>
+  </div>
+
+  <div id="actionsFloat" class="float-window hidden">
+    <div class="float-head">
+      <span class="float-title">Actions</span>
+      <div class="float-actions">
+        <button type="button" class="float-dock" data-dock="float" title="Float freely">&#10697;</button>
+        <button type="button" class="float-dock" data-dock="left" title="Dock to the left panel">&#8676;</button>
+        <button type="button" class="float-dock" data-dock="right" title="Dock to the right panel">&#8677;</button>
+        <button type="button" class="float-dock" data-dock="bottom" title="Dock to the bottom panel">&#8681;</button>
+        <button type="button" class="float-close" data-float-close="actions" title="Back to the default position">&#10005;</button>
+      </div>
+    </div>
+    <div id="actionsFloatBody" class="float-body"></div>
+  </div>
+
   <div id="classPicker" class="class-picker hidden"></div>
 
   <div id="settingsModal" class="modal hidden">
@@ -194,6 +236,36 @@
             <span>Boxes</span>
             <select id="boxesDockSel">
               <option value="default">Default (side panel)</option>
+              <option value="float">Floating window</option>
+              <option value="left">Left panel</option>
+              <option value="right">Right panel</option>
+              <option value="bottom">Bottom panel</option>
+            </select>
+          </label>
+          <label class="settings-row" for="actionsDockSel" title="Where the per-dataset action buttons live">
+            <span>Actions</span>
+            <select id="actionsDockSel">
+              <option value="default">Default (side panel)</option>
+              <option value="float">Floating window</option>
+              <option value="left">Left panel</option>
+              <option value="right">Right panel</option>
+              <option value="bottom">Bottom panel</option>
+            </select>
+          </label>
+          <label class="settings-row" for="navDockSel" title="Where the Prev / counter / Next controls live">
+            <span>Navigation</span>
+            <select id="navDockSel">
+              <option value="default">Default (bottom bar)</option>
+              <option value="float">Floating window</option>
+              <option value="left">Left panel</option>
+              <option value="right">Right panel</option>
+              <option value="bottom">Bottom panel</option>
+            </select>
+          </label>
+          <label class="settings-row" for="saveDockSel" title="Where the Undo / Redo / Save buttons live">
+            <span>Save / Undo</span>
+            <select id="saveDockSel">
+              <option value="default">Default (bottom bar)</option>
               <option value="float">Floating window</option>
               <option value="left">Left panel</option>
               <option value="right">Right panel</option>

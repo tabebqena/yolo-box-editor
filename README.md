@@ -48,13 +48,15 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   values to `0..1` and updates the canvas live; while a coordinate input is
   focused its value is highlighted on the image in orange.
 - **Layout** (Settings → Layout, remembered per browser): put the control panel
-  on the **left** or **right**, and choose where **Tags** and **Boxes** live —
-  their default spot, a **floating window**, or the **left / right / bottom**
-  panel. A widget docked to the control panel's side stacks inside it; otherwise
-  it opens a panel on the opposite side that appears only while it holds
-  something. Drag a floating window by its title bar to reposition it; the
-  `⧉ ⇤ ⇥ ⇩` buttons send it floating, left, right or bottom, and `×` returns it
-  to its default spot.
+  on the **left** or **right**, and choose where each **widget** — **Tags**,
+  **Boxes**, **Actions**, **Navigation** (Prev / counter / Next) and
+  **Save / Undo** — lives: its default spot, a **floating window**, or the
+  **left / right / bottom** panel. A widget docked to the control panel's side
+  stacks inside it; otherwise it opens a panel on the opposite side that appears
+  only while it holds something. Panels (including the bottom one) disappear
+  when they hold nothing. Drag a floating window by its title bar to reposition
+  it; the `⧉ ⇤ ⇥ ⇩` buttons send it floating, left, right or bottom, and `×`
+  returns it to its default spot.
 - **Keyboard-first row editing**: with a box selected, `Tab` cycles between the
   class select and the four coordinate inputs of its row; `Esc` deactivates the
   row. `Shift` selects the next box (resuming from the last active one after

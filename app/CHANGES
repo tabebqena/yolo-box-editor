@@ -2,6 +2,10 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 3.1.0
+- Actions, Navigation (Prev / counter / Next) and Save / Undo are now dockable widgets like Tags and Boxes.
+- The bottom panel hides when it holds no widget; the box list no longer adds inner padding.
+
 ## 3.0.0
 - Updates are done with `ybe update` (alias `ybe upgrade`); `ybx.sh` is only the installer. The launchers are always added to ~/.local/bin (the `--no-link` option is gone).
 
