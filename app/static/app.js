@@ -53,6 +53,8 @@ const SHOW_BOXES_KEY = 'ybe_show_boxes'; // localStorage key: box overlay shown/
 const CLIENT_ID_KEY = 'ybe_client_id';   // sessionStorage key: this tab's presence id
 const UPDATE_NOTIFIED_KEY = 'ybe_update_notified'; // localStorage: version@date last shown
 const CHANGELOG_SEEN_KEY = 'ybe_changelog_seen'; // localStorage: last version's changelog shown
+const TIP_LAST_KEY = 'ybe_tip_last';   // localStorage: date the last tip was shown
+const TIPS_SEEN_KEY = 'ybe_tips_seen'; // localStorage: tip indices already shown
 const UPDATE_POLL_MS = [4000, 12000]; // retries to pick up the start-thread result
 
 // One id per tab, so the server can count concurrent clients (see /api/presence).
@@ -784,6 +786,42 @@ async function jumpToImage(text) {
 }
 
 let loadDataAutoOpened = false;
+let tipChecked = false; // the daily tip is considered at most once per page load
+
+// Show one random, not-yet-seen tip at most once per day. The tip list ships in
+// the backend (config.tips); this browser remembers the date and which indices
+// it has seen, and resets the seen list once every tip has appeared.
+function maybeShowTip(tips) {
+  if (tipChecked) return;
+  tipChecked = true;
+  if (!Array.isArray(tips) || !tips.length) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  let last = null;
+  try { last = localStorage.getItem(TIP_LAST_KEY); } catch (e) { /* ignore */ }
+  if (last === today) return;
+
+  let seen = [];
+  try { seen = JSON.parse(localStorage.getItem(TIPS_SEEN_KEY) || '[]'); } catch (e) { seen = []; }
+  if (!Array.isArray(seen)) seen = [];
+
+  let pool = tips.map((_, i) => i).filter((i) => !seen.includes(i));
+  if (!pool.length) { pool = tips.map((_, i) => i); seen = []; }
+  const idx = pool[Math.floor(Math.random() * pool.length)];
+  seen.push(idx);
+
+  try {
+    localStorage.setItem(TIP_LAST_KEY, today);
+    localStorage.setItem(TIPS_SEEN_KEY, JSON.stringify(seen));
+  } catch (e) { /* ignore */ }
+
+  el('tipText').textContent = tips[idx];
+  el('tipModal').classList.remove('hidden');
+}
+
+function closeTipModal() {
+  el('tipModal').classList.add('hidden');
+}
 
 function selectSettingsTab(name) {
   document.querySelectorAll('.settings-tab').forEach((tab) => {
@@ -1176,6 +1214,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
   renderUpdateStatus();
   notifyUpdateDaily();
   notifyChangelog(cfg0);
+  maybeShowTip(cfg0.tips);
   runHook('on_images_list_loaded');
 }
 
@@ -2883,6 +2922,10 @@ el('changelogModalClose').addEventListener('click', closeChangelog);
 el('changelogModal').addEventListener('click', (e) => {
   if (e.target === el('changelogModal')) closeChangelog();
 });
+el('tipModalClose').addEventListener('click', closeTipModal);
+el('tipModal').addEventListener('click', (e) => {
+  if (e.target === el('tipModal')) closeTipModal();
+});
 el('notifBtn').addEventListener('click', (e) => {
   e.stopPropagation();
   toggleNotifPanel();
@@ -3196,6 +3239,10 @@ document.addEventListener('keydown', (e) => {
     }
     if (!el('changelogModal').classList.contains('hidden')) {
       closeChangelog();
+      return;
+    }
+    if (!el('tipModal').classList.contains('hidden')) {
+      closeTipModal();
       return;
     }
     if (!el('loadDataModal').classList.contains('hidden')) {

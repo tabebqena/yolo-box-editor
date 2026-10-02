@@ -427,6 +427,18 @@ python -m pip install -r app/requirements.txt</pre>
     </div>
   </div>
 
+  <div id="tipModal" class="modal hidden">
+    <div class="modal-box tip-modal">
+      <div class="modal-head">
+        <span class="modal-title">Tip of the day</span>
+        <button id="tipModalClose" class="modal-close" title="Close (Esc)">&#10005;</button>
+      </div>
+      <div class="tip-body">
+        <p id="tipText" class="tip-text"></p>
+      </div>
+    </div>
+  </div>
+
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>

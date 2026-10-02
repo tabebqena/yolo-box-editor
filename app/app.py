@@ -203,6 +203,26 @@ APP_ACTIONS = {
 # callables are registered next to `_rescan_images` below.
 BACKEND_ACTION_NAMES = {"backend_rescan_images"}
 
+# Shipped "tip of the day" ideas, shown once per day (per browser). The browser
+# remembers which it has seen so a new one appears each day until they cycle.
+TIPS = [
+    "Draw a box by dragging on the image; press Esc to drop a box you just drew by mistake.",
+    "Select a box, then Tab cycles through its class and cx/cy/w/h fields; Esc leaves the row.",
+    "Shift selects the next box, resuming from the last one you had active.",
+    "Alt+1 … Alt+9 toggles the matching tag from tags.yaml — no mouse needed.",
+    "Right-click a tag badge? No — just click any badge to toggle it on or off.",
+    "Settings → Layout lets every widget (Tags, Boxes, Actions, Navigation, Save) float or dock to any panel.",
+    "Drag a floating window by its title bar; the L/T/R/B buttons dock it to an edge.",
+    "Resize the side, dock and bottom panels by dragging their divider — the size is remembered.",
+    "Filters (Settings → Filters) narrow the image list; stack up to eight of them top to bottom.",
+    "Actions and hooks live in your user folder; a hook runs on events like on_after_save.",
+    "Turn on Auto-save (Settings → General) so Prev/Next never asks you to save.",
+    "Read-only mode (--readonly) is a safe way to browse a dataset without changing labels.",
+    "Save (S) writes only when there are changes; Undo (Z) and Redo (Y) cover every edit.",
+    "After an external tool edits the current image, use app_refresh_image to reload it in place.",
+    "New tag names reach tags.yaml on the next save, via the built-in update_tags action.",
+]
+
 MAX_RECENT = 10
 ACTION_TIMEOUT = 120  # seconds
 FILTER_TIMEOUT = 120  # seconds
@@ -1704,6 +1724,7 @@ def api_config():
             "recent_data_yamls": _load_recent(),
             "settings": _load_settings(),
             "tags_dir": STATE.get("tags_dir"),
+            "tips": TIPS,
             "actions": [a["name"] for a in actions],
             "hooks": [h["name"] for h in hooks],
             "hook_errors": hook_errors,

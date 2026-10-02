@@ -701,6 +701,8 @@ def test_index_serves_page():
     assert "id=\"actionsVisibleSw\"" in html
     assert "id=\"navVisibleSw\"" in html
     assert "id=\"saveVisibleSw\"" in html
+    assert "id=\"tipModal\"" in html
+    assert "id=\"tipText\"" in html
 
 
 def test_api_config_defaults(clean_state):
@@ -715,6 +717,12 @@ def test_api_config_defaults(clean_state):
     assert cfg["actions"] == [] and cfg["hooks"] == []
     assert cfg["hook_errors"] == []
     assert cfg["debug"] is False
+
+
+def test_api_config_includes_tips(clean_state):
+    cfg = ybe.app.test_client().get("/api/config").get_json()
+    assert isinstance(cfg["tips"], list) and cfg["tips"]
+    assert all(isinstance(t, str) and t for t in cfg["tips"])
 
 
 def test_api_config_includes_settings(clean_state):
