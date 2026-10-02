@@ -18,8 +18,6 @@
 #   --latest        install the latest commit on the main branch (no git needed)
 #   --commit SHA    install a specific commit (no git needed)
 #   --from PATH     install from a local clone/folder or a .tar.gz (offline)
-#   --link          add yolo-box-editor and ybe to ~/.local/bin (default)
-#   --no-link       do not create the launchers
 #   --no-start      do not start the app after installing/upgrading
 #   --purge         uninstall: also delete the user folder (with --yes)
 #   --yes, -y       uninstall: skip the --purge confirmation
@@ -43,7 +41,6 @@ REF_ARG=""
 COMMIT=""
 LATEST=0
 FROM=""
-LINK=1
 START=1
 PURGE=0
 ASSUME_YES=0
@@ -84,8 +81,6 @@ Options:
   --latest        install the latest commit on the main branch (no git needed)
   --commit SHA    install a specific commit (no git needed)
   --from PATH     install from a local clone/folder or a .tar.gz (offline)
-  --link          add yolo-box-editor and ybe to ~/.local/bin (default)
-  --no-link       do not create the launchers
   --no-start      do not start the app after installing/upgrading
   --purge         uninstall: also delete the user folder (with --yes)
   --yes, -y       uninstall: skip the --purge confirmation
@@ -116,8 +111,7 @@ while [ $# -gt 0 ]; do
     --latest) LATEST=1 ;;
     --commit) COMMIT="${2:?--commit needs a value}"; shift ;;
     --from) FROM="${2:?--from needs a value}"; shift ;;
-    --link) LINK=1 ;;
-    --no-link) LINK=0 ;;
+    --link) ;; # accepted no-op: launchers are always created
     --no-start) START=0 ;;
     --purge) PURGE=1 ;;
     --yes|-y) ASSUME_YES=1 ;;
@@ -316,7 +310,6 @@ install_self() {
 }
 
 make_launcher() {
-  [ "$LINK" -eq 1 ] || return 0
   local launcher="$BIN_DIR/yolo-box-editor" venv="$DIR/.venv"
   local template="$DIR/app/launcher.sh.in" line
   mkdir -p "$BIN_DIR"
@@ -371,21 +364,17 @@ do_install() {
 }
 
 print_run_hint() {
-  if [ "$LINK" -eq 1 ]; then
-    echo "Run:         yolo-box-editor start --data /path/to/data.yaml   (or: ybe start …)"
-  else
-    echo "Run:         \"$DIR/.venv/bin/python\" \"$DIR/app/app.py\" --data /path/to/data.yaml"
-  fi
+  echo "Run:         yolo-box-editor start --data /path/to/data.yaml   (or: ybe start …)"
 }
 
 # Start the app after installing/upgrading (unless --no-start), so it is ready
-# to use. Uses the launcher when available; restarts it if it was already up.
+# to use. Uses the launcher; restarts it if it was already up.
 maybe_start() {
   [ "$START" -eq 1 ] || { print_run_hint; return 0; }
   local launcher="$BIN_DIR/yolo-box-editor"
-  if [ "$LINK" -ne 1 ] || [ ! -x "$launcher" ]; then
-    warn "no launcher (--no-link); start it manually:"
-    print_run_hint
+  if [ ! -x "$launcher" ]; then
+    warn "launcher not found at $launcher; start it manually:"
+    echo "Run:         \"$DIR/.venv/bin/python\" \"$DIR/app/app.py\" --data /path/to/data.yaml"
     return 0
   fi
   say "Starting yolo-box-editor…"

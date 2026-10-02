@@ -157,7 +157,7 @@ The app is split into a relocatable **code folder** and your **user folder**:
 
 ```
 <root>/
-├── .venv/                    virtual environment (created by ybx.sh)
+├── .venv/                    virtual environment (created by the installer)
 ├── actions/ hooks/ filters/ scripts/ shortcuts.txt   your files
 ├── .recent_data_yamls.json .view_state.json          your app state
 └── app/                      the shipped app (replaced on upgrade)
@@ -191,27 +191,24 @@ cd yolo-box-editor
 ./ybx.sh install --from .
 ```
 
-Common commands:
-
-```bash
-ybx.sh version                     # print the installed version
-ybx.sh check-update                # exit 0 = update available, 1 = current, 2 = unknown
-ybx.sh upgrade                     # update the app, keeping your files and venv (alias: update)
-ybx.sh update --latest             # latest commit on main (unreleased; no git needed)
-ybx.sh update --commit 1a2b3c4     # a specific commit (no git needed)
-ybx.sh install --dir ~/ybx --no-link
-ybx.sh uninstall                   # remove the app + venv, keep your files
-ybx.sh uninstall --purge --yes     # remove the whole user folder too
-```
-
-The installed command (`yolo-box-editor` or its short alias `ybe`) accepts the
-same maintenance subcommands:
+Once installed, use the **`ybe`** command (also `yolo-box-editor`) for
+everything — you never need `ybx.sh` again:
 
 ```bash
 ybe version        # print the installed version
 ybe check-update   # exit 0 = update available, 1 = current, 2 = unknown
-ybe update         # update in place, keeping your files and venv
+ybe update         # update in place, keeping your files and venv (alias: upgrade)
 ybe uninstall      # remove the app, venv and launchers (keeps your files)
+```
+
+`ybx.sh` is only the installer. From a clone (or by running the script
+directly) it can also do the same jobs, plus install a specific ref:
+
+```bash
+ybx.sh install --from .            # install from this checkout
+ybx.sh update --latest             # latest commit on main (unreleased; no git needed)
+ybx.sh update --commit 1a2b3c4     # a specific commit (no git needed)
+ybx.sh uninstall --purge --yes     # remove the whole user folder too
 ```
 
 `check-update` prints three lines: `exit code:`, `current_version:` and
@@ -231,9 +228,10 @@ when the **major or minor** part of `app/VERSION` changes on `main`
 (`1.2.0 → 1.3.0` or `1.2.0 → 2.0.0`). Patch bumps (`1.2.0 → 1.2.1`) are left for
 manual tagging. The release body is the matching `app/CHANGES` section.
 
-`ybx.sh` only ever replaces `<dir>/app/` (atomically); your `actions/`, `hooks/`,
-`filters/`, `scripts/`, `shortcuts.txt` and the `.venv` are never touched. It
-picks the latest GitHub release, else the newest tag, else the `main` branch
+An update (`ybe update`) only ever replaces `<dir>/app/` (atomically); your
+`actions/`, `hooks/`, `filters/`, `scripts/`, `shortcuts.txt` and the `.venv`
+are never touched. It picks the latest GitHub release, else the newest tag, else
+the `main` branch
 (override with `--version <tag|branch|commit>`). To move to unreleased code
 instead, use `--latest` (the newest commit on `main`) or pin one with
 `--commit <sha>`; both download over HTTP and need no `git`. `uninstall` stops
@@ -246,7 +244,7 @@ The app checks GitHub for a newer version at every start and at most once a
 week (the result is cached in `<home>/.update_check.json`). When one is found it
 shows a **daily notification** with a **How to update** button, and the same
 info lives in **Settings → Updates** (with a manual **Check now**). On Linux/
-macOS that is `ybx.sh upgrade`; for a manual/Windows install it is `git pull`
+macOS that is `ybe update`; for a manual/Windows install it is `git pull`
 then `pip install -r app/requirements.txt`. Disable the check with
 `--no-update-check`.
 

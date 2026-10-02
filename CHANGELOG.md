@@ -4,6 +4,20 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - 2026-10-02
+
+### Changed
+
+- The **How to update** dialog now tells you to run **`ybe update`** (alias
+  `ybe upgrade`); `ybx.sh` is only the one-time installer. The no-launcher
+  fallback (re-run the one-liner) is still offered.
+
+### Removed
+
+- **Breaking:** the installer's `--no-link` option. `yolo-box-editor` and its
+  `ybe` alias are now always added to `~/.local/bin` (`--link` is accepted as a
+  no-op for old scripts).
+
 ## [2.16.0] - 2026-10-02
 
 ### Changed

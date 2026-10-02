@@ -9,8 +9,8 @@
 #   ybe start --fg [OPTIONS]    run it in the foreground
 #   ybe stop|restart|status     manage the background process
 #   ybe logs [-f]               show / follow the log file
-#   ybe version|check-update|update|upgrade   installation management (ybx.sh)
-#   ybe uninstall                             remove the app (ybx.sh)
+#   ybe version|check-update|update|upgrade   installation management
+#   ybe uninstall                             remove the app
 
 DIR="@DIR@"
 VENV="@VENV@"
@@ -36,7 +36,7 @@ ensure_ybx() {
       -o "$DIR/ybx.sh" 2>/dev/null || true
     chmod +x "$DIR/ybx.sh" 2>/dev/null || true
   fi
-  [ -f "$DIR/ybx.sh" ] || die "cannot find $DIR/ybx.sh (reinstall with 'ybx.sh install')"
+  [ -f "$DIR/ybx.sh" ] || die "cannot find $DIR/ybx.sh (reinstall with the one-liner installer)"
 }
 
 do_start() {
@@ -54,7 +54,7 @@ do_start() {
     return 0
   fi
 
-  [ -x "$PY" ] || die "virtual environment missing at $VENV (run 'ybx.sh install')"
+  [ -x "$PY" ] || die "virtual environment missing at $VENV (reinstall with the one-liner installer)"
 
   if [ "$fg" -eq 1 ]; then
     exec "$PY" "$APP" --home "$DIR" "${args[@]}"
@@ -132,9 +132,9 @@ Usage:
   ybe status                  report whether it is running
   ybe logs [-f]               show the last log lines (or follow with -f)
   ybe version                 print the installed version
-  ybe check-update            check for a newer version (via ybx.sh)
-  ybe update                  update in place (via ybx.sh)
-  ybe uninstall               remove the app, venv and launchers (via ybx.sh)
+  ybe check-update            check for a newer version
+  ybe update                  update in place, keeping your files and venv
+  ybe uninstall               remove the app, venv and launchers
 
 OPTIONS are the app's flags, e.g.:
   --data /path/to/data.yaml   dataset to open
