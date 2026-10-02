@@ -27,7 +27,7 @@ arguments:                  # optional list of dicts
     default: "false"
     options: ["false", "true"]
 steps:                      # one shell command per entry, run in order
-  - python {USER_SCRIPT_DIR}/sharp.py {DATA_YAML_PATH} {SPLIT} {INPUT_PIPE} {OUTPUT_PIPE} --threshold {THRESHOLD} --invert {INVERT}
+  - {PYTHON} {USER_SCRIPT_DIR}/sharp.py {DATA_YAML_PATH} {SPLIT} {INPUT_PIPE} {OUTPUT_PIPE} --threshold {THRESHOLD} --invert {INVERT}
 ```
 
 - `name` wins the filter name; without it the file name (minus `.yaml`) is used.
@@ -61,13 +61,16 @@ pipe paths and each argument:
 | `{HOME_DIR}` | your user folder (the working directory of every run) |
 | `{APP_SCRIPT_DIR}` | the shipped helper scripts (`app/scripts/`) |
 | `{USER_SCRIPT_DIR}` | your helper scripts (`<home>/scripts/`) |
+| `{PYTHON}` | the Python interpreter running the app (`sys.executable`) |
 | `{<ARG>}` | each declared argument, upper-cased (`threshold` -> `{THRESHOLD}`) |
 
 Write your filter logic as a helper script under `<home>/scripts/` (shipped
 examples live in `app/scripts/`) and call it from `steps`, e.g.
-`python {USER_SCRIPT_DIR}/sharp.py {INPUT_PIPE} {OUTPUT_PIPE} {THRESHOLD}`.
-Export the values yourself with `--threshold {THRESHOLD}` if the script prefers
-flags. Because steps run with the working directory set to `{HOME_DIR}`,
+`{PYTHON} {USER_SCRIPT_DIR}/sharp.py {INPUT_PIPE} {OUTPUT_PIPE} {THRESHOLD}`.
+Always start a Python step with `{PYTHON}` rather than `python`: it is the
+interpreter already running the app, so it works even when `python` is not on the
+`PATH`. Export the values yourself with `--threshold {THRESHOLD}` if the script
+prefers flags. Because steps run with the working directory set to `{HOME_DIR}`,
 `scripts/sharp.py` also works relatively.
 
 ## The pipes

@@ -1237,6 +1237,7 @@ FILTER_RESERVED_PLACEHOLDERS = {
     "HOME_DIR",
     "APP_SCRIPT_DIR",
     "USER_SCRIPT_DIR",
+    "PYTHON",
     "SPLIT",
     "INPUT_PIPE",
     "OUTPUT_PIPE",
@@ -1515,6 +1516,7 @@ def _filter_placeholder_values(flt, data_yaml, split, input_pipe, output_pipe, a
         "HOME_DIR": YBX_HOME,
         "APP_SCRIPT_DIR": APP_SCRIPT_DIR,
         "USER_SCRIPT_DIR": USER_SCRIPT_DIR,
+        "PYTHON": sys.executable,
         "SPLIT": split or "",
         "INPUT_PIPE": input_pipe,
         "OUTPUT_PIPE": output_pipe,
@@ -2420,6 +2422,9 @@ def api_action_run():
         "HOME_DIR": YBX_HOME,
         "APP_SCRIPT_DIR": APP_SCRIPT_DIR,
         "USER_SCRIPT_DIR": USER_SCRIPT_DIR,
+        # the interpreter running the app; use {PYTHON} so steps work even when
+        # `python` is not on PATH
+        "PYTHON": sys.executable,
         # scratch file shared by every step and after_success action of this run
         "PIPE_PATH": pipe_path or "",
     }

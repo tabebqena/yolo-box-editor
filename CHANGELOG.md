@@ -28,7 +28,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   shared placeholders plus `{DATA_YAML_PATH}`, `{DATASET_PATH}`, `{SPLIT}`,
   `{INPUT_PIPE}` and `{OUTPUT_PIPE}`; every declared argument is also usable in
   place as its upper-cased name (`threshold` -> `{THRESHOLD}`). There is no
-  `after_success`.
+  `after_success`. The new `{PYTHON}` placeholder is the interpreter running the
+  app, so shipped filters run even when `python` is not on `PATH`.
 - **Settings → Filters** now shows each filter's name and a trimmed description,
   and renders one input per argument (a dropdown when `options` is given).
   `active: false` filters are hidden. Argument names must be simple identifiers

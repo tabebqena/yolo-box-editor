@@ -38,6 +38,8 @@
 #   {HOME_DIR}       your user folder (the working directory of every run)
 #   {APP_SCRIPT_DIR} the shipped helper scripts (`app/scripts/`)
 #   {USER_SCRIPT_DIR} your helper scripts (`<home>/scripts/`)
+#   {PYTHON}         the Python interpreter running the app (use it instead of
+#                    `python`, which may not be on PATH)
 #   {PIPE_PATH}      a per-run scratch file shared by every step and by the
 #                    actions in `after_success`, so they can pass data on; it is
 #                    deleted when the run ends (use --keep-pipe to keep it)

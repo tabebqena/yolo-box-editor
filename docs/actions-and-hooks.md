@@ -95,13 +95,15 @@ Leave them unquoted; the app shell-quotes each value for you.
 | `{HOME_DIR}` | your user folder (the working directory of every run) |
 | `{APP_SCRIPT_DIR}` | shipped helper scripts (`app/scripts/`) |
 | `{USER_SCRIPT_DIR}` | your helper scripts (`<home>/scripts/`) |
+| `{PYTHON}` | the Python interpreter running the app (`sys.executable`) |
 | `{PIPE_PATH}` | path of the run's scratch file (may be empty) |
 
 Reach a script **explicitly** with `{USER_SCRIPT_DIR}/helper.py` (yours) or
-`{APP_SCRIPT_DIR}/helper.py` (shipped). Because every step runs with the working
-directory set to `{HOME_DIR}`, `scripts/helper.py` also works **relatively** for
-your own scripts. The same paths are exported to each command as `YBE_HOME`,
-`YBE_APP_DIR`, `YBE_USER_SCRIPT_DIR` and `YBE_APP_SCRIPT_DIR`.
+`{APP_SCRIPT_DIR}/helper.py` (shipped). Start a Python step with `{PYTHON}`
+rather than `python`, which may not be on `PATH`. Because every step runs with
+the working directory set to `{HOME_DIR}`, `scripts/helper.py` also works
+**relatively** for your own scripts. The same paths are exported to each command
+as `YBE_HOME`, `YBE_APP_DIR`, `YBE_USER_SCRIPT_DIR` and `YBE_APP_SCRIPT_DIR`.
 
 `{PIPE_PATH}` is a per-run scratch file shared by every step and every action
 reached through `after_success`, so steps can hand data to each other. It is

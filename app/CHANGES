@@ -4,7 +4,7 @@
 
 ## 5.0.0
 - Filters are now defined by YAML in filters/: name, description, active, arguments (name/required/default/options) and steps. Put the filter's script under scripts/ and call it from a step.
-- Steps get the action placeholders plus {DATA_YAML_PATH}, {DATASET_PATH}, {SPLIT}, {INPUT_PIPE}, {OUTPUT_PIPE}; each argument is usable in place as {NAME}.
+- Steps get the action placeholders plus {DATA_YAML_PATH}, {DATASET_PATH}, {SPLIT}, {INPUT_PIPE}, {OUTPUT_PIPE}; each argument is usable in place as {NAME}. Use {PYTHON} (the app's interpreter) instead of `python`.
 - Settings > Filters shows the name, a trimmed description and an input per argument; active:false filters are hidden.
 - New shipped Contains class / Does not contain class filters; options: {DATASET_CLASS_NAMES} fills the dropdown from the dataset classes and invalid values are rejected.
 - app/filters/example.yaml is a working example backed by app/scripts/example_filter.py; the old filters/*.py form is removed.

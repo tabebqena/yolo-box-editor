@@ -1920,6 +1920,17 @@ def test_run_filter_substitutes_placeholders_and_args(clean_state):
     assert log.read_text(encoding="utf-8") == "in.txt|out.txt|/d/data.yaml|train|3"
 
 
+def test_run_filter_python_placeholder_runs(clean_state):
+    log = clean_state / "exe.txt"
+    write_script(clean_state, "log.py",
+                 f"import sys\nopen({str(log)!r}, 'w').write(sys.executable)\n")
+    write_filter(clean_state, "Py.yaml",
+                 filter_yaml("{PYTHON} {USER_SCRIPT_DIR}/log.py {INPUT_PIPE} {OUTPUT_PIPE}",
+                             name="Py"))
+    assert ybe.run_filter("Py", "", "train", "in", "out")["ok"] is True
+    assert Path(log.read_text(encoding="utf-8")).resolve() == Path(sys.executable).resolve()
+
+
 def test_run_filter_uses_argument_default(clean_state):
     log = clean_state / "args.txt"
     write_script(clean_state, "log.py",

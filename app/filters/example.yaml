@@ -19,7 +19,7 @@
 #       default: "2"        # optional; pre-filled value
 #       options: ["2", "3"] # optional; inline or block list -> a <select>
 #   steps:                  # run in order; stops at the first failure
-#     - python {APP_SCRIPT_DIR}/example_filter.py {DATA_YAML_PATH} {SPLIT} \
+#     - {PYTHON} {APP_SCRIPT_DIR}/example_filter.py {DATA_YAML_PATH} {SPLIT} \
 #         {INPUT_PIPE} {OUTPUT_PIPE} --every {EVERY} --reverse {REVERSE}
 #
 # Each `steps` entry is one shell command (a single value may also go on the
@@ -61,4 +61,4 @@ arguments:
     default: "false"
     options: ["false", "true"]
 steps:
-  - python {APP_SCRIPT_DIR}/example_filter.py {DATA_YAML_PATH} {SPLIT} {INPUT_PIPE} {OUTPUT_PIPE} --every {EVERY} --reverse {REVERSE}
+  - {PYTHON} {APP_SCRIPT_DIR}/example_filter.py {DATA_YAML_PATH} {SPLIT} {INPUT_PIPE} {OUTPUT_PIPE} --every {EVERY} --reverse {REVERSE}

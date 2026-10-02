@@ -9,4 +9,4 @@ arguments:
     required: true
     options: {DATASET_CLASS_NAMES}
 steps:
-  - python {APP_SCRIPT_DIR}/class_filter.py {DATA_YAML_PATH} {SPLIT} {INPUT_PIPE} {OUTPUT_PIPE} --class {CLASS_NAME} --invert
+  - {PYTHON} {APP_SCRIPT_DIR}/class_filter.py {DATA_YAML_PATH} {SPLIT} {INPUT_PIPE} {OUTPUT_PIPE} --class {CLASS_NAME} --invert
