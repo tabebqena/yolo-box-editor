@@ -682,9 +682,11 @@ def test_index_serves_page():
     assert "id=\"filterPanelApply\"" in html
     assert "id=\"tagFloat\"" in html
     assert "id=\"boxFloat\"" in html
+    assert "id=\"dockSide\"" in html
+    assert "id=\"dockBottom\"" in html
     assert "id=\"panelSideSel\"" in html
-    assert "id=\"detachTagsSw\"" in html
-    assert "id=\"detachBoxesSw\"" in html
+    assert "id=\"tagsDockSel\"" in html
+    assert "id=\"boxesDockSel\"" in html
 
 
 def test_api_config_defaults(clean_state):

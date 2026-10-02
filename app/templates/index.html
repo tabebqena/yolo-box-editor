@@ -8,40 +8,19 @@
 </head>
 <body>
   <div class="app">
-    <div class="app-main">
-      <main class="canvas-wrap">
-        <canvas id="canvas"></canvas>
-      </main>
+    <div class="app-row">
+      <aside id="dockSide" class="dock-panel hidden">
+        <div id="dockSideBody" class="dock-body"></div>
+        <div id="dockSideResizer" class="dock-resizer" title="Drag to resize the panel"></div>
+      </aside>
 
-      <section class="imagebar">
-        <div id="tagBar" class="tagbar hidden">
-          <span class="tagbar-title">Tags</span>
-          <span id="tagHint" class="tagbar-hint hidden">Alt+1..9 toggles</span>
-          <div id="tagBadges" class="tag-badges"></div>
-          <button id="tagExpandBtn" class="tag-expand hidden" title="Show all tags">&#8230;</button>
-          <div class="tagbar-add">
-            <input id="tagInput" class="tag-input hidden" type="text" placeholder="add a tag…"
-                   list="tagSuggestions" maxlength="64">
-            <datalist id="tagSuggestions"></datalist>
-            <button id="tagSubmitBtn" type="button" class="tag-add-btn hidden" title="Add the tag (Enter)">&#10003;</button>
-            <button id="addTagBtn" type="button" class="tag-add-btn" title="Add a tag">+</button>
-          </div>
-        </div>
-        <div class="imagebar-nav">
-          <button id="prevBtn" title="Previous (←)">&#9664; Prev</button>
-          <input id="counter" class="counter" type="text" inputmode="numeric"
-                 title="Current image — type a number and press Enter to jump" value="0 / 0">
-          <button id="nextBtn" title="Next (→)">Next &#9654;</button>
-        </div>
-        <div class="imagebar-right">
-          <button id="undoBtn" title="Undo (Z)">Undo</button>
-          <button id="redoBtn" title="Redo (Y)">Redo</button>
-          <button id="saveBtn" class="primary" title="Save (S)">Save</button>
-        </div>
-      </section>
-    </div>
+      <div class="app-main">
+        <main class="canvas-wrap">
+          <canvas id="canvas"></canvas>
+        </main>
+      </div>
 
-    <aside id="sidebar" class="sidebar">
+      <aside id="sidebar" class="sidebar">
       <div id="sidebarResizer" class="sidebar-resizer" title="Drag to resize the panel"></div>
 
       <div class="sidebar-head">
@@ -98,18 +77,50 @@
         </div>
         <div id="notifList" class="notif-list"></div>
       </div>
-    </aside>
+      </aside>
+    </div>
+
+    <section id="dockBottom" class="dock-panel">
+      <div id="dockBottomBody" class="dock-body"></div>
+      <div id="dockBottomResizer" class="dock-resizer" title="Drag to resize the panel"></div>
+      <div class="imagebar">
+        <div id="tagBar" class="tagbar hidden">
+          <span class="tagbar-title">Tags</span>
+          <span id="tagHint" class="tagbar-hint hidden">Alt+1..9 toggles</span>
+          <div id="tagBadges" class="tag-badges"></div>
+          <button id="tagExpandBtn" class="tag-expand hidden" title="Show all tags">&#8230;</button>
+          <div class="tagbar-add">
+            <input id="tagInput" class="tag-input hidden" type="text" placeholder="add a tag…"
+                   list="tagSuggestions" maxlength="64">
+            <datalist id="tagSuggestions"></datalist>
+            <button id="tagSubmitBtn" type="button" class="tag-add-btn hidden" title="Add the tag (Enter)">&#10003;</button>
+            <button id="addTagBtn" type="button" class="tag-add-btn" title="Add a tag">+</button>
+          </div>
+        </div>
+        <div class="imagebar-nav">
+          <button id="prevBtn" title="Previous (←)">&#9664; Prev</button>
+          <input id="counter" class="counter" type="text" inputmode="numeric"
+                 title="Current image — type a number and press Enter to jump" value="0 / 0">
+          <button id="nextBtn" title="Next (→)">Next &#9654;</button>
+        </div>
+        <div class="imagebar-right">
+          <button id="undoBtn" title="Undo (Z)">Undo</button>
+          <button id="redoBtn" title="Redo (Y)">Redo</button>
+          <button id="saveBtn" class="primary" title="Save (S)">Save</button>
+        </div>
+      </div>
+    </section>
   </div>
 
   <div id="tagFloat" class="float-window hidden">
     <div class="float-head">
       <span class="float-title">Tags</span>
       <div class="float-actions">
-        <button type="button" class="float-dock" data-dock="left" title="Snap to the left edge">&#8676;</button>
-        <button type="button" class="float-dock" data-dock="top" title="Snap to the top edge">&#8679;</button>
-        <button type="button" class="float-dock" data-dock="right" title="Snap to the right edge">&#8677;</button>
-        <button type="button" class="float-dock" data-dock="bottom" title="Snap to the bottom edge">&#8681;</button>
-        <button type="button" class="float-close" data-float-close="tags" title="Re-attach the tags">&#10005;</button>
+        <button type="button" class="float-dock" data-dock="float" title="Float freely">&#10697;</button>
+        <button type="button" class="float-dock" data-dock="left" title="Dock to the left panel">&#8676;</button>
+        <button type="button" class="float-dock" data-dock="right" title="Dock to the right panel">&#8677;</button>
+        <button type="button" class="float-dock" data-dock="bottom" title="Dock to the bottom panel">&#8681;</button>
+        <button type="button" class="float-close" data-float-close="tags" title="Back to the default position">&#10005;</button>
       </div>
     </div>
     <div id="tagFloatBody" class="float-body"></div>
@@ -119,11 +130,11 @@
     <div class="float-head">
       <span class="float-title">Boxes</span>
       <div class="float-actions">
-        <button type="button" class="float-dock" data-dock="left" title="Snap to the left edge">&#8676;</button>
-        <button type="button" class="float-dock" data-dock="top" title="Snap to the top edge">&#8679;</button>
-        <button type="button" class="float-dock" data-dock="right" title="Snap to the right edge">&#8677;</button>
-        <button type="button" class="float-dock" data-dock="bottom" title="Snap to the bottom edge">&#8681;</button>
-        <button type="button" class="float-close" data-float-close="boxes" title="Re-attach the boxes">&#10005;</button>
+        <button type="button" class="float-dock" data-dock="float" title="Float freely">&#10697;</button>
+        <button type="button" class="float-dock" data-dock="left" title="Dock to the left panel">&#8676;</button>
+        <button type="button" class="float-dock" data-dock="right" title="Dock to the right panel">&#8677;</button>
+        <button type="button" class="float-dock" data-dock="bottom" title="Dock to the bottom panel">&#8681;</button>
+        <button type="button" class="float-close" data-float-close="boxes" title="Back to the default position">&#10005;</button>
       </div>
     </div>
     <div id="boxFloatBody" class="float-body"></div>
@@ -169,13 +180,25 @@
               <option value="left">Left</option>
             </select>
           </label>
-          <label class="settings-row" for="detachTagsSw" title="Show the tags in a movable floating window">
-            <input type="checkbox" id="detachTagsSw">
-            <span>Tags as a floating window</span>
+          <label class="settings-row" for="tagsDockSel" title="Where the tag controls live">
+            <span>Tags</span>
+            <select id="tagsDockSel">
+              <option value="default">Default (bottom bar)</option>
+              <option value="float">Floating window</option>
+              <option value="left">Left panel</option>
+              <option value="right">Right panel</option>
+              <option value="bottom">Bottom panel</option>
+            </select>
           </label>
-          <label class="settings-row" for="detachBoxesSw" title="Show the box list in a movable floating window">
-            <input type="checkbox" id="detachBoxesSw">
-            <span>Boxes as a floating window</span>
+          <label class="settings-row" for="boxesDockSel" title="Where the box list lives">
+            <span>Boxes</span>
+            <select id="boxesDockSel">
+              <option value="default">Default (side panel)</option>
+              <option value="float">Floating window</option>
+              <option value="left">Left panel</option>
+              <option value="right">Right panel</option>
+              <option value="bottom">Bottom panel</option>
+            </select>
           </label>
         </section>
 

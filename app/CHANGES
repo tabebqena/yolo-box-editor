@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 2.16.0
+- Tags and Boxes are now dockable widgets: send them to the left, right or bottom panel, or keep them floating. A panel only appears while it holds a widget.
+
 ## 2.13.0
 - Releases for major/minor version bumps are now tagged and published automatically on GitHub.
 

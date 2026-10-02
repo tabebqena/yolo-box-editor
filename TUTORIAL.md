@@ -82,17 +82,21 @@ canvas.
 
 ## 4. The screen at a glance
 
-- **Right column** — everything except the image, top to bottom: the app label
-  with the **⚙ Settings**, notifications bell and **Panel** toggle; the dataset
-  name; separators; the _Split_ picker; the per-dataset action buttons (a few,
-  with a `…` to show the rest); and finally the _Boxes_ list for the current
-  image (one row per box with its class dropdown, `cx cy w h` number inputs and
-  a `×`). The column width can be dragged from its left edge. The **Panel**
-  toggle collapses the whole column (the image takes the full width); only the
-  **Panel** and bell buttons remain, floating over the top-right corner.
+- **Control column** — sits on the left or right (Settings → _Layout_), top to
+  bottom: the app label with the **⚙ Settings**, notifications bell and
+  **Panel** toggle; the dataset name; separators; the _Split_ picker; the
+  per-dataset action buttons (a few, with a `…` to show the rest); and the
+  _Boxes_ list for the current image (one row per box with its class dropdown,
+  `cx cy w h` number inputs and a `×`). The column width can be dragged from its
+  inner edge. The **Panel** toggle collapses the column (the image takes the full
+  width); only the **Panel** and bell buttons remain, floating over the corner.
 - **Middle** — the picture (canvas).
-- **Bottom bar** — one row with the tag controls (when Tags is on) plus image
-  navigation (Prev / Next, counter) and Undo / Redo / Save.
+- **Bottom panel** — one row with the tag controls (when Tags is on) plus image
+  navigation (Prev / Next, counter) and Undo / Redo / Save. It can be resized
+  from its top edge.
+- **Tags / Boxes** can also be docked into the left, right or bottom panel (or a
+  floating window) from _Settings → Layout_ or the buttons on their title bar; a
+  panel only appears while it holds a widget.
 - **Settings** (⚙) — tabs for _View_, _Layout_, _Dataset_, _Filters_, _Shortcuts_
   and _Updates_; the _Filters_ tab chains filter scripts and the _Shortcuts_ tab
   lists every binding in a scrollable panel.

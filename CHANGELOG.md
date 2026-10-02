@@ -4,6 +4,15 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.16.0] - 2026-10-02
+
+### Changed
+
+- **Tags** and **Boxes** are now dockable widgets: send them to the left, right
+  or bottom panel, or keep them floating. A side docked to the control panel
+  stays in it; otherwise a panel opens on the opposite side. Panels appear only
+  while they hold a widget. Replaces the old floating-window detach checkboxes.
+
 ## [2.15.0] - 2026-10-02
 
 ### Changed

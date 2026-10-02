@@ -59,6 +59,12 @@ select, input {
 .app {
   flex: 1;
   display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.app-row {
+  flex: 1;
+  display: flex;
   min-height: 0;
 }
 .app-main {
@@ -118,7 +124,7 @@ select, input {
 .sidebar-resizer.active { background: var(--accent); opacity: 0.5; }
 
 /* Panel on the left: flip the row, border and resize handle. */
-body.panel-left .app { flex-direction: row-reverse; }
+body.panel-left .app-row { flex-direction: row-reverse; }
 body.panel-left .sidebar { border-left: none; border-right: 1px solid var(--border); }
 body.panel-left .sidebar.collapsed { border-right: none; }
 body.panel-left .sidebar-resizer { left: auto; right: -3px; }
@@ -276,7 +282,6 @@ body.panel-left .notif-panel { left: 10px; right: auto; }
   gap: 14px;
   padding: 6px 14px;
   background: #20212a;
-  border-top: 1px solid var(--border);
 }
 .imagebar .imagebar-nav {
   flex: 0 0 auto;
@@ -526,6 +531,90 @@ canvas {
   box-shadow: 0 0 0 1px var(--border);
   cursor: crosshair;
 }
+
+/* dock panels (widget-only side panel + full-width bottom panel) */
+.dock-panel {
+  position: relative;
+  flex: 0 0 auto;
+  background: #1b1c23;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+.dock-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+#dockSide {
+  flex-direction: row;
+  width: var(--dock-side-w, 300px);
+  border-right: 1px solid var(--border);
+}
+body.panel-left #dockSide {
+  flex-direction: row-reverse;
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+#dockSideBody { display: flex; flex-direction: column; }
+#dockBottomBody .float-window { flex: 1 1 0; min-width: 0; }
+#dockBottom {
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+}
+#dockBottomBody {
+  flex: 0 0 auto;
+  height: var(--dock-bottom-h, auto);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+}
+#dockBottomBody.empty { display: none; }
+#dockBottomBody.empty + .dock-resizer { display: none; }
+
+.dock-resizer {
+  position: relative;
+  flex: 0 0 auto;
+  background: transparent;
+  touch-action: none;
+}
+#dockSideResizer {
+  width: 6px;
+  cursor: col-resize;
+  margin-left: -3px;
+  margin-right: -3px;
+  z-index: 5;
+}
+#dockBottomResizer {
+  height: 6px;
+  cursor: row-resize;
+  margin-top: -3px;
+  margin-bottom: -3px;
+  z-index: 5;
+}
+.dock-resizer:hover, .dock-resizer.active { background: var(--accent); opacity: 0.5; }
+
+/* a docked widget frame becomes an inline block inside its panel */
+.dock-panel .float-window,
+.sidebar .sidebar-body .float-window {
+  position: static;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  max-height: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  resize: none;
+  background: transparent;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.dock-panel .float-window.hidden,
+.sidebar .sidebar-body .float-window.hidden { display: none; }
 
 /* detachable floating windows (tags / boxes) */
 .float-window {
