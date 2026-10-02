@@ -693,6 +693,11 @@ def test_index_serves_page():
     assert "id=\"actionsDockSel\"" in html
     assert "id=\"navDockSel\"" in html
     assert "id=\"saveDockSel\"" in html
+    assert "id=\"tagsVisibleSw\"" in html
+    assert "id=\"boxesVisibleSw\"" in html
+    assert "id=\"actionsVisibleSw\"" in html
+    assert "id=\"navVisibleSw\"" in html
+    assert "id=\"saveVisibleSw\"" in html
 
 
 def test_api_config_defaults(clean_state):

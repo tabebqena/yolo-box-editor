@@ -204,10 +204,6 @@
             <input type="checkbox" id="readonlySw">
             <span>Read-only</span>
           </label>
-          <label class="settings-row" for="taggingSw" title="Show and edit image tags below the image">
-            <input type="checkbox" id="taggingSw">
-            <span>Tags</span>
-          </label>
           <label class="settings-row" for="autoSaveSw" title="Save labels automatically after each edit (no save/discard prompt when navigating)">
             <input type="checkbox" id="autoSaveSw">
             <span>Auto-save</span>
@@ -215,63 +211,108 @@
         </section>
 
         <section class="settings-panel" data-panel="layout">
-          <label class="settings-row" for="panelSideSel" title="Which side the panel sits on">
-            <span>Panel side</span>
+          <label class="settings-row" for="panelSideSel" title="Which side the control panel sits on">
+            <span>Control panel side</span>
             <select id="panelSideSel">
               <option value="right">Right</option>
               <option value="left">Left</option>
             </select>
           </label>
-          <label class="settings-row" for="tagsDockSel" title="Where the tag controls live">
-            <span>Tags</span>
-            <select id="tagsDockSel">
-              <option value="default">Default (bottom bar)</option>
-              <option value="float">Floating window</option>
-              <option value="left">Left panel</option>
-              <option value="right">Right panel</option>
-              <option value="bottom">Bottom panel</option>
-            </select>
-          </label>
-          <label class="settings-row" for="boxesDockSel" title="Where the box list lives">
-            <span>Boxes</span>
-            <select id="boxesDockSel">
-              <option value="default">Default (side panel)</option>
-              <option value="float">Floating window</option>
-              <option value="left">Left panel</option>
-              <option value="right">Right panel</option>
-              <option value="bottom">Bottom panel</option>
-            </select>
-          </label>
-          <label class="settings-row" for="actionsDockSel" title="Where the per-dataset action buttons live">
-            <span>Actions</span>
-            <select id="actionsDockSel">
-              <option value="default">Default (side panel)</option>
-              <option value="float">Floating window</option>
-              <option value="left">Left panel</option>
-              <option value="right">Right panel</option>
-              <option value="bottom">Bottom panel</option>
-            </select>
-          </label>
-          <label class="settings-row" for="navDockSel" title="Where the Prev / counter / Next controls live">
-            <span>Navigation</span>
-            <select id="navDockSel">
-              <option value="default">Default (bottom bar)</option>
-              <option value="float">Floating window</option>
-              <option value="left">Left panel</option>
-              <option value="right">Right panel</option>
-              <option value="bottom">Bottom panel</option>
-            </select>
-          </label>
-          <label class="settings-row" for="saveDockSel" title="Where the Undo / Redo / Save buttons live">
-            <span>Save / Undo</span>
-            <select id="saveDockSel">
-              <option value="default">Default (bottom bar)</option>
-              <option value="float">Floating window</option>
-              <option value="left">Left panel</option>
-              <option value="right">Right panel</option>
-              <option value="bottom">Bottom panel</option>
-            </select>
-          </label>
+
+          <div class="widget-setting">
+            <div class="widget-setting-head">
+              <span class="settings-group-title">Tags</span>
+              <label class="widget-toggle" for="tagsVisibleSw" title="Show or hide the tag bar">
+                <input type="checkbox" id="tagsVisibleSw"><span>Show</span>
+              </label>
+            </div>
+            <label class="settings-row" for="tagsDockSel" title="Where the tag bar lives">
+              <span class="widget-field-label">Location</span>
+              <select id="tagsDockSel">
+                <option value="default">Default (bottom bar)</option>
+                <option value="float">Floating window</option>
+                <option value="left">Left panel</option>
+                <option value="right">Right panel</option>
+                <option value="bottom">Bottom panel</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="widget-setting">
+            <div class="widget-setting-head">
+              <span class="settings-group-title">Boxes</span>
+              <label class="widget-toggle" for="boxesVisibleSw" title="Show or hide the box list">
+                <input type="checkbox" id="boxesVisibleSw"><span>Show</span>
+              </label>
+            </div>
+            <label class="settings-row" for="boxesDockSel" title="Where the box list lives">
+              <span class="widget-field-label">Location</span>
+              <select id="boxesDockSel">
+                <option value="default">Default (side panel)</option>
+                <option value="float">Floating window</option>
+                <option value="left">Left panel</option>
+                <option value="right">Right panel</option>
+                <option value="bottom">Bottom panel</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="widget-setting">
+            <div class="widget-setting-head">
+              <span class="settings-group-title">Actions</span>
+              <label class="widget-toggle" for="actionsVisibleSw" title="Show or hide the action buttons">
+                <input type="checkbox" id="actionsVisibleSw"><span>Show</span>
+              </label>
+            </div>
+            <label class="settings-row" for="actionsDockSel" title="Where the action buttons live">
+              <span class="widget-field-label">Location</span>
+              <select id="actionsDockSel">
+                <option value="default">Default (side panel)</option>
+                <option value="float">Floating window</option>
+                <option value="left">Left panel</option>
+                <option value="right">Right panel</option>
+                <option value="bottom">Bottom panel</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="widget-setting">
+            <div class="widget-setting-head">
+              <span class="settings-group-title">Navigation</span>
+              <label class="widget-toggle" for="navVisibleSw" title="Show or hide the Prev / Next controls">
+                <input type="checkbox" id="navVisibleSw"><span>Show</span>
+              </label>
+            </div>
+            <label class="settings-row" for="navDockSel" title="Where the Prev / counter / Next controls live">
+              <span class="widget-field-label">Location</span>
+              <select id="navDockSel">
+                <option value="default">Default (bottom bar)</option>
+                <option value="float">Floating window</option>
+                <option value="left">Left panel</option>
+                <option value="right">Right panel</option>
+                <option value="bottom">Bottom panel</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="widget-setting">
+            <div class="widget-setting-head">
+              <span class="settings-group-title">Save / Undo</span>
+              <label class="widget-toggle" for="saveVisibleSw" title="Show or hide Undo / Redo / Save">
+                <input type="checkbox" id="saveVisibleSw"><span>Show</span>
+              </label>
+            </div>
+            <label class="settings-row" for="saveDockSel" title="Where the Undo / Redo / Save buttons live">
+              <span class="widget-field-label">Location</span>
+              <select id="saveDockSel">
+                <option value="default">Default (bottom bar)</option>
+                <option value="float">Floating window</option>
+                <option value="left">Left panel</option>
+                <option value="right">Right panel</option>
+                <option value="bottom">Bottom panel</option>
+              </select>
+            </label>
+          </div>
         </section>
 
         <section class="settings-panel" data-panel="dataset">

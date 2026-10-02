@@ -36,7 +36,6 @@ let imgH = 0;
 let dirty = false;
 let readonly = false;
 let datasetLoaded = false;
-let taggingEnabled = false; // "Tags" switch; shows the tag bar
 let availableTags = [];     // dataset-wide list from tags.yaml (toggle order for Alt+n)
 let imageTags = [];         // current image's tags
 let boxesVisible = true;    // `app_show_hide`: draw the box overlay or not
@@ -1391,7 +1390,7 @@ function applyTagOverflow() {
 
 function renderTagBar() {
   const bar = el('tagBar');
-  const show = taggingEnabled && datasetLoaded && currentIndex >= 0;
+  const show = getWidgetVisible('tags') && datasetLoaded && currentIndex >= 0;
   bar.classList.toggle('hidden', !show);
   if (getDock('tags') !== 'default') el('tagFloat').classList.toggle('hidden', !show);
   if (!show) {
@@ -1516,11 +1515,7 @@ function toggleTagByNumber(n) {
   if (readonly || currentIndex < 0) return;
   const i = n - 1;
   if (i < 0 || i >= availableTags.length) return;
-  if (!taggingEnabled) {
-    taggingEnabled = true;
-    localStorage.setItem('taggingEnabled', '1');
-    el('taggingSw').checked = true;
-  }
+  if (!getWidgetVisible('tags')) setWidgetVisible('tags', true);
   const name = availableTags[i];
   if (imageTags.includes(name)) removeTag(name);
   else addTag(name, false);
@@ -1988,6 +1983,7 @@ function toggleSidePanel(show) {
 const PANEL_SIDE_KEY = 'ybe_panel_side';
 const DOCK_SIDE_W_KEY = 'ybe_dock_side_w';
 const DOCK_BOTTOM_H_KEY = 'ybe_dock_bottom_h';
+const LEGACY_TAGGING_KEY = 'taggingEnabled';
 const LEGACY_DETACH_TAGS_KEY = 'ybe_detach_tags';
 const LEGACY_DETACH_BOXES_KEY = 'ybe_detach_boxes';
 const FLOAT_MARGIN = 8;
@@ -2006,12 +2002,14 @@ const WIDGETS = {
     content: () => el('tagBar'),
     parent: () => document.querySelector('#dockBottom .imagebar'),
     key: 'ybe_tags_dock', select: 'tagsDockSel',
+    visibleKey: 'ybe_tags_visible', visibleSw: 'tagsVisibleSw',
   },
   boxes: {
     frame: 'boxFloat', body: 'boxFloatBody',
     content: () => document.querySelector('.boxes-section'),
     parent: () => document.querySelector('#sidebar .sidebar-body'),
     key: 'ybe_boxes_dock', select: 'boxesDockSel',
+    visibleKey: 'ybe_boxes_visible', visibleSw: 'boxesVisibleSw',
   },
   actions: {
     frame: 'actionsFloat', body: 'actionsFloatBody',
@@ -2019,23 +2017,30 @@ const WIDGETS = {
     parent: () => document.querySelector('#sidebar .sidebar-body'),
     anchor: () => el('actionsSep'),
     key: 'ybe_actions_dock', select: 'actionsDockSel',
+    visibleKey: 'ybe_actions_visible', visibleSw: 'actionsVisibleSw',
   },
   nav: {
     frame: 'navFloat', body: 'navFloatBody',
     content: () => document.querySelector('.imagebar-nav'),
     parent: () => document.querySelector('#dockBottom .imagebar'),
     key: 'ybe_nav_dock', select: 'navDockSel',
+    visibleKey: 'ybe_nav_visible', visibleSw: 'navVisibleSw',
   },
   save: {
     frame: 'saveFloat', body: 'saveFloatBody',
     content: () => document.querySelector('.imagebar-right'),
     parent: () => document.querySelector('#dockBottom .imagebar'),
     key: 'ybe_save_dock', select: 'saveDockSel',
+    visibleKey: 'ybe_save_visible', visibleSw: 'saveVisibleSw',
   },
 };
 
 const dockState = {};
-Object.keys(WIDGETS).forEach((name) => { dockState[name] = 'default'; });
+const visibleState = {};
+Object.keys(WIDGETS).forEach((name) => {
+  dockState[name] = 'default';
+  visibleState[name] = true;
+});
 
 function applyPanelSide() {
   document.body.classList.toggle('panel-left', panelSide === 'left');
@@ -2163,9 +2168,28 @@ function placeWidget(name, loc) {
   updateDockPanels();
 }
 
+function getWidgetVisible(name) { return visibleState[name] !== false; }
+
+function setWidgetVisible(name, on) {
+  visibleState[name] = !!on;
+  try { localStorage.setItem(WIDGETS[name].visibleKey, on ? '1' : '0'); } catch (e) { /* ignore */ }
+  const sw = el(WIDGETS[name].visibleSw);
+  if (sw) sw.checked = !!on;
+  applyWidget(name);
+}
+
 function applyWidget(name) {
   placeWidget(name, getDock(name));
-  if (name === 'tags') renderTagBar();
+  const on = getWidgetVisible(name);
+  if (name === 'tags') {
+    renderTagBar(); // tags only show with a dataset/image; it reads the flag
+    return;
+  }
+  const frame = widgetFrame(name);
+  const content = widgetContent(name);
+  if (content) content.classList.toggle('hidden', !on);
+  if (frame) frame.classList.toggle('hidden', !on || getDock(name) === 'default');
+  updateDockPanels();
 }
 
 function applyAllWidgets() {
@@ -2310,6 +2334,8 @@ function setAppearanceControls() {
   widgetNames().forEach((name) => {
     const sel = el(dockSelectId(name));
     if (sel) sel.value = getDock(name);
+    const sw = el(WIDGETS[name].visibleSw);
+    if (sw) sw.checked = getWidgetVisible(name);
   });
 }
 
@@ -2318,17 +2344,30 @@ function savedDock(key) {
   return DOCK_LOCATIONS.includes(raw) ? raw : 'default';
 }
 
+function savedVisible(key) {
+  return localStorage.getItem(key) !== '0';
+}
+
 function initAppearance() {
   panelSide = localStorage.getItem(PANEL_SIDE_KEY) === 'left' ? 'left' : 'right';
-  widgetNames().forEach((name) => { dockState[name] = savedDock(dockKey(name)); });
+  widgetNames().forEach((name) => {
+    dockState[name] = savedDock(dockKey(name));
+    visibleState[name] = savedVisible(WIDGETS[name].visibleKey);
+  });
   // migrate the old "detach into a floating window" checkboxes
   const tagsKey = dockKey('tags');
   const boxesKey = dockKey('boxes');
   if (!localStorage.getItem(tagsKey) && localStorage.getItem(LEGACY_DETACH_TAGS_KEY) === '1') dockState.tags = 'float';
   if (!localStorage.getItem(boxesKey) && localStorage.getItem(LEGACY_DETACH_BOXES_KEY) === '1') dockState.boxes = 'float';
+  // migrate the old View > Tags switch (now the Tags widget's Show toggle)
+  if (localStorage.getItem(WIDGETS.tags.visibleKey) === null
+      && localStorage.getItem(LEGACY_TAGGING_KEY) !== null) {
+    visibleState.tags = localStorage.getItem(LEGACY_TAGGING_KEY) !== '0';
+  }
   try {
     localStorage.removeItem(LEGACY_DETACH_TAGS_KEY);
     localStorage.removeItem(LEGACY_DETACH_BOXES_KEY);
+    localStorage.removeItem(LEGACY_TAGGING_KEY);
   } catch (e) { /* ignore */ }
 
   applyPanelSide();
@@ -2355,6 +2394,8 @@ function initAppearance() {
   widgetNames().forEach((name) => {
     const sel = el(dockSelectId(name));
     if (sel) sel.addEventListener('change', () => setWidgetDock(name, sel.value));
+    const sw = el(WIDGETS[name].visibleSw);
+    if (sw) sw.addEventListener('change', () => setWidgetVisible(name, sw.checked));
   });
 }
 
@@ -2763,12 +2804,6 @@ counterInput.addEventListener('keydown', (e) => {
 counterInput.addEventListener('blur', () => updateNav());
 el('actionResultClose').addEventListener('click', closeActionResult);
 
-el('taggingSw').addEventListener('change', (e) => {
-  taggingEnabled = e.target.checked;
-  localStorage.setItem('taggingEnabled', taggingEnabled ? '1' : '0');
-  renderTagBar();
-});
-
 el('autoSaveSw').addEventListener('change', (e) => {
   autoSave = e.target.checked;
   localStorage.setItem('autoSave', autoSave ? '1' : '0');
@@ -3108,8 +3143,6 @@ function runActionForShortcut(e) {
   }
 }
 
-el('taggingSw').checked = localStorage.getItem('taggingEnabled') === '1';
-taggingEnabled = el('taggingSw').checked;
 el('autoSaveSw').checked = localStorage.getItem('autoSave') === '1';
 autoSave = el('autoSaveSw').checked;
 boxesVisible = localStorage.getItem(SHOW_BOXES_KEY) !== '0';

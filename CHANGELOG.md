@@ -4,6 +4,18 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.2.0] - 2026-10-02
+
+### Added
+
+- **Settings → Layout** now has one block per widget (Tags, Boxes, Actions,
+  Navigation, Save / Undo) with a **Show** toggle and a **Location** selector.
+
+### Changed
+
+- The tag controls are shown by default; the old **Tags** switch in
+  **Settings → View** is gone (use the Tags widget's **Show** toggle instead).
+
 ## [3.1.0] - 2026-10-02
 
 ### Added

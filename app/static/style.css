@@ -818,6 +818,33 @@ body.panel-left #dockSide {
 .settings-row input { accent-color: var(--green); cursor: pointer; }
 .settings-row input:disabled { cursor: default; opacity: 0.5; }
 .settings-modal .hint { color: var(--muted); font-size: 12px; }
+
+/* one block per dockable widget in the Layout tab */
+.widget-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.widget-setting-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.widget-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
+.widget-toggle input { accent-color: var(--green); cursor: pointer; }
+.widget-field-label { color: var(--muted); font-size: 13px; }
+.widget-setting .settings-row select { flex: 1 1 auto; min-width: 0; }
 .settings-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .update-row { align-items: center; }
 .update-row .hint { flex: 1 1 auto; min-width: 0; }

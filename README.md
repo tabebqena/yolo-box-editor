@@ -96,8 +96,8 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   `ACTION_NAME <SHORTCUT> label`. Every app action and your action names
   can be bound; invalid names are rejected with a dismissible notification. Your
   `shortcuts.txt` lives in the user folder and is read after the shipped one.
-- **Tags** (opt-in via the Settings `Tags` switch): the tag controls in the bottom bar
-  show the dataset's tags as clickable badges — click to toggle a tag on the
+- **Tags** (shown by default; toggle it in Settings → Layout → **Tags**): the tag
+  controls in the bottom bar show the dataset's tags as clickable badges — click to toggle a tag on the
   current image, the small `+` button reveals an input whose new name is
   appended to `tags.yaml`, and `Alt+1..9` toggles the matching tag by number.
   Active badges look different from inactive ones, and a `…` button appears when
@@ -503,8 +503,9 @@ hook are skipped.
 
 ## Tags
 
-YOLO has no canonical tagging scheme, so this app defines a minimal one. It is
-opt-in: flip the **Tags** switch in **Settings** to show the tag controls in the bottom bar.
+YOLO has no canonical tagging scheme, so this app defines a minimal one. The tag
+controls show in the bottom bar by default; show/hide them with the **Tags**
+widget in **Settings → Layout**.
 
 - **`tags.yaml`** lives next to `data.yaml` and holds the dataset's available
   tags under a single key:
@@ -534,7 +535,7 @@ opt-in: flip the **Tags** switch in **Settings** to show the tag controls in the
 - **Overflow**: when the badges are wider than the row, a `…` button appears;
   clicking it wraps the tags onto more lines (click again to collapse).
 - **Keyboard**: `Alt+1` … `Alt+9` toggle the tag at that 1-based position in
-  `tags.yaml`. Using the shortcut also turns tagging on so the bar is visible.
+  `tags.yaml`. Using the shortcut shows the Tags widget if it was hidden.
 - Tag writes are blocked in read-only mode.
 
 ## Filters

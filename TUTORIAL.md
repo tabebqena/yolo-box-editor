@@ -193,7 +193,8 @@ editing and saving stop working; boxes still display.
 Tags are short labels you attach to a whole image (not to a box) — useful to
 mark, say, "night", "indoor" or "hard". They are separate from YOLO classes.
 
-1. Tick **Tags** in **Settings** to show the tag controls in the bottom bar.
+1. The tag controls show in the bottom bar by default; enable/disable them with
+   the **Tags** widget in **Settings → Layout**.
 2. The dataset's tags appear as **badges**. Green = the tag is on this image;
    grey = it is not. **Click a badge** to toggle it — the image's tag file is
    saved straight away.
@@ -202,7 +203,7 @@ mark, say, "night", "indoor" or "hard". They are separate from YOLO classes.
    `tags.yaml`, the dataset's list of available tags, so they reappear for other
    images.
 4. **`Alt+1` … `Alt+9`** toggles the 1st, 2nd, … tag from `tags.yaml` — the
-   numbers shown on the badges. This also switches tagging on for you.
+   numbers shown on the badges. This also shows the Tags widget if it was hidden.
 5. If the badges are wider than the row, a **…** button appears — click it to
    wrap them onto more lines, and click again to collapse.
 
