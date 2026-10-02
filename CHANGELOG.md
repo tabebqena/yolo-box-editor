@@ -4,6 +4,14 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.13.0] - 2026-10-02
+
+### Added
+
+- Automated GitHub release workflow: a push to `main` that changes the major or
+  minor part of `app/VERSION` creates the tag and release (patch bumps are tagged
+  manually).
+
 ## [2.12.0] - 2026-10-02
 
 ### Added
