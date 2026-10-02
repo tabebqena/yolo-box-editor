@@ -4,6 +4,15 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.6.0] - 2026-10-02
+
+### Fixed
+
+- The tag bar now shows **all** tags when `tags.yaml` is written as a plain
+  top-level list of names instead of under a `tags:` key. Both shapes are read
+  (and merged if a file has both); saving rewrites the canonical `tags:` form,
+  so the plain list is not left behind as a second, stale list.
+
 ## [3.5.0] - 2026-10-02
 
 ### Added
