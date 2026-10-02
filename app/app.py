@@ -257,6 +257,63 @@ HOOK_EVENTS = (
     "box_edited",
 )
 
+# The extension YAML format version. Bump it only when the action/hook/filter
+# file format changes: the UI compares a file's `api_version:` against this to
+# flag files that predate (or postdate) the format it understands.
+EXTENSION_API_VERSION = 1
+
+# Placeholder catalogs offered by the UI's click-to-insert palette. Keep them in
+# sync with the values built in `api_action_run` and `_filter_placeholder_values`
+# (and with the tables in docs/actions-and-hooks.md and docs/filters.md).
+ACTION_PLACEHOLDERS = (
+    ("IMAGE_PATH", "path of the current image"),
+    ("LABEL_PATH", "path of the current image's label file (may not exist yet)"),
+    ("DATASET_PATH", "root path of the loaded dataset"),
+    ("DATA_YAML_PATH", "path of the loaded data.yaml"),
+    ("IMAGE_INDEX", "1-based position of the current image in the list"),
+    ("APP_DIR", "the shipped code folder (app/)"),
+    ("HOME_DIR", "your user folder (the working directory of every run)"),
+    ("APP_SCRIPT_DIR", "the shipped helper scripts (app/scripts/)"),
+    ("USER_SCRIPT_DIR", "your helper scripts (<home>/scripts/)"),
+    ("PYTHON", "the Python interpreter running the app"),
+    ("PIPE_PATH", "the per-run scratch file shared by the run's steps"),
+)
+FILTER_PLACEHOLDERS = (
+    ("DATA_YAML_PATH", "path of the loaded data.yaml"),
+    ("DATASET_PATH", "root path of the loaded dataset"),
+    ("SPLIT", "active split (train/val/test) or empty on All splits"),
+    ("INPUT_PIPE", "file with the candidate image paths (one per line)"),
+    ("OUTPUT_PIPE", "file to write the kept image paths to"),
+    ("APP_DIR", "the shipped code folder (app/)"),
+    ("HOME_DIR", "your user folder (the working directory of every run)"),
+    ("APP_SCRIPT_DIR", "the shipped helper scripts (app/scripts/)"),
+    ("USER_SCRIPT_DIR", "your helper scripts (<home>/scripts/)"),
+    ("PYTHON", "the Python interpreter running the app"),
+)
+
+
+def _placeholder_payload(catalog):
+    """`ACTION_PLACEHOLDERS` -> the UI shape `{token, description}`."""
+    return [
+        {"token": "{" + name + "}", "name": name, "description": desc}
+        for name, desc in catalog
+    ]
+
+
+def api_version_status(version):
+    """Classify a file's `api_version` against `EXTENSION_API_VERSION`.
+
+    Returns "current", "outdated" (missing or lower) or "newer" (higher); a
+    non-integer value counts as outdated.
+    """
+    if not isinstance(version, int):
+        return "outdated"
+    if version < EXTENSION_API_VERSION:
+        return "outdated"
+    if version > EXTENSION_API_VERSION:
+        return "newer"
+    return "current"
+
 
 def is_hook_name(name):
     """True when `name` looks like a hook name (`on_*`)."""
@@ -748,6 +805,15 @@ def _yaml_scalar(s):
     return s
 
 
+def _parse_api_version(value):
+    """Parse an `api_version:` scalar to an int, or None when absent/invalid."""
+    value = _yaml_scalar(_strip_comment(value or "").strip())
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _parse_action_file(text):
     """Parse one action/hook file into a dict of its top-level keys.
 
@@ -766,6 +832,7 @@ def _parse_action_file(text):
         "name": None,
         "event_name": None,
         "active": True,
+        "api_version": None,
         "steps": [],
         "after_success": [],
     }
@@ -782,6 +849,9 @@ def _parse_action_file(text):
                 section = None
                 if value:
                     data["name"] = _yaml_scalar(value)
+            elif key == "api_version":
+                section = None
+                data["api_version"] = _parse_api_version(value)
             elif key == "event_name":
                 section = None
                 if value:
@@ -832,18 +902,21 @@ def load_actions():
     is read first, the user's <home>/actions/ second (it wins on a name clash).
     """
     merged = {}
-    paths = _action_files(ACTIONS_DIR) + _action_files(USER_ACTIONS_DIR)
-    for path in paths:
-        data = _parse_action_file(_read_text(path))
-        name = _action_name(path, data["name"])
-        if not name:
-            continue
-        if data["steps"] or data["after_success"]:
-            merged[name] = {
-                "name": name,
-                "steps": data["steps"],
-                "after_success": data["after_success"],
-            }
+    for source, dirpath in (("shipped", ACTIONS_DIR), ("user", USER_ACTIONS_DIR)):
+        for path in _action_files(dirpath):
+            data = _parse_action_file(_read_text(path))
+            name = _action_name(path, data["name"])
+            if not name:
+                continue
+            if data["steps"] or data["after_success"]:
+                merged[name] = {
+                    "name": name,
+                    "steps": data["steps"],
+                    "after_success": data["after_success"],
+                    "api_version": data["api_version"],
+                    "source": source,
+                    "path": path,
+                }
     return list(merged.values())
 
 
@@ -878,28 +951,31 @@ def load_hooks():
     """
     merged = {}
     errors = []
-    paths = _action_files(HOOKS_DIR) + _action_files(USER_HOOKS_DIR)
-    for path in paths:
-        data = _parse_action_file(_read_text(path))
-        event = _hook_event(path, data)
-        has_body = bool(data["steps"] or data["after_success"])
-        if event is None:
-            if has_body:
-                errors.append(
-                    f"'hooks/{os.path.basename(path)}': no app event — name it "
-                    f"on_<event>.yaml or set event_name: (known: "
-                    f"{', '.join(HOOK_EVENTS)})"
-                )
-            continue
-        if not data["active"] or not has_body:
-            continue
-        name = HOOK_PREFIX + event
-        merged[name] = {
-            "name": name,
-            "event": event,
-            "steps": data["steps"],
-            "after_success": data["after_success"],
-        }
+    for source, dirpath in (("shipped", HOOKS_DIR), ("user", USER_HOOKS_DIR)):
+        for path in _action_files(dirpath):
+            data = _parse_action_file(_read_text(path))
+            event = _hook_event(path, data)
+            has_body = bool(data["steps"] or data["after_success"])
+            if event is None:
+                if has_body:
+                    errors.append(
+                        f"'hooks/{os.path.basename(path)}': no app event — name it "
+                        f"on_<event>.yaml or set event_name: (known: "
+                        f"{', '.join(HOOK_EVENTS)})"
+                    )
+                continue
+            if not data["active"] or not has_body:
+                continue
+            name = HOOK_PREFIX + event
+            merged[name] = {
+                "name": name,
+                "event": event,
+                "steps": data["steps"],
+                "after_success": data["after_success"],
+                "api_version": data["api_version"],
+                "source": source,
+                "path": path,
+            }
     return list(merged.values()), errors
 
 
@@ -1302,7 +1378,7 @@ def _parse_filter_file(text):
     `steps` may also be a single value on the key line.
     """
     data = {"name": None, "description": None, "active": True,
-            "arguments": [], "steps": []}
+            "api_version": None, "arguments": [], "steps": []}
     mode, current, arg_indent, options_pending = None, None, None, False
     for line in text.splitlines():
         stripped = line.strip()
@@ -1316,6 +1392,8 @@ def _parse_filter_file(text):
             if key == "name":
                 if value:
                     data["name"] = _yaml_scalar(value)
+            elif key == "api_version":
+                data["api_version"] = _parse_api_version(value)
             elif key == "description":
                 if value:
                     data["description"] = _yaml_scalar(value)
@@ -1413,23 +1491,256 @@ def load_filters():
     <home>/filters/ second (it wins on a name clash).
     """
     merged, errors = {}, []
-    for path in _filter_files(FILTERS_DIR) + _filter_files(USER_FILTERS_DIR):
-        data = _parse_filter_file(_read_text(path))
-        fname = os.path.basename(path)
-        name = (data["name"] or "").strip() or fname[: -len(".yaml")]
-        if not name or not data["active"] or not data["steps"]:
-            continue
-        arguments, arg_errors = _validate_filter_arguments(fname, name, data["arguments"])
-        if arg_errors:
-            errors.extend(arg_errors)
-            continue
-        merged[name] = {
-            "name": name,
-            "description": (data["description"] or "").strip(),
-            "arguments": arguments,
-            "steps": data["steps"],
-        }
+    for source, dirpath in (("shipped", FILTERS_DIR), ("user", USER_FILTERS_DIR)):
+        for path in _filter_files(dirpath):
+            data = _parse_filter_file(_read_text(path))
+            fname = os.path.basename(path)
+            name = (data["name"] or "").strip() or fname[: -len(".yaml")]
+            if not name or not data["active"] or not data["steps"]:
+                continue
+            arguments, arg_errors = _validate_filter_arguments(fname, name, data["arguments"])
+            if arg_errors:
+                errors.extend(arg_errors)
+                continue
+            merged[name] = {
+                "name": name,
+                "description": (data["description"] or "").strip(),
+                "arguments": arguments,
+                "steps": data["steps"],
+                "api_version": data["api_version"],
+                "source": source,
+                "path": path,
+            }
     return merged, errors
+
+
+# --------------------------------------------------------------------------- #
+# extension authoring (Settings > Actions / Hooks / Filters)
+#
+# The web editor writes user YAML in exactly the shape the parsers above read.
+# A small hand-written writer is used (no PyYAML) so the runtime dependency stays
+# Flask only; `_dump_action_file` / `_dump_filter_file` round-trip through
+# `_parse_action_file` / `_parse_filter_file` (covered by tests).
+# --------------------------------------------------------------------------- #
+_EXTENSION_BAD_FILENAME = set('/\\<>:"|?*')
+_EXTENSION_RESERVED_PREFIXES = ("app_", "backend_", "action_", "on_")
+
+
+def _safe_extension_name(name):
+    """A file-stem for a user action/filter name, or None when unsafe.
+
+    Allows spaces, letters, digits, `.`, `_` and `-`; rejects path separators,
+    control characters, the reserved action prefixes and a leading dot.
+    """
+    if not isinstance(name, str):
+        return None
+    name = name.strip()
+    if not name or name in (".", "..") or len(name) > 80:
+        return None
+    if name.startswith(".") or name.startswith(_EXTENSION_RESERVED_PREFIXES):
+        return None
+    if any(ch in _EXTENSION_BAD_FILENAME or ord(ch) < 32 for ch in name):
+        return None
+    return name
+
+
+def _yaml_quote(value):
+    """Wrap a scalar in double quotes (round-trips through `_yaml_scalar`)."""
+    return '"' + value + '"'
+
+
+def _clean_extension_entries(raw):
+    """Validate a `steps` / `after_success` list -> (entries, error).
+
+    Each entry is a non-empty single-line string, stored verbatim (a shell
+    command or an action reference).
+    """
+    if raw is None:
+        return [], None
+    if not isinstance(raw, list):
+        return None, "steps must be a list"
+    entries = []
+    for item in raw:
+        if not isinstance(item, str):
+            return None, "each step must be text"
+        text = item.strip()
+        if not text:
+            continue
+        if any(ord(ch) < 32 for ch in text):
+            return None, "a step contains a newline or control character"
+        entries.append(text)
+    return entries, None
+
+
+def _clean_filter_arguments(raw):
+    """Validate submitted filter arguments -> (arguments, error)."""
+    if raw is None:
+        return [], None
+    if not isinstance(raw, list):
+        return None, "arguments must be a list"
+    cleaned, seen = [], set()
+    for item in raw:
+        if not isinstance(item, dict):
+            return None, "each argument must be an object"
+        name = str(item.get("name") or "").strip()
+        if not name:
+            return None, "every argument needs a name"
+        if not _FILTER_ARG_NAME_RE.match(name):
+            return None, (
+                f'invalid argument name "{name}" (letters, digits and _ only; '
+                "cannot start with a digit)")
+        if name.upper() in FILTER_RESERVED_PLACEHOLDERS:
+            return None, f'argument "{name}" collides with {{{name.upper()}}}'
+        if name in seen:
+            return None, f'duplicate argument "{name}"'
+        seen.add(name)
+        default = item.get("default")
+        if default is not None:
+            default = str(default)
+            if any(ord(ch) < 32 for ch in default) or "#" in default:
+                return None, f'argument "{name}": default cannot contain # or newlines'
+            if default == "":
+                default = None
+        options = item.get("options")
+        if options is not None:
+            if not isinstance(options, list):
+                return None, f'argument "{name}": options must be a list'
+            clean_options = []
+            for opt in options:
+                opt = str(opt).strip()
+                if not opt:
+                    continue
+                if "," in opt or "#" in opt or any(ord(ch) < 32 for ch in opt):
+                    return None, (
+                        f'argument "{name}": an option cannot contain , # or newlines')
+                if opt not in clean_options:
+                    clean_options.append(opt)
+            options = clean_options or None
+        cleaned.append({
+            "name": name,
+            "required": bool(item.get("required")),
+            "default": default,
+            "options": options,
+        })
+    return cleaned, None
+
+
+def _dump_action_file(steps, after_success, active=True,
+                      api_version=EXTENSION_API_VERSION):
+    """Serialize a `steps`/`after_success` file in the parser's own format."""
+    lines = [f"api_version: {api_version}"]
+    if not active:
+        lines.append("active: false")
+    for key, entries in (("steps", steps), ("after_success", after_success)):
+        if entries:
+            lines.append(f"{key}:")
+            lines.extend("  - " + entry for entry in entries)
+    return "\n".join(lines) + "\n"
+
+
+def _dump_filter_file(description, active, arguments, steps,
+                      api_version=EXTENSION_API_VERSION):
+    """Serialize a filter file in the parser's own format."""
+    lines = [f"api_version: {api_version}"]
+    if description:
+        lines.append("description: " + _yaml_quote(description))
+    if not active:
+        lines.append("active: false")
+    if arguments:
+        lines.append("arguments:")
+        for arg in arguments:
+            lines.append("  - name: " + arg["name"])
+            if arg.get("required"):
+                lines.append("    required: true")
+            default = arg.get("default")
+            if default is not None and str(default) != "":
+                lines.append("    default: " + _yaml_quote(str(default)))
+            options = arg.get("options")
+            if options:
+                rendered = ", ".join(_yaml_quote(str(o)) for o in options)
+                lines.append(f"    options: [{rendered}]")
+    if steps:
+        lines.append("steps:")
+        lines.extend("  - " + entry for entry in steps)
+    return "\n".join(lines) + "\n"
+
+
+def _bump_api_version_text(text, version=EXTENSION_API_VERSION):
+    """Return `text` with its top-level `api_version:` set to `version`.
+
+    Comments and every other line are preserved; when the key is absent it is
+    inserted after the leading comment/blank block.
+    """
+    lines = text.splitlines()
+    pattern = re.compile(r"^api_version\s*:")
+    for i, line in enumerate(lines):
+        if pattern.match(line):
+            lines[i] = f"api_version: {version}"
+            return "\n".join(lines) + "\n"
+    insert_at = 0
+    while insert_at < len(lines):
+        stripped = lines[insert_at].strip()
+        if stripped and not stripped.startswith("#"):
+            break
+        insert_at += 1
+    lines.insert(insert_at, f"api_version: {version}")
+    return "\n".join(lines) + "\n"
+
+
+def _parse_extension_text(kind, text):
+    """Parse raw editor text with the parser for `kind`."""
+    if kind in ("action", "hook"):
+        return _parse_action_file(text)
+    return _parse_filter_file(text)
+
+
+def _extension_user_dir(kind):
+    """The user folder a kind is written to (None for an unknown kind)."""
+    return {
+        "action": USER_ACTIONS_DIR,
+        "hook": USER_HOOKS_DIR,
+        "filter": USER_FILTERS_DIR,
+    }.get(kind)
+
+
+def extension_file_for(kind, name):
+    """Resolve a loaded extension to its winning file, or None.
+
+    Returns `{kind, name, path, source, api_version}`; `source` is "shipped" or
+    "user". Only extensions the loaders accept (with a body) are resolvable.
+    """
+    entry = None
+    if kind == "action":
+        entry = next((a for a in load_actions() if a["name"] == name), None)
+    elif kind == "hook":
+        entry = next((h for h in load_hooks()[0] if h["name"] == name), None)
+    elif kind == "filter":
+        entry = load_filters()[0].get(name)
+    if entry is None:
+        return None
+    return {
+        "kind": kind,
+        "name": name,
+        "path": entry["path"],
+        "source": entry["source"],
+        "api_version": entry.get("api_version"),
+    }
+
+
+def _extension_file_payload(found, text):
+    """The UI shape for the raw YAML editor."""
+    return {
+        "ok": True,
+        "kind": found["kind"],
+        "name": found["name"],
+        "source": found["source"],
+        "path": found["path"],
+        "api_version": found["api_version"],
+        "status": api_version_status(found["api_version"]),
+        "writable": found["source"] == "user" and not STATE["readonly"],
+        "text": text,
+    }
+
 
 
 def _entry_path(entry):
@@ -2126,6 +2437,41 @@ def api_config():
         ),
         key=lambda f: f["name"],
     )
+    action_defs = [
+        {
+            "name": a["name"],
+            "steps": a["steps"],
+            "after_success": a["after_success"],
+            "source": a["source"],
+            "api_version": a["api_version"],
+            "status": api_version_status(a["api_version"]),
+        }
+        for a in actions
+    ]
+    hook_defs = [
+        {
+            "name": h["name"],
+            "event": h["event"],
+            "steps": h["steps"],
+            "after_success": h["after_success"],
+            "source": h["source"],
+            "api_version": h["api_version"],
+            "status": api_version_status(h["api_version"]),
+        }
+        for h in hooks
+    ]
+    filter_defs = [
+        {
+            "name": f["name"],
+            "description": f["description"],
+            "arguments": f["arguments"],
+            "steps": f["steps"],
+            "source": f["source"],
+            "api_version": f["api_version"],
+            "status": api_version_status(f["api_version"]),
+        }
+        for f in filters.values()
+    ]
     return jsonify(
         {
             "data_yaml": STATE["data_yaml"],
@@ -2135,6 +2481,7 @@ def api_config():
             "images": _current_images(),
             "active_split": STATE["active_split"],
             "filters": filter_catalog,
+            "filter_defs": filter_defs,
             "active_filters": STATE["active_filters"],
             "filter_error": STATE["filter_error"],
             "filter_errors": filter_errors,
@@ -2143,8 +2490,18 @@ def api_config():
             "tags_dir": STATE.get("tags_dir"),
             "tips": TIPS,
             "actions": [a["name"] for a in actions],
+            "action_defs": action_defs,
             "hooks": [h["name"] for h in hooks],
+            "hook_defs": hook_defs,
             "hook_errors": hook_errors,
+            "app_actions": sorted(APP_ACTIONS),
+            "backend_actions": sorted(BACKEND_ACTION_NAMES),
+            "hook_events": list(HOOK_EVENTS),
+            "extension_api_version": EXTENSION_API_VERSION,
+            "placeholders": {
+                "action": _placeholder_payload(ACTION_PLACEHOLDERS),
+                "filter": _placeholder_payload(FILTER_PLACEHOLDERS),
+            },
             "shortcuts": app_shortcuts,
             "action_shortcuts": user_shortcuts,
             "shortcut_errors": shortcut_errors,
@@ -2490,6 +2847,211 @@ def _execution_payload(state):
         "pipe_path": state["pipe_path"],
         "cwd": state.get("cwd"),
     }
+
+
+@app.route("/api/actions/save", methods=["POST"])
+def api_action_save():
+    """Create (or replace) a user action from the Settings form.
+
+    Body `{name, steps, after_success, overwrite}`. The file is written to the
+    user actions/ folder as `<name>.yaml`; an existing user file needs
+    `overwrite: true`. Read-only is refused.
+    """
+    if STATE["readonly"]:
+        return jsonify({"ok": False, "error": "read-only mode"}), 403
+    data = request.get_json(silent=True) or {}
+    name = _safe_extension_name(data.get("name"))
+    if name is None:
+        return jsonify({"ok": False, "error": "invalid action name"}), 400
+    steps, error = _clean_extension_entries(data.get("steps"))
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    after, error = _clean_extension_entries(data.get("after_success"))
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    if not steps and not after:
+        return jsonify({"ok": False, "error": "add at least one step"}), 400
+
+    os.makedirs(USER_ACTIONS_DIR, exist_ok=True)
+    target = os.path.join(USER_ACTIONS_DIR, name + ".yaml")
+    if os.path.exists(target) and not data.get("overwrite"):
+        return jsonify({"ok": False, "error": f"a user action '{name}' already exists"}), 409
+    try:
+        with open(target, "w", encoding="utf-8") as f:
+            f.write(_dump_action_file(steps, after))
+    except OSError as exc:
+        return jsonify({"ok": False, "error": f"could not write the action: {exc}"}), 500
+
+    cfg = api_config().get_json()
+    cfg["ok"] = True
+    return jsonify(cfg)
+
+
+@app.route("/api/hooks/save", methods=["POST"])
+def api_hook_save():
+    """Create (or replace) a user event hook from the Settings form.
+
+    Body `{event, steps, after_success, active, overwrite}`. The file is
+    `<user hooks>/on_<event>.yaml`; existing needs `overwrite: true`.
+    """
+    if STATE["readonly"]:
+        return jsonify({"ok": False, "error": "read-only mode"}), 403
+    data = request.get_json(silent=True) or {}
+    event = str(data.get("event") or "").strip()
+    if event not in HOOK_EVENTS:
+        return jsonify({"ok": False, "error": f"unknown hook event: {event}"}), 400
+    steps, error = _clean_extension_entries(data.get("steps"))
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    after, error = _clean_extension_entries(data.get("after_success"))
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    if not steps and not after:
+        return jsonify({"ok": False, "error": "add at least one step"}), 400
+
+    os.makedirs(USER_HOOKS_DIR, exist_ok=True)
+    target = os.path.join(USER_HOOKS_DIR, HOOK_PREFIX + event + ".yaml")
+    if os.path.exists(target) and not data.get("overwrite"):
+        return jsonify({"ok": False, "error": f"a hook for {event} already exists"}), 409
+    try:
+        with open(target, "w", encoding="utf-8") as f:
+            f.write(_dump_action_file(steps, after, active=bool(data.get("active", True))))
+    except OSError as exc:
+        return jsonify({"ok": False, "error": f"could not write the hook: {exc}"}), 500
+
+    cfg = api_config().get_json()
+    cfg["ok"] = True
+    return jsonify(cfg)
+
+
+@app.route("/api/filters/save", methods=["POST"])
+def api_filter_save():
+    """Create (or replace) a user filter from the Settings form.
+
+    Body `{name, description, active, arguments, steps, overwrite}`. The file is
+    written to the user filters/ folder as `<name>.yaml`.
+    """
+    if STATE["readonly"]:
+        return jsonify({"ok": False, "error": "read-only mode"}), 403
+    data = request.get_json(silent=True) or {}
+    name = _safe_extension_name(data.get("name"))
+    if name is None:
+        return jsonify({"ok": False, "error": "invalid filter name"}), 400
+    description = str(data.get("description") or "").strip()
+    if any(ord(ch) < 32 for ch in description):
+        return jsonify({"ok": False, "error": "description cannot contain newlines"}), 400
+    arguments, error = _clean_filter_arguments(data.get("arguments"))
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    steps, error = _clean_extension_entries(data.get("steps"))
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+    if not steps:
+        return jsonify({"ok": False, "error": "add at least one step"}), 400
+
+    os.makedirs(USER_FILTERS_DIR, exist_ok=True)
+    target = os.path.join(USER_FILTERS_DIR, name + ".yaml")
+    if os.path.exists(target) and not data.get("overwrite"):
+        return jsonify({"ok": False, "error": f"a user filter '{name}' already exists"}), 409
+    try:
+        with open(target, "w", encoding="utf-8") as f:
+            f.write(_dump_filter_file(description, bool(data.get("active", True)),
+                                      arguments, steps))
+    except OSError as exc:
+        return jsonify({"ok": False, "error": f"could not write the filter: {exc}"}), 500
+
+    cfg = api_config().get_json()
+    cfg["ok"] = True
+    return jsonify(cfg)
+
+
+@app.route("/api/extensions/delete", methods=["POST"])
+def api_extension_delete():
+    """Delete one of the user's extension files (never a shipped one)."""
+    if STATE["readonly"]:
+        return jsonify({"ok": False, "error": "read-only mode"}), 403
+    data = request.get_json(silent=True) or {}
+    found = extension_file_for(data.get("kind"), data.get("name"))
+    if found is None:
+        return jsonify({"ok": False, "error": "unknown extension"}), 404
+    if found["source"] != "user":
+        return jsonify({"ok": False, "error": "shipped files cannot be deleted"}), 400
+    try:
+        os.remove(found["path"])
+    except OSError as exc:
+        return jsonify({"ok": False, "error": f"could not delete the file: {exc}"}), 500
+
+    cfg = api_config().get_json()
+    cfg["ok"] = True
+    return jsonify(cfg)
+
+
+@app.route("/api/extensions/file", methods=["GET", "POST"])
+def api_extension_file():
+    """Read or raw-edit one extension file for the YAML editor.
+
+    GET (`?kind=&name=`) returns the file's text plus its source and version
+    status. POST `{kind, name, text, overwrite}` saves edited text (read-only is
+    refused): the file must parse and have a body, `api_version` is bumped to
+    the current value, and saving a shipped file writes a user override.
+    """
+    if request.method == "POST":
+        return _save_extension_file()
+
+    found = extension_file_for(request.args.get("kind"), request.args.get("name"))
+    if found is None:
+        return jsonify({"ok": False, "error": "unknown extension"}), 404
+    if api_version_status(found["api_version"]) == "newer":
+        return jsonify(
+            {"ok": False, "error": "this file is newer than the app supports"}
+        ), 400
+    return jsonify(_extension_file_payload(found, _read_text(found["path"])))
+
+
+def _save_extension_file():
+    """Save raw editor text (the POST half of `/api/extensions/file`)."""
+    if STATE["readonly"]:
+        return jsonify({"ok": False, "error": "read-only mode"}), 403
+    data = request.get_json(silent=True) or {}
+    kind = data.get("kind")
+    text = data.get("text")
+    if not isinstance(text, str):
+        return jsonify({"ok": False, "error": "text is required"}), 400
+    found = extension_file_for(kind, data.get("name"))
+    if found is None:
+        return jsonify({"ok": False, "error": "unknown extension"}), 404
+    if api_version_status(found["api_version"]) == "newer":
+        return jsonify(
+            {"ok": False, "error": "this file is newer than the app supports"}
+        ), 400
+
+    parsed = _parse_extension_text(kind, text)
+    if kind == "filter":
+        usable = bool(parsed.get("steps"))
+    else:
+        usable = bool(parsed.get("steps") or parsed.get("after_success"))
+    if not usable:
+        return jsonify({"ok": False, "error": "the file has no steps / after_success"}), 400
+
+    if found["source"] == "user":
+        target = found["path"]
+    else:
+        target = os.path.join(_extension_user_dir(kind), os.path.basename(found["path"]))
+        if os.path.exists(target) and not data.get("overwrite"):
+            return jsonify(
+                {"ok": False, "error": "a user override already exists"}
+            ), 409
+
+    text = _bump_api_version_text(text)
+    try:
+        os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
+        with open(target, "w", encoding="utf-8") as f:
+            f.write(text)
+    except OSError as exc:
+        return jsonify({"ok": False, "error": f"could not write the file: {exc}"}), 500
+
+    # Re-resolve so the reply reflects the user override and bumped version.
+    return jsonify(_extension_file_payload(extension_file_for(kind, data.get("name")) or found, text))
 
 
 @app.route("/api/image")

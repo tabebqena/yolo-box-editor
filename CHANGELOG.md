@@ -4,6 +4,32 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.0.0] - 2026-10-02
+
+### Added
+
+- **Create actions, hooks and filters from the web UI** (Settings → Actions /
+  Hooks, and a "Create a filter" section in Settings → Filters). The form writes
+  valid YAML itself, so indentation, missing `:` and missing `-` mistakes cannot
+  happen. Each command row has a **click-to-insert placeholder palette**
+  (`{IMAGE_PATH}`, `{USER_SCRIPT_DIR}`, `{INPUT_PIPE}`, …) so their spelling need
+  not be memorised. List and delete your own extensions next to the form.
+- Extension YAML now carries an **`api_version`** key. A file whose version is
+  missing or older than the UI is flagged **outdated** and can be opened in a
+  **raw YAML editor** (comments and unknown keys are preserved); saving bumps
+  `api_version` to the current value and, for a shipped file, writes a user
+  override. A file **newer** than the app is blocked with a warning.
+
+### Changed
+
+- New endpoints `/api/actions/save`, `/api/hooks/save`, `/api/filters/save`,
+  `/api/extensions/delete` and `/api/extensions/file` (read/write); `/api/config`
+  now also returns `extension_api_version`, `placeholders`, `hook_events`,
+  `app_actions`, `backend_actions` and `action_defs` / `hook_defs` / `filter_defs`
+  (each with `source`, `api_version` and `status`). All extension writes honour
+  read-only mode.
+- Shipped filters declare `api_version: 1`. Files without it still load.
+
 ## [5.0.0] - 2026-10-02
 
 ### Added

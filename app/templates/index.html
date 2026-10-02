@@ -196,6 +196,8 @@
         <button class="settings-tab" type="button" role="tab" data-tab="layout">Layout</button>
         <button class="settings-tab" type="button" role="tab" data-tab="dataset">Dataset</button>
         <button class="settings-tab" type="button" role="tab" data-tab="filters">Filters</button>
+        <button class="settings-tab" type="button" role="tab" data-tab="actions">Actions</button>
+        <button class="settings-tab" type="button" role="tab" data-tab="hooks">Hooks</button>
         <button class="settings-tab" type="button" role="tab" data-tab="shortcuts">Shortcuts</button>
         <button class="settings-tab" type="button" role="tab" data-tab="updates">Updates</button>
       </div>
@@ -345,6 +347,16 @@
             <button id="filterPanelClear" title="Remove every filter">Clear</button>
             <button id="filterPanelApply" class="primary" title="Run the selected filters top to bottom">Apply</button>
           </div>
+          <div class="settings-sep"></div>
+          <div id="filterBuilder" class="ext-builder"></div>
+        </section>
+
+        <section class="settings-panel" data-panel="actions">
+          <div id="actionBuilder" class="ext-builder"></div>
+        </section>
+
+        <section class="settings-panel" data-panel="hooks">
+          <div id="hookBuilder" class="ext-builder"></div>
         </section>
 
         <section class="settings-panel" data-panel="shortcuts">
@@ -452,6 +464,25 @@ python -m pip install -r app/requirements.txt</pre>
       </div>
       <div class="tip-body">
         <p id="tipText" class="tip-text"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="yamlEditorModal" class="modal hidden">
+    <div class="modal-box yaml-editor-modal">
+      <div class="modal-head">
+        <span id="yamlEditorTitle" class="modal-title">Edit YAML</span>
+        <button id="yamlEditorClose" class="modal-close" title="Close (Esc)">&#10005;</button>
+      </div>
+      <div class="yaml-editor-body">
+        <div id="yamlEditorMeta" class="yaml-editor-meta"></div>
+        <textarea id="yamlEditorText" class="yaml-editor-text" spellcheck="false"
+                  autocapitalize="off" autocomplete="off"></textarea>
+        <pre id="yamlEditorError" class="yaml-editor-error hidden"></pre>
+      </div>
+      <div class="settings-actions">
+        <button id="yamlEditorCancel" type="button">Cancel</button>
+        <button id="yamlEditorSave" class="primary" type="button">Save</button>
       </div>
     </div>
   </div>

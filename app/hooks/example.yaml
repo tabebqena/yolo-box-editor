@@ -30,6 +30,8 @@
 #
 # Format (2-space indentation, lines starting with # are ignored):
 #
+#   api_version: 1          # extension format version (older files are opened
+#                           # in the YAML editor in the web UI)
 #   steps:                  # run in order; execution stops at the first
 #     - touch {DATASET_PATH}/saved.log   # failure. Entries share the syntax
 #   after_success:          # optional, runs after all steps succeeded

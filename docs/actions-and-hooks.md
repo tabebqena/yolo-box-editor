@@ -4,6 +4,25 @@ Actions are custom commands you run on the current image from a button (with a
 confirmation). Hooks are the same kind of command, but they run automatically on
 an app event instead of a button.
 
+## Create actions and hooks in the web UI
+
+**Settings → Actions** and **Settings → Hooks** build the YAML for you, so you
+never have to get the indentation or the `:` / `-` right by hand:
+
+- Type a name (actions) or pick an event (hooks), then fill **Steps** and
+  **After success**. An entry can be a shell command, an `app_*` / `backend_*`
+  built-in, or another `action_<Name>` — choose the type from the dropdown.
+- **Insert placeholder** buttons drop a token such as `{IMAGE_PATH}` into the
+  command at the cursor, so you do not have to remember the spelling.
+- Your files are listed under **Existing** and can be deleted there; shipped
+  files are never deleted.
+
+Every extension file carries an `api_version` (currently `1`). A file whose
+version is missing or older than the app is shown as **outdated**: use its
+**YAML** button to open it in the raw editor, adjust it and save — the version
+is bumped for you and comments are kept. A file **newer** than the app is
+blocked with a warning. Files without `api_version` still load.
+
 ## Built-in app actions
 
 The built-in app actions are defined in `app/app.py` (`APP_ACTIONS`) and

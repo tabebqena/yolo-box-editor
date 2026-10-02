@@ -12,6 +12,20 @@ Each filter is defined by **one YAML file** in a `filters/` folder. Shipped
 filters live in `app/filters/`; your filters live in `<home>/filters/`, are read
 after the shipped ones and win on a name clash.
 
+## Create a filter in the web UI
+
+**Settings → Filters** has a **Create a filter** section below the chain. Give the
+filter a name, an optional description, any arguments (name / required / default /
+comma-separated options) and its **Steps**. Each command row has **Insert
+placeholder** buttons (`{INPUT_PIPE}`, `{OUTPUT_PIPE}`, `{SPLIT}`, every
+argument's `{NAME}`, …), so you never type a token from memory. Your filters are
+listed under **Existing** and can be deleted there; shipped ones cannot.
+
+Every filter file carries an `api_version` (currently `1`). A missing or older
+version is shown as **outdated** and can be opened in a raw YAML editor with its
+**YAML** button; saving bumps the version and keeps comments. A file **newer**
+than the app is blocked with a warning. Files without `api_version` still load.
+
 ## Format
 
 ```yaml

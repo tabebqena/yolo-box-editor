@@ -2663,3 +2663,255 @@ def test_fetch_latest_version_falls_back_to_release_without_tags(monkeypatch):
 
     monkeypatch.setattr(ybe, "_http_get_text", fake_get)
     assert ybe.fetch_latest_version() == "3.1.0"
+
+
+# --------------------------------------------------------------------------- #
+# extension api_version + authoring (Settings > Actions / Hooks / Filters)
+# --------------------------------------------------------------------------- #
+def test_parse_action_file_reads_api_version():
+    parsed = ybe._parse_action_file("api_version: 1\nsteps:\n  - echo hi\n")
+    assert parsed["api_version"] == 1
+    assert ybe._parse_action_file("steps:\n  - echo hi\n")["api_version"] is None
+    assert ybe._parse_action_file("api_version: abc\nsteps:\n  - x\n")["api_version"] is None
+
+
+def test_parse_filter_file_reads_api_version():
+    parsed = ybe._parse_filter_file("api_version: 2\nsteps:\n  - echo hi\n")
+    assert parsed["api_version"] == 2
+    assert ybe._parse_filter_file("steps:\n  - echo hi\n")["api_version"] is None
+
+
+def test_api_version_status():
+    assert ybe.api_version_status(None) == "outdated"
+    assert ybe.api_version_status("1") == "outdated"
+    assert ybe.api_version_status(0) == "outdated"
+    assert ybe.api_version_status(ybe.EXTENSION_API_VERSION) == "current"
+    assert ybe.api_version_status(ybe.EXTENSION_API_VERSION + 1) == "newer"
+
+
+def test_dump_action_file_round_trips():
+    text = ybe._dump_action_file(["rm {IMAGE_PATH}"], ["app_refresh_image"])
+    parsed = ybe._parse_action_file(text)
+    assert parsed["api_version"] == ybe.EXTENSION_API_VERSION
+    assert parsed["steps"] == ["rm {IMAGE_PATH}"]
+    assert parsed["after_success"] == ["app_refresh_image"]
+
+    inactive = ybe._parse_action_file(ybe._dump_action_file(["echo hi"], [], active=False))
+    assert inactive["active"] is False
+
+
+def test_dump_filter_file_round_trips():
+    text = ybe._dump_filter_file("demo: x", True, [
+        {"name": "every", "required": False, "default": "2", "options": ["2", "3"]},
+        {"name": "reverse", "required": True, "default": None, "options": None},
+    ], ["echo {EVERY}"])
+    parsed = ybe._parse_filter_file(text)
+    assert parsed["api_version"] == ybe.EXTENSION_API_VERSION
+    assert parsed["description"] == "demo: x"
+    assert parsed["arguments"] == [
+        {"name": "every", "required": False, "default": "2", "options": ["2", "3"]},
+        {"name": "reverse", "required": True, "default": None, "options": None},
+    ]
+    assert parsed["steps"] == ["echo {EVERY}"]
+
+
+def test_safe_extension_name():
+    assert ybe._safe_extension_name("Remove box") == "Remove box"
+    for bad in ("", "   ", ".hidden", "..", "a/b", "a\\b", "x" * 81,
+                "app_x", "backend_x", "action_x", "on_x"):
+        assert ybe._safe_extension_name(bad) is None
+
+
+def test_bump_api_version_text_preserves_comments():
+    bumped = ybe._bump_api_version_text("# note\nname: x\nsteps:\n  - a\n")
+    assert bumped.startswith(f"# note\napi_version: {ybe.EXTENSION_API_VERSION}\n")
+    replaced = ybe._bump_api_version_text("api_version: 9\nsteps:\n  - a\n")
+    assert f"api_version: {ybe.EXTENSION_API_VERSION}" in replaced
+    assert "api_version: 9" not in replaced
+
+
+def test_api_action_save_writes_user_file(clean_state):
+    cfg = ybe.app.test_client().post("/api/actions/save", json={
+        "name": "Remove box",
+        "steps": ["rm {IMAGE_PATH}"],
+        "after_success": ["app_refresh_image"],
+    }).get_json()
+    assert cfg["ok"] is True
+    path = Path(clean_state) / "actions" / "Remove box.yaml"
+    assert path.is_file()
+    assert [a["name"] for a in ybe.load_actions()] == ["Remove box"]
+    assert cfg["action_defs"][0]["source"] == "user"
+    assert cfg["action_defs"][0]["status"] == "current"
+    assert f"api_version: {ybe.EXTENSION_API_VERSION}" in path.read_text(encoding="utf-8")
+
+
+def test_api_action_save_rejects_bad_name_and_empty(clean_state):
+    client = ybe.app.test_client()
+    assert client.post("/api/actions/save",
+                       json={"name": "app_x", "steps": ["echo"]}).status_code == 400
+    assert client.post("/api/actions/save",
+                       json={"name": "X", "steps": [], "after_success": []}).status_code == 400
+    assert client.post("/api/actions/save",
+                       json={"name": "../evil", "steps": ["echo"]}).status_code == 400
+
+
+def test_api_action_save_overwrite_conflict(clean_state):
+    client = ybe.app.test_client()
+    body = {"name": "X", "steps": ["echo one"]}
+    assert client.post("/api/actions/save", json=body).status_code == 200
+    assert client.post("/api/actions/save", json=body).status_code == 409
+    assert client.post("/api/actions/save", json={**body, "overwrite": True}).status_code == 200
+
+
+def test_api_action_save_readonly(clean_state):
+    ybe.STATE["readonly"] = True
+    resp = ybe.app.test_client().post(
+        "/api/actions/save", json={"name": "X", "steps": ["echo"]})
+    assert resp.status_code == 403
+
+
+def test_api_hook_save_writes_hook(clean_state):
+    cfg = ybe.app.test_client().post("/api/hooks/save", json={
+        "event": "after_save", "steps": ["echo saved"], "active": True,
+    }).get_json()
+    assert cfg["ok"] is True
+    assert (Path(clean_state) / "hooks" / "on_after_save.yaml").is_file()
+    assert cfg["hook_defs"][0]["event"] == "after_save"
+    assert cfg["hook_defs"][0]["status"] == "current"
+
+
+def test_api_hook_save_rejects_unknown_event(clean_state):
+    resp = ybe.app.test_client().post(
+        "/api/hooks/save", json={"event": "nope", "steps": ["echo"]})
+    assert resp.status_code == 400
+
+
+def test_api_filter_save_writes_filter(clean_state):
+    cfg = ybe.app.test_client().post("/api/filters/save", json={
+        "name": "Keep every",
+        "description": "demo",
+        "active": True,
+        "arguments": [{"name": "every", "required": True,
+                       "default": "2", "options": ["2", "3"]}],
+        "steps": ["echo {EVERY}"],
+    }).get_json()
+    assert cfg["ok"] is True
+    assert (Path(clean_state) / "filters" / "Keep every.yaml").is_file()
+    flt = ybe.load_filters()[0]["Keep every"]
+    assert flt["arguments"][0]["name"] == "every"
+    assert cfg["filter_defs"][0]["status"] == "current"
+
+
+def test_api_filter_save_rejects_reserved_argument_and_empty(clean_state):
+    client = ybe.app.test_client()
+    assert client.post("/api/filters/save", json={
+        "name": "X", "steps": ["echo"], "arguments": [{"name": "app_dir"}],
+    }).status_code == 400
+    assert client.post("/api/filters/save",
+                       json={"name": "X", "steps": []}).status_code == 400
+
+
+def test_api_config_exposes_extension_builder_data(clean_state):
+    write_action(clean_state, "Remove.yaml", "steps:\n  - echo hi\n")
+    write_hook(clean_state, "on_after_save.yaml", "steps:\n  - echo hi\n")
+    write_filter(clean_state, "Odd.yaml", filter_yaml("echo hi", name="Odd"))
+    cfg = ybe.app.test_client().get("/api/config").get_json()
+    assert cfg["extension_api_version"] == ybe.EXTENSION_API_VERSION
+    assert "IMAGE_PATH" in {p["name"] for p in cfg["placeholders"]["action"]}
+    assert "INPUT_PIPE" in {p["name"] for p in cfg["placeholders"]["filter"]}
+    assert cfg["hook_events"] == list(ybe.HOOK_EVENTS)
+    assert "app_save" in cfg["app_actions"]
+    assert "backend_rescan_images" in cfg["backend_actions"]
+
+    action = {d["name"]: d for d in cfg["action_defs"]}["Remove"]
+    assert action["status"] == "outdated" and action["source"] == "user"
+    assert action["steps"] == ["echo hi"]
+    assert "api_version" in cfg["hook_defs"][0]
+    assert cfg["filter_defs"][0]["source"] == "user"
+
+
+def test_api_extension_file_get_and_writable(clean_state):
+    write_action(clean_state, "Remove.yaml", "steps:\n  - echo hi\n")
+    data = ybe.app.test_client().get(
+        "/api/extensions/file?kind=action&name=Remove").get_json()
+    assert data["ok"] and data["source"] == "user" and data["writable"] is True
+    assert data["status"] == "outdated"
+    assert "echo hi" in data["text"]
+
+
+def test_api_extension_file_get_shipped_is_not_writable(clean_state):
+    write_action(clean_state, "Keep.yaml", "steps:\n  - echo hi\n", subdir="app-actions")
+    data = ybe.app.test_client().get(
+        "/api/extensions/file?kind=action&name=Keep").get_json()
+    assert data["source"] == "shipped" and data["writable"] is False
+
+
+def test_api_extension_file_get_unknown_404(clean_state):
+    assert ybe.app.test_client().get(
+        "/api/extensions/file?kind=action&name=Nope").status_code == 404
+
+
+def test_api_extension_file_save_bumps_and_preserves_comments(clean_state):
+    path = Path(clean_state) / "actions" / "Remove.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# keep me\nname: Remove\nsteps:\n  - echo hi\n", encoding="utf-8")
+    data = ybe.app.test_client().post("/api/extensions/file", json={
+        "kind": "action", "name": "Remove", "text": path.read_text(encoding="utf-8"),
+    }).get_json()
+    assert data["ok"] and data["status"] == "current"
+    assert data["api_version"] == ybe.EXTENSION_API_VERSION
+    written = path.read_text(encoding="utf-8")
+    assert "# keep me" in written
+    assert f"api_version: {ybe.EXTENSION_API_VERSION}" in written
+
+
+def test_api_extension_file_save_shipped_creates_user_override(clean_state):
+    write_action(clean_state, "Keep.yaml", "steps:\n  - echo shipped\n", subdir="app-actions")
+    data = ybe.app.test_client().post("/api/extensions/file", json={
+        "kind": "action", "name": "Keep", "text": "steps:\n  - echo edited\n",
+    }).get_json()
+    assert data["ok"] and data["source"] == "user"
+    assert (Path(clean_state) / "actions" / "Keep.yaml").is_file()
+    assert ybe.load_actions()[0]["steps"] == ["echo edited"]
+
+
+def test_api_extension_file_save_rejects_empty_and_newer(clean_state):
+    write_action(clean_state, "Remove.yaml", "steps:\n  - echo hi\n")
+    client = ybe.app.test_client()
+    assert client.post("/api/extensions/file", json={
+        "kind": "action", "name": "Remove", "text": "# only a comment\n",
+    }).status_code == 400
+
+    write_action(clean_state, "Future.yaml",
+                 f"api_version: {ybe.EXTENSION_API_VERSION + 1}\nsteps:\n  - echo hi\n")
+    assert client.post("/api/extensions/file", json={
+        "kind": "action", "name": "Future", "text": "steps:\n  - echo hi\n",
+    }).status_code == 400
+    assert client.get(
+        "/api/extensions/file?kind=action&name=Future").status_code == 400
+
+
+def test_api_extension_file_save_readonly(clean_state):
+    ybe.STATE["readonly"] = True
+    resp = ybe.app.test_client().post("/api/extensions/file", json={
+        "kind": "action", "name": "X", "text": "steps:\n  - a\n"})
+    assert resp.status_code == 403
+
+
+def test_api_extension_delete_user_only(clean_state):
+    write_action(clean_state, "Remove.yaml", "steps:\n  - echo hi\n")
+    client = ybe.app.test_client()
+    cfg = client.post("/api/extensions/delete",
+                      json={"kind": "action", "name": "Remove"}).get_json()
+    assert cfg["ok"] is True
+    assert not (Path(clean_state) / "actions" / "Remove.yaml").exists()
+    assert ybe.load_actions() == []
+
+
+def test_api_extension_delete_refuses_shipped(clean_state):
+    write_action(clean_state, "Keep.yaml", "steps:\n  - echo hi\n", subdir="app-actions")
+    resp = ybe.app.test_client().post(
+        "/api/extensions/delete", json={"kind": "action", "name": "Keep"})
+    assert resp.status_code == 400
+    assert (Path(clean_state) / "app-actions" / "Keep.yaml").is_file()
+
