@@ -25,7 +25,7 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   reached (per dataset) when you reload.
 - **Split filter**: narrow navigation to a single split, or "All splits".
 - **Filters**: chain scripts from the `filters/` folder to narrow the loaded
-  image list (shown once a `data.yaml` is loaded). See [Filters](#filters).
+  image list, from the **Filters** tab in **Settings** (⚙). See [Filters](#filters).
 - **Labels** are drawn on the image as boxes; a class list pops up when a new
   box is drawn.
 - **Hide / show boxes**: press `.` to toggle the box overlay, so you can inspect
@@ -537,9 +537,8 @@ opt-in: flip the **Tags** switch in **Settings** to show the tag controls in the
 ## Filters
 
 A **filter** narrows the loaded image list to the images a script returns.
-**Filters are chainable**: the applied filter names show in the right column
-(below `Split`) with a `…` button that opens a modal with a stack of selects (up
-to 8), once a `data.yaml` is loaded.
+**Filters are chainable**: open **Settings** (⚙) and use the **Filters** tab,
+which stacks up to 8 selects.
 Pick a filter in each select and they run **top to bottom** — each one receives
 the previous one's result, applies its own logic, and passes its result on. The
 last filter's output is exactly what the app shows (count, Prev/Next, the counter

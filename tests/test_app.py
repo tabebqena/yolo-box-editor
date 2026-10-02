@@ -678,8 +678,8 @@ def test_index_serves_page():
     assert "id=\"settingsBtn\"" in html
     assert "id=\"shortcutItems\"" in html
     assert "id=\"autoSaveSw\"" in html
-    assert "id=\"filtersBtn\"" in html
-    assert "id=\"filterModal\"" in html
+    assert "id=\"filterPanelBody\"" in html
+    assert "id=\"filterPanelApply\"" in html
     assert "id=\"tagFloat\"" in html
     assert "id=\"boxFloat\"" in html
     assert "id=\"panelSideSel\"" in html

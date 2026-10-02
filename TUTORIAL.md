@@ -84,8 +84,7 @@ canvas.
 
 - **Right column** — everything except the image, top to bottom: the app label
   with the **⚙ Settings**, notifications bell and **Panel** toggle; the dataset
-  name; separators; the _Split_ picker; the applied _Filter_ names with a `…`
-  button that opens the filter modal; the per-dataset action buttons (a few,
+  name; separators; the _Split_ picker; the per-dataset action buttons (a few,
   with a `…` to show the rest); and finally the _Boxes_ list for the current
   image (one row per box with its class dropdown, `cx cy w h` number inputs and
   a `×`). The column width can be dragged from its left edge. The **Panel**
@@ -94,8 +93,9 @@ canvas.
 - **Middle** — the picture (canvas).
 - **Bottom bar** — one row with the tag controls (when Tags is on) plus image
   navigation (Prev / Next, counter) and Undo / Redo / Save.
-- **Settings** (⚙) — tabs for _View_, _Layout_, _Dataset_, _Shortcuts_ and
-  _Updates_; the _Shortcuts_ tab lists every binding in a scrollable panel.
+- **Settings** (⚙) — tabs for _View_, _Layout_, _Dataset_, _Filters_, _Shortcuts_
+  and _Updates_; the _Filters_ tab chains filter scripts and the _Shortcuts_ tab
+  lists every binding in a scrollable panel.
 
 ## 5. Your first box
 

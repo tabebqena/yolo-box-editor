@@ -734,11 +734,6 @@ async function jumpToImage(text) {
   loadImage(idx);
 }
 
-function applyDatasetVisibility() {
-  // filters need a dataset to receive, so only show them once one is loaded
-  el('filterBox').classList.toggle('hidden', !datasetLoaded);
-}
-
 let loadDataAutoOpened = false;
 
 function selectSettingsTab(name) {
@@ -794,30 +789,9 @@ function populateSplitSelect() {
 
 const FILTER_CHAIN_MAX = 8;
 
-function filterSummary() {
-  if (!activeFilters.length) return 'No filter';
-  return activeFilters.join(' → ');
-}
-
-function updateFilterButton() {
-  const summary = filterSummary();
-  const label = el('filterSummary');
-  const btn = el('filtersBtn');
-  if (label) {
-    label.textContent = summary;
-    label.classList.toggle('filter-none', activeFilters.length === 0);
-    label.title = activeFilters.length ? `Filters: ${summary}` : 'No filter';
-  }
-  if (btn) {
-    btn.title = filters.length
-      ? 'Edit the filter chain'
-      : 'No filters found in filters/';
-    btn.disabled = filters.length === 0;
-  }
-}
-
-function populateFilterModal() {
-  const body = el('filterModalBody');
+function populateFilterPanel() {
+  const body = el('filterPanelBody');
+  if (!body) return;
   body.innerHTML = '';
   if (!filters.length) {
     const empty = document.createElement('div');
@@ -844,18 +818,10 @@ function populateFilterModal() {
   }
 }
 
-function openFilterModal() {
-  populateFilterModal();
-  el('filterModal').classList.remove('hidden');
-}
-
-function closeFilterModal() {
-  el('filterModal').classList.add('hidden');
-}
-
 function selectedFilterChain() {
   const names = [];
-  el('filterModalBody').querySelectorAll('select').forEach((s) => {
+  const body = el('filterPanelBody');
+  if (body) body.querySelectorAll('select').forEach((s) => {
     if (s.value) names.push(s.value);
   });
   return names;
@@ -1111,7 +1077,6 @@ async function loadConfig(startIdx = 0, opts = {}) {
     el('datasetPath').title = dsPath || 'No dataset loaded';
   }
   readonly = !!cfg.readonly;
-  applyDatasetVisibility();
   if (!datasetLoaded && !loadDataAutoOpened) {
     loadDataAutoOpened = true;
     openLoadDataModal();
@@ -1120,7 +1085,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
   applyReadonly();
   populateClasses();
   populateSplitSelect();
-  updateFilterButton();
+  populateFilterPanel();
   populateRecent(cfg.recent_data_yamls || []);
   actionShortcuts = cfg.action_shortcuts || {};
   appShortcuts = cfg.shortcuts || {};
@@ -1763,17 +1728,16 @@ async function applyFilterChain(names) {
     if (res.ok && data.ok) {
       dbg('filters changed', { filters: names || [],
         images: (data.images || []).length, filter_error: data.filter_error });
-      closeFilterModal();
       await loadConfig(0, { noResume: true, skipFilterRestore: true, anchor });
     } else {
       dbgWarn('filter failed', { status: res.status, error: data.error });
       toast(data.error || 'Filter failed', { type: 'error' });
-      populateFilterModal(); // revert the modal to the active chain
+      populateFilterPanel(); // revert the panel to the active chain
     }
   } catch (err) {
     dbgWarn('filter error', err);
     toast('Error: ' + err.message, { type: 'error' });
-    populateFilterModal();
+    populateFilterPanel();
   }
 }
 
@@ -2612,13 +2576,8 @@ el('recentSelect').addEventListener('change', () => {
   setDataYaml();
 });
 el('splitSelect').addEventListener('change', () => setSplit(el('splitSelect').value));
-el('filtersBtn').addEventListener('click', openFilterModal);
-el('filterModalClose').addEventListener('click', closeFilterModal);
-el('filterModalClear').addEventListener('click', () => applyFilterChain([]));
-el('filterModalApply').addEventListener('click', () => applyFilterChain(selectedFilterChain()));
-el('filterModal').addEventListener('click', (e) => {
-  if (e.target === el('filterModal')) closeFilterModal();
-});
+el('filterPanelClear').addEventListener('click', () => applyFilterChain([]));
+el('filterPanelApply').addEventListener('click', () => applyFilterChain(selectedFilterChain()));
 const counterInput = el('counter');
 counterInput.addEventListener('focus', () => counterInput.select());
 counterInput.addEventListener('keydown', (e) => {
@@ -2812,7 +2771,7 @@ function applyImagesPayload(data, anchor, label) {
   dbg(label + ' done', { now: images.length, active_split: activeSplit,
     active_filters: activeFilters, filter_error: data.filter_error });
   populateSplitSelect();
-  updateFilterButton();
+  populateFilterPanel();
   if (data.filter_error) showTransientFilterMessage(data.filter_error);
   if (!images.length) {
     currentIndex = -1;
@@ -2906,10 +2865,6 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!el('actionResult').classList.contains('hidden')) {
       closeActionResult();
-      return;
-    }
-    if (!el('filterModal').classList.contains('hidden')) {
-      closeFilterModal();
       return;
     }
     if (!el('changelogModal').classList.contains('hidden')) {

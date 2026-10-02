@@ -72,16 +72,6 @@
 
         <div class="sidebar-sep"></div>
 
-        <div id="filterBox" class="sidebar-section filterbox hidden">
-          <span class="sidebar-label">Filters</span>
-          <div class="filter-row">
-            <span id="filterSummary" class="filter-summary">No filter</span>
-            <button id="filtersBtn" class="filter-more" title="Edit filter chain">&#8230;</button>
-          </div>
-        </div>
-
-        <div class="sidebar-sep"></div>
-
         <div class="sidebar-section actionbox">
           <span class="sidebar-label">Actions</span>
           <div class="action-row">
@@ -151,6 +141,7 @@
         <button class="settings-tab active" type="button" role="tab" data-tab="view">View</button>
         <button class="settings-tab" type="button" role="tab" data-tab="layout">Layout</button>
         <button class="settings-tab" type="button" role="tab" data-tab="dataset">Dataset</button>
+        <button class="settings-tab" type="button" role="tab" data-tab="filters">Filters</button>
         <button class="settings-tab" type="button" role="tab" data-tab="shortcuts">Shortcuts</button>
         <button class="settings-tab" type="button" role="tab" data-tab="updates">Updates</button>
       </div>
@@ -196,6 +187,14 @@
             </select>
             <input id="dataYaml" type="text" placeholder="/path/to/data.yaml">
             <button id="setDataBtn" class="primary">Load</button>
+          </div>
+        </section>
+
+        <section class="settings-panel" data-panel="filters">
+          <div id="filterPanelBody" class="filter-panel-body"></div>
+          <div class="settings-actions filter-panel-actions">
+            <button id="filterPanelClear" title="Remove every filter">Clear</button>
+            <button id="filterPanelApply" class="primary" title="Run the selected filters top to bottom">Apply</button>
           </div>
         </section>
 
@@ -280,20 +279,6 @@ python -m pip install -r app/requirements.txt</pre>
       <pre id="actionResultExit" class="modal-exit"></pre>
       <pre id="actionResultOut" class="modal-out"></pre>
       <pre id="actionResultErr" class="modal-err"></pre>
-    </div>
-  </div>
-
-  <div id="filterModal" class="modal hidden">
-    <div class="modal-box">
-      <div class="modal-head">
-        <span class="modal-title">Filter chain</span>
-        <button id="filterModalClose" class="modal-close" title="Close (Esc)">&#10005;</button>
-      </div>
-      <div id="filterModalBody" class="filter-modal-body"></div>
-      <div class="modal-actions">
-        <button id="filterModalClear" title="Remove every filter">Clear</button>
-        <button id="filterModalApply" class="primary" title="Run the selected filters top to bottom">Apply</button>
-      </div>
     </div>
   </div>
 
