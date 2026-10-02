@@ -53,6 +53,7 @@ const VIEW_KEY = 'ybe_view';             // localStorage key: last split + filte
 const SHOW_BOXES_KEY = 'ybe_show_boxes'; // localStorage key: box overlay shown/hidden
 const CLIENT_ID_KEY = 'ybe_client_id';   // sessionStorage key: this tab's presence id
 const UPDATE_NOTIFIED_KEY = 'ybe_update_notified'; // localStorage: version@date last shown
+const CHANGELOG_SEEN_KEY = 'ybe_changelog_seen'; // localStorage: last version's changelog shown
 const UPDATE_POLL_MS = [4000, 12000]; // retries to pick up the start-thread result
 
 // One id per tab, so the server can count concurrent clients (see /api/presence).
@@ -210,13 +211,8 @@ function renderUpdateStatus() {
   }
   const cur = updateInfo.current_version || 'unknown';
   const latest = updateInfo.latest_version;
-  const breaking = !!updateInfo.breaking_changes;
   if (updateInfo.update_available) {
-    status.textContent = `Update available: ${latest} (you have ${cur})`
-      + (breaking ? ' — includes breaking changes' : '');
-    if (how) how.classList.remove('hidden');
-  } else if (breaking) {
-    status.textContent = `Version ${cur} — this release has breaking changes`;
+    status.textContent = `Update available: ${latest} (you have ${cur})`;
     if (how) how.classList.remove('hidden');
   } else if (latest) {
     status.textContent = `Up to date (${cur})`;
@@ -245,14 +241,10 @@ async function refreshUpdateInfo(force = false) {
   notifyUpdateDaily();
 }
 
-// One sticky notice per day (and per version) with a details button. Also fires
-// for a fresh install of a release whose own version has breaking changes.
+// One sticky notice per day (and per version) with a details button.
 function notifyUpdateDaily() {
-  if (!updateInfo) return;
-  const hasUpdate = !!updateInfo.update_available;
-  const breaking = !!updateInfo.breaking_changes;
-  if (!hasUpdate && !breaking) return;
-  const version = updateInfo.latest_version || updateInfo.current_version || '';
+  if (!updateInfo || !updateInfo.update_available) return;
+  const version = updateInfo.latest_version || '';
   const today = new Date().toISOString().slice(0, 10);
   const key = `${version}@${today}`;
   let seen = null;
@@ -260,23 +252,16 @@ function notifyUpdateDaily() {
   if (seen === key) return;
   try { localStorage.setItem(UPDATE_NOTIFIED_KEY, key); } catch (e) { /* ignore */ }
   dbg('update notice', updateInfo);
-  let msg;
-  if (hasUpdate) {
-    msg = `A new version of YOLO Box Editor is available: ${updateInfo.latest_version} `
-      + `(you have ${updateInfo.current_version}).`;
-    if (breaking) msg += ' It has breaking changes — check what changed before updating.';
-  } else {
-    msg = `YOLO Box Editor ${updateInfo.current_version} has breaking changes — check what changed.`;
-  }
-  toast(msg, {
-    type: breaking ? 'warning' : 'info',
-    sticky: true,
-    log: true,
-    action: {
-      label: breaking ? 'What changed?' : 'How to update',
-      onClick: openUpdateModal,
-    },
-  });
+  toast(
+    `A new version of YOLO Box Editor is available: ${updateInfo.latest_version} `
+      + `(you have ${updateInfo.current_version}).`,
+    {
+      type: 'info',
+      sticky: true,
+      log: true,
+      action: { label: 'How to update', onClick: openUpdateModal },
+    }
+  );
 }
 
 function openUpdateModal() {
@@ -285,29 +270,49 @@ function openUpdateModal() {
     if (updateInfo && updateInfo.update_available) {
       summary.textContent = `Version ${updateInfo.latest_version} is available `
         + `(you have ${updateInfo.current_version}). Update with the steps for your setup:`;
-    } else if (updateInfo && updateInfo.breaking_changes) {
-      summary.textContent = `Your version (${updateInfo.current_version}) has breaking changes:`;
     } else {
       summary.textContent = 'Update with the steps for your setup:';
     }
   }
-  const breaking = (updateInfo && Array.isArray(updateInfo.breaking)) ? updateInfo.breaking : [];
-  const wrap = el('updateBreaking');
-  const list = el('updateBreakingList');
-  if (list) {
-    list.innerHTML = '';
-    breaking.forEach((note) => {
-      const li = document.createElement('li');
-      li.textContent = note;
-      list.appendChild(li);
-    });
-  }
-  if (wrap) wrap.classList.toggle('hidden', breaking.length === 0);
   el('updateModal').classList.remove('hidden');
 }
 
 function closeUpdateModal() {
   el('updateModal').classList.add('hidden');
+}
+
+// ------------------------------------------------------------------------- //
+// changelog: show app/CHANGES for the installed version once per version
+// ------------------------------------------------------------------------- //
+function notifyChangelog(cfg) {
+  const version = (cfg && cfg.version) || '';
+  const changes = (cfg && Array.isArray(cfg.changelog)) ? cfg.changelog : [];
+  if (!version || !changes.length) return;
+  let seen = null;
+  try { seen = localStorage.getItem(CHANGELOG_SEEN_KEY); } catch (e) { /* ignore */ }
+  if (seen === version) return;
+  try { localStorage.setItem(CHANGELOG_SEEN_KEY, version); } catch (e) { /* ignore */ }
+  dbg('changelog', version, changes);
+  showChangelog(version, changes);
+}
+
+function showChangelog(version, changes) {
+  const title = el('changelogTitle');
+  if (title) title.textContent = `What's new in ${version}`;
+  const list = el('changelogList');
+  if (list) {
+    list.innerHTML = '';
+    changes.forEach((line) => {
+      const li = document.createElement('li');
+      li.textContent = line;
+      list.appendChild(li);
+    });
+  }
+  el('changelogModal').classList.remove('hidden');
+}
+
+function closeChangelog() {
+  el('changelogModal').classList.add('hidden');
 }
 
 // interaction state
@@ -734,10 +739,21 @@ function applyDatasetVisibility() {
   el('filterBox').classList.toggle('hidden', !datasetLoaded);
 }
 
-let settingsAutoOpened = false;
+let loadDataAutoOpened = false;
+
+function selectSettingsTab(name) {
+  document.querySelectorAll('.settings-tab').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.tab === name);
+  });
+  document.querySelectorAll('.settings-panel').forEach((panel) => {
+    panel.classList.toggle('active', panel.dataset.panel === name);
+  });
+}
 
 function openSettingsModal() {
   el('settingsModal').classList.remove('hidden');
+  // With no dataset, the Dataset tab is the only useful one.
+  if (!datasetLoaded) selectSettingsTab('dataset');
   if (!datasetLoaded) {
     const input = el('dataYaml');
     input.focus();
@@ -747,6 +763,17 @@ function openSettingsModal() {
 
 function closeSettingsModal() {
   el('settingsModal').classList.add('hidden');
+}
+
+function openLoadDataModal() {
+  el('loadDataModal').classList.remove('hidden');
+  const input = el('loadDataYaml');
+  input.focus();
+  input.select();
+}
+
+function closeLoadDataModal() {
+  el('loadDataModal').classList.add('hidden');
 }
 
 function populateSplitSelect() {
@@ -837,11 +864,14 @@ function selectedFilterChain() {
 function populateRecent(paths) {
   const sel = el('recentSelect');
   sel.innerHTML = '';
+  const list = paths || [];
+  // Nothing to pick from: hide the dropdown entirely.
+  sel.classList.toggle('hidden', list.length === 0);
   const placeholder = document.createElement('option');
   placeholder.value = '';
   placeholder.textContent = 'Recent…';
   sel.appendChild(placeholder);
-  (paths || []).forEach((p) => {
+  list.forEach((p) => {
     const opt = document.createElement('option');
     opt.value = p;
     opt.textContent = p;
@@ -1091,9 +1121,9 @@ async function loadConfig(startIdx = 0, opts = {}) {
   }
   readonly = !!cfg.readonly;
   applyDatasetVisibility();
-  if (!datasetLoaded && !settingsAutoOpened) {
-    settingsAutoOpened = true;
-    openSettingsModal();
+  if (!datasetLoaded && !loadDataAutoOpened) {
+    loadDataAutoOpened = true;
+    openLoadDataModal();
   }
   el('readonlySw').dataset.server = cfg.readonly ? '1' : '';
   applyReadonly();
@@ -1137,6 +1167,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
   }
   renderUpdateStatus();
   notifyUpdateDaily();
+  notifyChangelog(cfg0);
   runHook('on_images_list_loaded');
 }
 
@@ -1669,8 +1700,12 @@ async function save(opts = {}) {
   return ok;
 }
 
-async function setDataYaml() {
-  const yamlPath = el('dataYaml').value.trim();
+async function loadDataset(rawPath) {
+  const yamlPath = (rawPath || '').trim();
+  if (!yamlPath) {
+    toast('Enter the path to a data.yaml', { type: 'warning' });
+    return;
+  }
   try {
     const res = await fetch('/api/data', {
       method: 'POST',
@@ -1683,6 +1718,7 @@ async function setDataYaml() {
       await loadConfig();
       toast('Dataset loaded', { type: 'success' });
       closeSettingsModal();
+      closeLoadDataModal();
     } else {
       dbgWarn('dataset load failed', { status: res.status, error: data.error });
       toast(data.error || 'Invalid data.yaml', { type: 'error' });
@@ -1691,6 +1727,14 @@ async function setDataYaml() {
     dbgWarn('dataset load error', err);
     toast('Error: ' + err.message, { type: 'error' });
   }
+}
+
+function setDataYaml() {
+  return loadDataset(el('dataYaml').value);
+}
+
+function loadDataFromModal() {
+  return loadDataset(el('loadDataYaml').value);
 }
 
 async function setSplit(split, resumeOk = false) {
@@ -2317,6 +2361,17 @@ el('settingsModalClose').addEventListener('click', closeSettingsModal);
 el('settingsModal').addEventListener('click', (e) => {
   if (e.target === el('settingsModal')) closeSettingsModal();
 });
+document.querySelectorAll('.settings-tab').forEach((tab) => {
+  tab.addEventListener('click', () => selectSettingsTab(tab.dataset.tab));
+});
+el('loadDataBtn').addEventListener('click', loadDataFromModal);
+el('loadDataYaml').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') loadDataFromModal();
+});
+el('loadDataModalClose').addEventListener('click', closeLoadDataModal);
+el('loadDataModal').addEventListener('click', (e) => {
+  if (e.target === el('loadDataModal')) closeLoadDataModal();
+});
 el('shortcutsModalBtn').addEventListener('click', openShortcutsModal);
 el('shortcutsModalClose').addEventListener('click', closeShortcutsModal);
 el('shortcutsModal').addEventListener('click', (e) => {
@@ -2330,6 +2385,10 @@ el('updateHowBtn').addEventListener('click', openUpdateModal);
 el('updateModalClose').addEventListener('click', closeUpdateModal);
 el('updateModal').addEventListener('click', (e) => {
   if (e.target === el('updateModal')) closeUpdateModal();
+});
+el('changelogModalClose').addEventListener('click', closeChangelog);
+el('changelogModal').addEventListener('click', (e) => {
+  if (e.target === el('changelogModal')) closeChangelog();
 });
 el('notifBtn').addEventListener('click', (e) => {
   e.stopPropagation();
@@ -2656,6 +2715,14 @@ document.addEventListener('keydown', (e) => {
     }
     if (!el('shortcutsModal').classList.contains('hidden')) {
       closeShortcutsModal();
+      return;
+    }
+    if (!el('changelogModal').classList.contains('hidden')) {
+      closeChangelog();
+      return;
+    }
+    if (!el('loadDataModal').classList.contains('hidden')) {
+      closeLoadDataModal();
       return;
     }
     if (!el('settingsModal').classList.contains('hidden')) {

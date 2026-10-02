@@ -199,24 +199,15 @@ ybe check-update   # exit 0 = update available, 1 = current, 2 = unknown
 ybe update         # update in place, keeping your files and venv
 ```
 
-`check-update` prints five lines; besides `exit code:`, `current_version:` and
-`latest_version:` it adds `breaking_changes:` (`yes`/`no`) and `breaking_notes:`
-(one line, `;`-separated). `upgrade` prints the same notes as a warning before it
-runs, and `install` warns about the installed version's own breaking changes.
+`check-update` prints three lines: `exit code:`, `current_version:` and
+`latest_version:` (exit 0 = update available, 1 = current, 2 = unknown).
 
-### Breaking changes
+### Changelog
 
-`app/BREAKING.md` lists breaking changes, one per line as
-`<version> | <note>`. `check-update`, `upgrade`, `install` and the in-app update
-notice read it. With an update available they warn about every entry in the
-range (`current < version <= latest`); otherwise (a fresh install) they warn
-about the newest entry the installed version already contains
-(`version <= current`), so a fresh install of a breaking release is warned too.
-Example:
-
-```
-2.6.0 | `ybe` / `yolo-box-editor` no longer run the app directly: use `ybe start OPTIONS`.
-```
+`app/CHANGES` holds short per-version notes (`## <version>` sections). On the
+first open after installing a new version, the app shows that version's notes in
+a **What's new** dialog (once per version, per browser). The full developer
+changelog lives in `CHANGELOG.md`.
 
 `ybx.sh` only ever replaces `<dir>/app/` (atomically); your `actions/`, `hooks/`,
 `filters/`, `scripts/`, `shortcuts.txt` and the `.venv` are never touched. It

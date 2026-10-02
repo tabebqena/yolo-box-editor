@@ -4,6 +4,29 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.8.0] - 2026-10-02
+
+### Added
+
+- **First-run "Load a dataset" dialog**: with no dataset loaded, the app now
+  opens a small modal with a paste-the-path input and a **Load** button (instead
+  of opening the whole Settings modal).
+
+### Changed
+
+- **Settings modal restyled with tabs** (View / Dataset / Shortcuts / Updates).
+  The Dataset tab puts the recent-dataset dropdown, the path input and the
+  **Load** button on one row; the dropdown is hidden when there are no recent
+  datasets.
+- **Breaking-change warnings replaced by an in-app changelog.** The shipped
+  `app/BREAKING.md` machinery (backend parsing, `ybx.sh` warnings, the update
+  notice's *Breaking changes* section) is removed. Instead, `app/CHANGES` holds
+  short per-version notes, and the app shows the installed version's notes once
+  per version on first open (a **What's new** dialog). `/api/config` now returns
+  `changelog`; `/api/update-check` no longer returns `breaking_changes` /
+  `breaking`, and `ybx.sh check-update` no longer prints `breaking_changes:` /
+  `breaking_notes:`.
+
 ## [2.7.1] - 2026-10-01
 
 ### Fixed

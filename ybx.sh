@@ -326,26 +326,8 @@ do_install() {
   fi
 }
 
-# Warn about the installed version's own breaking entry (fresh installs).
-warn_breaking_installed() {
-  local installed notes
-  installed=$(cat "$DIR/app/VERSION" 2>/dev/null || true)
-  [ -n "$installed" ] || return 0
-  notes=$(collect_breaking "$installed" "$installed" \
-    "$(cat "$DIR/app/BREAKING.md" 2>/dev/null || true)")
-  if [ -n "$notes" ]; then
-    warn "breaking changes in $installed:"
-    while IFS= read -r note; do
-      printf '  - %s\n' "$note" >&2
-    done <<EOF
-$notes
-EOF
-  fi
-}
-
 cmd_install() {
   do_install
-  warn_breaking_installed
 }
 
 cmd_upgrade() {
@@ -369,18 +351,6 @@ cmd_upgrade() {
   fi
   if [ -n "$target" ]; then
     [ -n "$resolved_ref" ] || resolved_ref="$target"
-    local notes btext
-    btext=$(breaking_text)
-    notes=$(collect_breaking "$current" "$target" "$btext")
-    if [ -n "$notes" ]; then
-      warn "breaking changes in $target:"
-      while IFS= read -r note; do
-        printf '  - %s\n' "$note" >&2
-      done <<EOF
-$notes
-EOF
-      printf '  (see app/BREAKING.md in the installed folder)\n' >&2
-    fi
   fi
   say "Upgrading $current -> ${resolved_version:-${REF_ARG:-${target:-local}}}"
   do_install
@@ -408,80 +378,17 @@ is_newer() {
   [ "$highest" = "$a" ]
 }
 
-trim() {
-  local s="$1"
-  s="${s#"${s%%[![:space:]]*}"}"
-  s="${s%"${s##*[![:space:]]}"}"
-  printf '%s' "$s"
-}
-
-# Echo the BREAKING.md contents to use for the current operation (local --from
-# folder wins, then the resolved tag, then main, then the installed copy).
-breaking_text() {
-  if [ -n "$FROM" ] && [ -f "$FROM/app/BREAKING.md" ]; then
-    cat "$FROM/app/BREAKING.md"
-    return 0
-  fi
-  local text=""
-  if [ -n "$resolved_ref" ]; then
-    text=$(curl -fsSL "$RAW/$resolved_ref/app/BREAKING.md" 2>/dev/null || true)
-  fi
-  [ -n "$text" ] || text=$(curl -fsSL "$RAW/main/app/BREAKING.md" 2>/dev/null || true)
-  if [ -z "$text" ]; then
-    text=$(cat "$DIR/app/BREAKING.md" 2>/dev/null || true)
-  fi
-  printf '%s' "$text"
-}
-
-# Echo the breaking notes that apply to this user, joined by `sep`.
-#   update available -> every entry in the range current < version <= latest;
-#   otherwise (fresh install) -> the newest entry the version already contains
-#   (version <= current), so a fresh install of a breaking release is warned.
-collect_breaking() {
-  local current="$1" latest="$2" text="$3" sep="${4:-$'\n'}"
-  local line ver note out="" bestver="" bestnote="" has_update=0
-  if [ -n "$latest" ] && is_newer "$latest" "$current"; then has_update=1; fi
-  while IFS= read -r line; do
-    case "$line" in ''|'#'*) continue ;; esac
-    case "$line" in *"|"*) ;; *) continue ;; esac
-    ver="${line%%|*}"
-    note="${line#*|}"
-    ver=$(trim "$ver")
-    note=$(trim "$note")
-    [ -n "$ver" ] && [ -n "$note" ] || continue
-    if [ "$has_update" -eq 1 ]; then
-      if is_newer "$ver" "$current" && ! is_newer "$ver" "$latest"; then
-        out="${out:+$out$sep}${ver}: ${note}"
-      fi
-    elif ! is_newer "$ver" "$current"; then
-      if [ -z "$bestver" ] || is_newer "$ver" "$bestver"; then
-        bestver="$ver"; bestnote="$note"
-      fi
-    fi
-  done <<EOF
-$text
-EOF
-  if [ "$has_update" -eq 0 ] && [ -n "$bestver" ]; then
-    out="${bestver}: ${bestnote}"
-  fi
-  printf '%s' "$out"
-}
-
 cmd_check_update() {
-  local current latest rc notes breaking btext
+  local current latest rc
   current=$(cat "$DIR/app/VERSION" 2>/dev/null || true)
   resolve_target
   latest="$resolved_version"
   if [ -z "$latest" ]; then
-    printf 'exit code: 2\ncurrent_version: %s\nlatest_version: unknown\nbreaking_changes: unknown\nbreaking_notes: \n' "$current"
+    printf 'exit code: 2\ncurrent_version: %s\nlatest_version: unknown\n' "$current"
     exit 2
   fi
   if is_newer "$latest" "$current"; then rc=0; else rc=1; fi
-  btext=$(breaking_text)
-  notes=$(collect_breaking "$current" "$latest" "$btext" '; ')
-  if [ -n "$notes" ]; then breaking=yes; else breaking=no; fi
-  printf 'exit code: %s\ncurrent_version: %s\nlatest_version: %s\nbreaking_changes: %s\nbreaking_notes: %s\n' \
-    "$rc" "$current" "$latest" "$breaking" "$notes"
+  printf 'exit code: %s\ncurrent_version: %s\nlatest_version: %s\n' "$rc" "$current" "$latest"
   exit "$rc"
 }
 

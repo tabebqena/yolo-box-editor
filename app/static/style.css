@@ -638,18 +638,32 @@ canvas {
 }
 
 /* settings modal */
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  background: #1d1e26;
+}
+.settings-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.settings-tab:hover { color: var(--text); background: transparent; }
+.settings-tab.active { color: var(--text); border-bottom-color: var(--accent); }
 .settings-modal-body {
-  padding: 12px 16px 16px;
+  padding: 16px;
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 18px;
 }
-.settings-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+.settings-panel { display: none; flex-direction: column; gap: 10px; }
+.settings-panel.active { display: flex; }
 .settings-group-title {
   margin: 0;
   color: var(--muted);
@@ -667,19 +681,37 @@ canvas {
 }
 .settings-row input { accent-color: var(--green); cursor: pointer; }
 .settings-row input:disabled { cursor: default; opacity: 0.5; }
-.settings-modal .field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.settings-modal .field > span { color: var(--muted); font-size: 13px; }
-.settings-modal #dataYaml { flex: 1 1 260px; min-width: 0; }
-.settings-modal #recentSelect { max-width: 240px; }
 .settings-modal .hint { color: var(--muted); font-size: 12px; }
 .settings-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .update-row { align-items: center; }
 .update-row .hint { flex: 1 1 auto; min-width: 0; }
+
+/* dataset path row (settings Dataset tab + first-run modal): one line */
+.dataset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+.dataset-row input { flex: 1 1 auto; min-width: 0; }
+.dataset-row select { flex: 0 1 auto; max-width: 200px; min-width: 0; }
+.dataset-row button { flex: 0 0 auto; }
+
+/* first-run "load a dataset" modal */
+.load-data-modal { width: min(560px, 92vw); }
+.load-data-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.load-data-hint { margin: 0; color: var(--muted); font-size: 13px; }
+.load-data-hint code {
+  background: #20212a;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
 
 /* update modal */
 .update-modal-body {
@@ -699,16 +731,6 @@ canvas {
   letter-spacing: 0.08em;
 }
 .update-modal-body .update-note { margin: 2px 0; color: var(--muted); font-size: 13px; }
-.update-breaking {
-  border: 1px solid var(--yellow);
-  border-left-width: 4px;
-  border-radius: 6px;
-  background: rgba(210, 170, 50, 0.08);
-  padding: 8px 12px 10px;
-}
-.update-breaking .update-heading { margin-top: 0; color: var(--yellow); }
-.update-breaking-list { margin: 4px 0 0; padding-left: 20px; }
-.update-breaking-list li { color: var(--text); font-size: 13px; margin: 4px 0; }
 .update-modal-body .update-note code {
   background: #20212a;
   border: 1px solid var(--border);
@@ -724,6 +746,14 @@ canvas {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* changelog modal */
+.changelog-body {
+  padding: 12px 16px 16px;
+  overflow: auto;
+}
+.changelog-list { margin: 0; padding-left: 20px; }
+.changelog-list li { color: var(--text); font-size: 13px; margin: 6px 0; }
 
 /* shortcuts modal */
 .shortcut-modal-body {

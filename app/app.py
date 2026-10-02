@@ -67,7 +67,7 @@ FILTERS_DIR = os.path.join(BASE_DIR, "filters")  # one Python script per filter
 APP_SCRIPT_DIR = os.path.join(BASE_DIR, "scripts")  # shipped helper programs
 SHORTCUTS_FILE = os.path.join(BASE_DIR, "shortcuts.txt")
 VERSION_FILE = os.path.join(BASE_DIR, "VERSION")  # shipped app version
-BREAKING_FILE = os.path.join(BASE_DIR, "BREAKING.md")  # breaking notes per version
+CHANGES_FILE = os.path.join(BASE_DIR, "CHANGES")  # per-version "what's new" notes
 
 # User files (inside YBX_HOME); read after the built-ins and win on a clash.
 USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
@@ -86,7 +86,6 @@ UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")  # cached updat
 UPDATE_REPO = "tabebqena/yolo-box-editor"
 UPDATE_API = f"https://api.github.com/repos/{UPDATE_REPO}"
 UPDATE_RAW = f"https://raw.githubusercontent.com/{UPDATE_REPO}"
-UPDATE_BREAKING_URL = f"{UPDATE_RAW}/main/app/BREAKING.md"
 UPDATE_CHECK_INTERVAL = 7 * 24 * 60 * 60  # re-check at most once a week
 UPDATE_POLL_INTERVAL = 6 * 60 * 60  # how often the start thread wakes up
 UPDATE_CHECK_TIMEOUT = 5  # seconds per network request
@@ -520,62 +519,37 @@ def fetch_latest_version(timeout=UPDATE_CHECK_TIMEOUT):
     return candidates[0] if candidates else None
 
 
-def parse_breaking_notes(text):
-    """Parse BREAKING.md: each non-comment `<version> | <note>` line -> tuple."""
-    entries = []
+def parse_changes(text):
+    """Parse the shipped CHANGES file into `{version: [lines]}`.
+
+    A `## <version>` line starts a section; every following non-empty line is
+    that version's changelog (a leading `- ` is stripped). Lines before the
+    first section (the header comment) are ignored.
+    """
+    sections = {}
+    current = None
     for raw in (text or "").splitlines():
         line = raw.strip()
-        if not line or line.startswith("#") or "|" not in line:
-            continue
-        version, note = line.split("|", 1)
-        version, note = version.strip(), note.strip()
-        if version and note:
-            entries.append((version, note))
-    return entries
+        if line.startswith("## "):
+            current = line[3:].strip()
+            sections[current] = []
+        elif current is not None and line:
+            sections[current].append(line[2:].strip() if line.startswith("- ") else line)
+    return sections
 
 
-def load_breaking_notes():
-    """The shipped BREAKING.md entries (empty on error)."""
+def load_changes():
+    """The shipped CHANGES sections (empty on error)."""
     try:
-        with open(BREAKING_FILE, encoding="utf-8") as f:
-            return parse_breaking_notes(f.read())
+        with open(CHANGES_FILE, encoding="utf-8") as f:
+            return parse_changes(f.read())
     except OSError:
-        return []
+        return {}
 
 
-def fetch_breaking_notes(timeout=UPDATE_CHECK_TIMEOUT):
-    """BREAKING.md from `main` (empty when offline/unavailable)."""
-    try:
-        return parse_breaking_notes(_http_get_text(UPDATE_BREAKING_URL, timeout))
-    except (urllib.error.URLError, OSError, ValueError):
-        return []
-
-
-def applicable_breaking(entries, current, latest):
-    """Breaking notes that apply to the running user.
-
-    With an update available: every entry in the range
-    `current < version <= latest`. Otherwise (a *fresh install* at, or ahead
-    of, the newest version): the newest breaking entry the installed version
-    already contains (`version <= current`), so a fresh install is warned too.
-    """
-    current_ver = _parse_version(current)
-    has_update = bool(latest) and _version_newer(latest, current)
-    if has_update:
-        return [
-            f"{version}: {note}"
-            for version, note in entries
-            if _version_newer(version, current) and not _version_newer(version, latest)
-        ]
-
-    best = None  # (parsed_version, version, note) -> highest entry <= current
-    for version, note in entries:
-        parsed = _parse_version(version)
-        if parsed is None or current_ver is None or parsed > current_ver:
-            continue
-        if best is None or parsed > best[0]:
-            best = (parsed, version, note)
-    return [f"{best[1]}: {best[2]}"] if best else []
+def changelog_for(version):
+    """The changelog lines for `version` (empty when it has no section)."""
+    return load_changes().get((version or "").strip(), [])
 
 
 def _load_update_cache():
@@ -592,15 +566,10 @@ def _update_payload(info):
     """A stable UI shape built from a (possibly empty) cache entry."""
     current = info.get("current_version") or read_version()
     latest = info.get("latest_version")
-    breaking = info.get("breaking")
-    if not isinstance(breaking, list):
-        breaking = []
     return {
         "current_version": current,
         "latest_version": latest,
         "update_available": bool(latest) and _version_newer(latest, current),
-        "breaking_changes": bool(breaking),
-        "breaking": breaking,
         "checked_at": info.get("checked_at"),
     }
 
@@ -629,17 +598,10 @@ def check_for_update(force=False, now=None):
         return _update_payload(cache)
 
     latest = fetch_latest_version()
-    if latest and _version_newer(latest, current):
-        entries = fetch_breaking_notes() or load_breaking_notes()
-    else:
-        # No update: still surface the installed version's own breaking entry.
-        entries = load_breaking_notes()
-    breaking = applicable_breaking(entries, current, latest)
     info = {
         "checked_at": now,
         "current_version": current,
         "latest_version": latest,
-        "breaking": breaking,
     }
     try:
         os.makedirs(os.path.dirname(UPDATE_CHECK_FILE), exist_ok=True)
@@ -1691,6 +1653,7 @@ def api_config():
             "readonly": STATE["readonly"],
             "debug": STATE["debug"],
             "version": read_version(),
+            "changelog": changelog_for(read_version()),
             "update": update_status(),
             "splits": [
                 {

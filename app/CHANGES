@@ -1,0 +1,9 @@
+# What's new — shown once per installed version in the app.
+# One `## <version>` section per release; the lines below it are the notes.
+# Keep the matching full entry in the repository's CHANGELOG.md.
+
+## 2.8.0
+- Added a first-run "Load a dataset" dialog: paste a data.yaml path and click Load.
+- Settings now uses tabs (View / Dataset / Shortcuts / Updates); the dataset dropdown, path input and Load button sit on one row.
+- Replaced the breaking-change warnings with a "What's new" changelog, shown once after the app updates to a new version.
+- `ybe check-update` no longer prints the `breaking_changes:` and `breaking_notes:` lines.

@@ -85,7 +85,7 @@ def clean_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "VIEW_FILE", str(tmp_path / "view.json"))
     monkeypatch.setattr(ybe, "UPDATE_CHECK_FILE", str(tmp_path / "update.json"))
     monkeypatch.setattr(ybe, "VERSION_FILE", str(tmp_path / "VERSION"))
-    monkeypatch.setattr(ybe, "BREAKING_FILE", str(tmp_path / "BREAKING.md"))
+    monkeypatch.setattr(ybe, "CHANGES_FILE", str(tmp_path / "CHANGES"))
     monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "app-actions"))
     monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "actions"))
     monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "app-hooks"))
@@ -2065,102 +2065,51 @@ def test_setup_logging_installs_presence_filter():
 
 
 # --------------------------------------------------------------------------- #
-# breaking changes
+# changelog (app/CHANGES)
 # --------------------------------------------------------------------------- #
-def test_parse_breaking_notes_skips_comments_and_bad_lines():
+def test_parse_changes_sections_and_bullets():
     text = (
-        "# header\n"
+        "# header comment\n"
         "\n"
-        "2.6.0 | old runner now prints help\n"
-        " 2.7.0 | spaced note \n"
-        "not a note\n"
-        "1.0.0 |\n"
+        "## 2.8.0\n"
+        "- added a thing\n"
+        "fixed another thing\n"
+        "\n"
+        "## 2.7.1\n"
+        "- older\n"
     )
-    assert ybe.parse_breaking_notes(text) == [
-        ("2.6.0", "old runner now prints help"),
-        ("2.7.0", "spaced note"),
-    ]
+    assert ybe.parse_changes(text) == {
+        "2.8.0": ["added a thing", "fixed another thing"],
+        "2.7.1": ["older"],
+    }
 
 
-def test_load_breaking_notes_reads_shipped_file(clean_state):
-    (clean_state / "BREAKING.md").write_text("2.6.0 | note\n", encoding="utf-8")
-    assert ybe.load_breaking_notes() == [("2.6.0", "note")]
-
-
-def test_applicable_breaking_update_range_vs_fresh_install():
-    entries = [("2.5.0", "old"), ("2.6.0", "mid"), ("2.7.0", "new")]
-    # update available: only the range current < version <= latest
-    assert ybe.applicable_breaking(entries, "2.5.0", "2.6.0") == ["2.6.0: mid"]
-    assert ybe.applicable_breaking(entries, "2.5.0", "2.7.0") == [
-        "2.6.0: mid", "2.7.0: new",
-    ]
-    assert ybe.applicable_breaking(entries, "2.6.0", "2.7.0") == ["2.7.0: new"]
-    # fresh install (no update): the newest breaking entry the version contains
-    assert ybe.applicable_breaking(entries, "2.5.0", "2.5.0") == ["2.5.0: old"]
-    assert ybe.applicable_breaking(entries, "2.6.0", "2.6.0") == ["2.6.0: mid"]
-    # a later version without its own entry still warns about the newest one
-    assert ybe.applicable_breaking(entries, "2.8.0", "2.8.0") == ["2.7.0: new"]
-    assert ybe.applicable_breaking(entries, "2.8.0", None) == ["2.7.0: new"]
-    # a version before any breaking entry: nothing
-    assert ybe.applicable_breaking(entries, "2.4.0", "2.4.0") == []
-
-
-def test_check_for_update_reports_fresh_install_breaking(clean_state, monkeypatch):
-    _write_version(clean_state, "2.6.0")
-    (clean_state / "BREAKING.md").write_text("2.6.0 | use ybe start\n", encoding="utf-8")
-    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.6.0")
-    info = ybe.check_for_update(now=1000)
-    assert info["update_available"] is False
-    assert info["breaking_changes"] is True
-    assert info["breaking"] == ["2.6.0: use ybe start"]
-
-
-def test_check_for_update_collects_breaking_notes(clean_state, monkeypatch):
-    _write_version(clean_state, "2.5.0")
-    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.6.0")
-    monkeypatch.setattr(
-        ybe, "fetch_breaking_notes", lambda timeout=None: [("2.6.0", "use ybe start")]
+def test_load_and_changelog_for(clean_state):
+    (clean_state / "CHANGES").write_text(
+        "## 2.8.0\n- note one\n- note two\n", encoding="utf-8"
     )
-    info = ybe.check_for_update(now=1000)
-    assert info["update_available"] is True
-    assert info["breaking_changes"] is True
-    assert info["breaking"] == ["2.6.0: use ybe start"]
-    cached = json.loads((clean_state / "update.json").read_text(encoding="utf-8"))
-    assert cached["breaking"] == ["2.6.0: use ybe start"]
+    assert ybe.load_changes()["2.8.0"] == ["note one", "note two"]
+    assert ybe.changelog_for("2.8.0") == ["note one", "note two"]
+    assert ybe.changelog_for("1.0.0") == []
+    assert ybe.changelog_for(None) == []
 
 
-def test_check_for_update_no_breaking_when_current(clean_state, monkeypatch):
-    _write_version(clean_state, "2.6.0")
-    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.6.0")
-    called = []
-    monkeypatch.setattr(
-        ybe, "fetch_breaking_notes", lambda timeout=None: called.append(1) or []
-    )
-    info = ybe.check_for_update(now=1000)
-    assert info["update_available"] is False
-    assert info["breaking_changes"] is False
-    assert called == []
+def test_api_config_includes_changelog(clean_state):
+    _write_version(clean_state, "2.8.0")
+    (clean_state / "CHANGES").write_text("## 2.8.0\n- shiny\n", encoding="utf-8")
+    cfg = ybe.app.test_client().get("/api/config").get_json()
+    assert cfg["version"] == "2.8.0"
+    assert cfg["changelog"] == ["shiny"]
 
 
-def test_update_payload_from_cache_includes_breaking():
+def test_update_payload_has_no_breaking_fields():
     payload = ybe._update_payload({
-        "current_version": "2.5.0",
-        "latest_version": "2.6.0",
-        "breaking": ["2.6.0: note"],
+        "current_version": "2.7.0",
+        "latest_version": "2.8.0",
     })
-    assert payload["breaking_changes"] is True
-    assert payload["breaking"] == ["2.6.0: note"]
-
-
-def test_api_update_check_reports_breaking(clean_state):
-    _write_version(clean_state, "2.5.0")
-    (clean_state / "update.json").write_text(json.dumps({
-        "checked_at": 5, "current_version": "2.5.0", "latest_version": "2.6.0",
-        "breaking": ["2.6.0: use ybe start"],
-    }), encoding="utf-8")
-    data = ybe.app.test_client().get("/api/update-check").get_json()
-    assert data["update"]["breaking_changes"] is True
-    assert data["update"]["breaking"] == ["2.6.0: use ybe start"]
+    assert payload["update_available"] is True
+    assert "breaking" not in payload
+    assert "breaking_changes" not in payload
 
 
 def test_fetch_latest_version_picks_highest_of_release_and_tags(monkeypatch):
