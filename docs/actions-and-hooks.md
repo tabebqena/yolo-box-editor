@@ -16,6 +16,11 @@ never have to get the indentation or the `:` / `-` right by hand:
   command at the cursor, so you do not have to remember the spelling.
 - Your files are listed under **Existing** and can be deleted there; shipped
   files are never deleted.
+- Each existing action/hook also has an **Enabled for this dataset** checkbox.
+  Uncheck it to disable the extension for the loaded `data.yaml` only — the file
+  is left untouched, the toolbar button disappears and the hook stops firing (a
+  disabled action also cannot be run as an `action_<Name>` reference). The
+  choice is remembered per dataset and can be reverted at any time.
 
 Every extension file carries an `api_version` (currently `1`). A file whose
 version is missing or older than the app is shown as **outdated**: use its
@@ -153,8 +158,10 @@ hook opens the result **modal**. They are opt-in: no file, no hook.
 The event comes from the **file name**: `on_<event>.yaml`. If the file name does
 not name a known event, the top-level `event_name:` key is used as a fallback.
 A file that defines `steps` but names no known event is reported as an error.
-Set `active: false` to skip a hook without deleting it. Your hooks live in
-`<home>/hooks/`, are read after the shipped ones and win on an event clash.
+Set `active: false` to skip a hook for **every** dataset without deleting it, or
+uncheck **Enabled for this dataset** in Settings → Hooks to skip it for the
+loaded dataset only (see above). Your hooks live in `<home>/hooks/`, are read
+after the shipped ones and win on an event clash.
 
 | Hook file | Fired when |
 | --------- | ---------- |

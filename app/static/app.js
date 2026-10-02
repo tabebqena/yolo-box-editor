@@ -1076,7 +1076,7 @@ function extRefNames() {
   return {
     app: appActions,
     backend: backendActions,
-    action: (actionDefs || []).map((d) => d.name),
+    action: (actionDefs || []).filter((d) => d.enabled !== false).map((d) => d.name),
   };
 }
 
@@ -1286,8 +1286,10 @@ function renderDefList(kind, defs) {
     wrap.appendChild(mk('p', 'hint', 'None yet.'));
     return wrap;
   }
+  const canToggle = (kind === 'action' || kind === 'hook') && datasetLoaded;
   defs.forEach((def) => {
-    const row = mk('div', 'ext-def');
+    const enabled = def.enabled !== false;
+    const row = mk('div', 'ext-def' + (canToggle && !enabled ? ' ext-def-disabled' : ''));
     const main = mk('div', 'ext-def-main');
     main.appendChild(mk('span', 'ext-def-name', def.name));
     if (def.event) main.appendChild(mk('span', 'ext-def-sub', def.event));
@@ -1296,6 +1298,12 @@ function renderDefList(kind, defs) {
     row.appendChild(main);
 
     const actions = mk('div', 'ext-def-actions');
+    if (canToggle) {
+      const toggle = extCheckbox('Enabled for this dataset', enabled);
+      toggle.input.addEventListener('change',
+        () => setExtensionDisabled(kind, def.name, !toggle.input.checked));
+      actions.appendChild(toggle.row);
+    }
     if (def.status !== 'newer' && (def.status === 'outdated' || def.source === 'user')) {
       const open = mk('button', 'ext-open', 'YAML');
       open.type = 'button';
@@ -1501,6 +1509,21 @@ async function deleteExtension(kind, name) {
   if (!data.ok) { toast(data.error || 'Could not delete', { type: 'error' }); return; }
   toast(`Deleted "${name}"`, { type: 'success' });
   applyExtensionConfig(data);
+}
+
+// Disable/enable one action or hook for the loaded dataset only (no file edit).
+async function setExtensionDisabled(kind, name, disabled) {
+  const data = await postJson('/api/extensions/disabled', { kind, name, disabled });
+  if (!data.ok) {
+    toast(data.error || 'Could not update', { type: 'error' });
+    if (kind === 'action') renderActionBuilder(); else renderHookBuilder();
+    return;
+  }
+  applyExtensionConfig(data);
+  hooksByName = new Set(data.hooks || []);
+  populateActions(data.actions || []);
+  toast(`"${name}" ${disabled ? 'disabled' : 'enabled'} for this dataset`,
+    { type: 'success' });
 }
 
 async function openYamlEditor(kind, name) {

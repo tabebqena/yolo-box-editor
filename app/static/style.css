@@ -1193,8 +1193,10 @@ body.panel-left #dockSide {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
 }
-.ext-def-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.ext-def-actions { display: flex; gap: 6px; flex: 0 0 auto; align-items: center; }
 .ext-def-actions button { font-size: 12px; padding: 4px 10px; }
+.ext-def-actions .ext-check { white-space: nowrap; }
+.ext-def-disabled .ext-def-main { opacity: 0.5; }
 .ext-badge {
   font-size: 11px;
   padding: 2px 6px;

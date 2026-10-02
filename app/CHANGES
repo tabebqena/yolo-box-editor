@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 6.4.0
+- Disable a hook or action for the current dataset only, without deleting its file: use the "Enabled for this dataset" checkbox in Settings > Actions / Hooks. A disabled action's button disappears and a disabled hook does not fire; re-check it to turn it back on. The setting is remembered per dataset and never changes the extension file.
+
 ## 6.1.0
 - Fixed: the app no longer becomes laggy after you view many images. Each image load now releases the previous decoded image first, so memory does not keep growing the longer you browse.
 

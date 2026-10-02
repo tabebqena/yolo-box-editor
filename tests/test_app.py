@@ -2801,6 +2801,110 @@ def test_api_hook_save_rejects_unknown_event(clean_state):
     assert resp.status_code == 400
 
 
+def test_api_extension_disabled_toggles_action_per_dataset(clean_state, tmp_path):
+    write_action(tmp_path, "Remove.yaml", "steps:\n  - echo hi\n")
+    client = ybe.app.test_client()
+    root = make_dataset(tmp_path)
+    load_dataset(client, root)
+    cfg = client.post("/api/extensions/disabled", json={
+        "kind": "action", "name": "Remove", "disabled": True,
+    }).get_json()
+    assert cfg["ok"] is True
+    assert "Remove" not in cfg["actions"]
+    assert {d["name"]: d["enabled"] for d in cfg["action_defs"]}["Remove"] is False
+    views = json.loads(Path(ybe.VIEW_FILE).read_text(encoding="utf-8"))
+    assert views[str(root / "data.yaml")]["disabled"]["actions"] == ["Remove"]
+
+    cfg = client.post("/api/extensions/disabled", json={
+        "kind": "action", "name": "Remove", "disabled": False,
+    }).get_json()
+    assert "Remove" in cfg["actions"]
+    assert {d["name"]: d["enabled"] for d in cfg["action_defs"]}["Remove"] is True
+
+
+def test_api_extension_disabled_toggles_hook(clean_state, tmp_path):
+    write_hook(tmp_path, "on_after_save.yaml", "steps:\n  - echo hi\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    cfg = client.post("/api/extensions/disabled", json={
+        "kind": "hook", "name": "on_after_save", "disabled": True,
+    }).get_json()
+    assert "on_after_save" not in cfg["hooks"]
+    assert {d["name"]: d["enabled"] for d in cfg["hook_defs"]}["on_after_save"] is False
+
+
+def test_api_action_run_refuses_disabled_action(clean_state, tmp_path):
+    write_action(tmp_path, "Remove.yaml", "steps:\n  - echo hi\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    client.post("/api/extensions/disabled", json={
+        "kind": "action", "name": "Remove", "disabled": True,
+    })
+    resp = client.post("/api/actions/run",
+                       json={"action": "Remove", "target": "train/a.jpg"})
+    assert resp.status_code == 400
+    assert "disabled" in resp.get_json()["error"]
+
+
+def test_api_action_run_refuses_disabled_hook(clean_state, tmp_path):
+    write_hook(tmp_path, "on_after_save.yaml", "steps:\n  - echo hi\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    client.post("/api/extensions/disabled", json={
+        "kind": "hook", "name": "on_after_save", "disabled": True,
+    })
+    resp = client.post("/api/actions/run",
+                       json={"action": "on_after_save", "target": "train/a.jpg"})
+    assert resp.status_code == 400
+    assert "disabled" in resp.get_json()["error"]
+
+
+def test_api_extension_disabled_requires_dataset(clean_state, tmp_path):
+    write_action(tmp_path, "Remove.yaml", "steps:\n  - echo hi\n")
+    resp = ybe.app.test_client().post("/api/extensions/disabled", json={
+        "kind": "action", "name": "Remove", "disabled": True,
+    })
+    assert resp.status_code == 400
+
+
+def test_api_extension_disabled_validates_kind_and_name(clean_state, tmp_path):
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    assert client.post("/api/extensions/disabled", json={
+        "kind": "filter", "name": "x", "disabled": True,
+    }).status_code == 400
+    assert client.post("/api/extensions/disabled", json={
+        "kind": "action", "name": "Nope", "disabled": True,
+    }).status_code == 404
+
+
+def test_api_extension_disabled_is_per_dataset(clean_state, tmp_path):
+    write_action(tmp_path, "Remove.yaml", "steps:\n  - echo hi\n")
+    client = ybe.app.test_client()
+    root_a = make_dataset(tmp_path / "a")
+    load_dataset(client, root_a)
+    client.post("/api/extensions/disabled", json={
+        "kind": "action", "name": "Remove", "disabled": True,
+    })
+    root_b = make_dataset(tmp_path / "b")
+    cfg = client.post("/api/data",
+                      json={"data_yaml": str(root_b / "data.yaml")}).get_json()
+    assert "Remove" in cfg["actions"]
+
+
+def test_save_view_preserves_disabled_extensions(clean_state, tmp_path):
+    write_action(tmp_path, "Remove.yaml", "steps:\n  - echo hi\n")
+    client = ybe.app.test_client()
+    root = make_dataset(tmp_path)
+    load_dataset(client, root)
+    client.post("/api/extensions/disabled", json={
+        "kind": "action", "name": "Remove", "disabled": True,
+    })
+    ybe._save_view(str(root / "data.yaml"), "train", [])
+    views = json.loads(Path(ybe.VIEW_FILE).read_text(encoding="utf-8"))
+    assert views[str(root / "data.yaml")]["disabled"]["actions"] == ["Remove"]
+
+
 def test_api_filter_save_writes_filter(clean_state):
     cfg = ybe.app.test_client().post("/api/filters/save", json={
         "name": "Keep every",

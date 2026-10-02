@@ -495,21 +495,84 @@ def _load_views():
 
 
 def _save_view(data_yaml, split, active_filters):
-    """Remember a dataset's split/filter chain and tags folder so a restart reopens it."""
+    """Remember a dataset's split/filter chain and tags folder so a restart reopens it.
+
+    Other per-dataset view keys (the disabled action/hook lists) are preserved.
+    """
     if not data_yaml:
         return
     views = _load_views()
-    views[data_yaml] = {
-        "split": split,
-        "filters": list(active_filters or []),
-        "tags_dir": STATE.get("tags_dir"),
-    }
+    entry = views.get(data_yaml)
+    if not isinstance(entry, dict):
+        entry = {}
+    entry["split"] = split
+    entry["filters"] = list(active_filters or [])
+    entry["tags_dir"] = STATE.get("tags_dir")
+    views[data_yaml] = entry
     try:
         with open(VIEW_FILE, "w", encoding="utf-8") as f:
             json.dump(views, f, indent=2)
             f.write("\n")
     except OSError:
         pass
+
+
+# A dataset's disabled extensions live in its view entry under the "disabled"
+# key: {"actions": [names], "hooks": [names]}. This maps an extension `kind` to
+# its list key. The flag is a per-dataset view preference, so it never edits the
+# extension files themselves (a hook's own `active: false` is separate).
+DISABLED_KIND_KEYS = {"action": "actions", "hook": "hooks"}
+
+
+def _disabled_extensions():
+    """The current dataset's disabled action/hook names.
+
+    Returns `{"action": set, "hook": set}`; empty when no dataset is loaded or
+    nothing was disabled.
+    """
+    data_yaml = STATE.get("data_yaml")
+    view = _load_views().get(data_yaml) if data_yaml else None
+    disabled = view.get("disabled") if isinstance(view, dict) else None
+    disabled = disabled if isinstance(disabled, dict) else {}
+    return {
+        kind: {n for n in (disabled.get(key) or []) if isinstance(n, str)}
+        for kind, key in DISABLED_KIND_KEYS.items()
+    }
+
+
+def _set_extension_disabled(kind, name, disabled):
+    """Record or clear one disabled action/hook in the current dataset's view.
+
+    Returns the fresh disabled sets (see `_disabled_extensions`), or None when no
+    dataset is loaded. Read-only is not consulted: this is a view preference, not
+    a dataset write.
+    """
+    data_yaml = STATE.get("data_yaml")
+    if not data_yaml:
+        return None
+    key = DISABLED_KIND_KEYS[kind]
+    views = _load_views()
+    entry = views.get(data_yaml)
+    if not isinstance(entry, dict):
+        entry = {}
+    stored = entry.get("disabled")
+    stored = stored if isinstance(stored, dict) else {}
+    names = [n for n in (stored.get(key) or []) if isinstance(n, str)]
+    if disabled:
+        if name not in names:
+            names.append(name)
+    else:
+        names = [n for n in names if n != name]
+    stored[key] = sorted(names)
+    entry["disabled"] = stored
+    views[data_yaml] = entry
+    try:
+        with open(VIEW_FILE, "w", encoding="utf-8") as f:
+            json.dump(views, f, indent=2)
+            f.write("\n")
+    except OSError:
+        pass
+    return _disabled_extensions()
 
 
 def _restore_tags_dir(data_yaml):
@@ -1112,8 +1175,15 @@ def _resolve_entry(entry, actions_by_name):
 
 
 def _action_items(action):
-    """Expand an action into its ordered work-queue items (steps, then after_success)."""
-    actions_by_name = {a["name"]: a for a in load_actions()}
+    """Expand an action into its ordered work-queue items (steps, then after_success).
+
+    An `action_<Name>` reference to an action disabled for this dataset does not
+    resolve, matching the toolbar (there is no way to run a disabled action).
+    """
+    disabled = _disabled_extensions()["action"]
+    actions_by_name = {
+        a["name"]: a for a in load_actions() if a["name"] not in disabled
+    }
     entries = list(action.get("steps") or []) + list(action.get("after_success") or [])
     return [_resolve_entry(entry, actions_by_name) for entry in entries]
 
@@ -2439,6 +2509,7 @@ def api_config():
         ),
         key=lambda f: f["name"],
     )
+    disabled = _disabled_extensions()
     action_defs = [
         {
             "name": a["name"],
@@ -2447,6 +2518,7 @@ def api_config():
             "source": a["source"],
             "api_version": a["api_version"],
             "status": api_version_status(a["api_version"]),
+            "enabled": a["name"] not in disabled["action"],
         }
         for a in actions
     ]
@@ -2459,6 +2531,7 @@ def api_config():
             "source": h["source"],
             "api_version": h["api_version"],
             "status": api_version_status(h["api_version"]),
+            "enabled": h["name"] not in disabled["hook"],
         }
         for h in hooks
     ]
@@ -2491,9 +2564,9 @@ def api_config():
             "settings": _load_settings(),
             "tags_dir": STATE.get("tags_dir"),
             "tips": TIPS,
-            "actions": [a["name"] for a in actions],
+            "actions": [a["name"] for a in actions if a["name"] not in disabled["action"]],
             "action_defs": action_defs,
-            "hooks": [h["name"] for h in hooks],
+            "hooks": [h["name"] for h in hooks if h["name"] not in disabled["hook"]],
             "hook_defs": hook_defs,
             "hook_errors": hook_errors,
             "app_actions": sorted(APP_ACTIONS),
@@ -2759,11 +2832,20 @@ def api_action_run():
         abort(404)
 
     action = next((a for a in load_actions() if a["name"] == name), None)
+    is_hook = False
     if action is None:
         # Event hooks are ordinary names here (`on_<event>`), so they can be run.
         action = next((h for h in load_hooks()[0] if h["name"] == name), None)
+        is_hook = action is not None
     if action is None:
         return jsonify({"ok": False, "error": f"unknown action: {name}"}), 400
+
+    disabled = _disabled_extensions()
+    if name in disabled["hook" if is_hook else "action"]:
+        return (
+            jsonify({"ok": False, "error": f"'{name}' is disabled for this dataset"}),
+            400,
+        )
 
     pipe_path = create_pipe()
     # 1-based, matching the "current / total" counter shown in the UI; 0 when the
@@ -2961,6 +3043,30 @@ def api_filter_save():
                                       arguments, steps))
     except OSError as exc:
         return jsonify({"ok": False, "error": f"could not write the filter: {exc}"}), 500
+
+    cfg = api_config().get_json()
+    cfg["ok"] = True
+    return jsonify(cfg)
+
+
+@app.route("/api/extensions/disabled", methods=["POST"])
+def api_extension_disabled():
+    """Enable or disable one action/hook for the current dataset.
+
+    Body `{kind, name, disabled}`. The flag is stored in the dataset's view entry
+    in `.view_state.json`, so it is undoable and needs no file edit; the extension
+    YAML is never touched. Returns the fresh config payload.
+    """
+    data = request.get_json(silent=True) or {}
+    kind = data.get("kind")
+    if kind not in DISABLED_KIND_KEYS:
+        return jsonify({"ok": False, "error": "kind must be action or hook"}), 400
+    name = str(data.get("name") or "").strip()
+    if extension_file_for(kind, name) is None:
+        return jsonify({"ok": False, "error": "unknown extension"}), 404
+    if not STATE["data_yaml"]:
+        return jsonify({"ok": False, "error": "load a dataset first"}), 400
+    _set_extension_disabled(kind, name, bool(data.get("disabled")))
 
     cfg = api_config().get_json()
     cfg["ok"] = True

@@ -4,6 +4,19 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.4.0] - 2026-10-03
+
+### Added
+
+- Disable an action or hook **for the loaded dataset only**, from Settings →
+  Actions / Hooks, using the **Enabled for this dataset** checkbox. The
+  extension file is never modified: the choice is remembered per `data.yaml`,
+  the toolbar button disappears and the hook stops firing (a disabled action
+  also cannot be run as an `action_<Name>` reference), and it can be re-enabled
+  at any time. `POST /api/extensions/disabled` backs the toggle; `/api/config`
+  reports an `enabled` flag per def, and `/api/actions/run` refuses a disabled
+  name.
+
 ## [6.3.0] - 2026-10-02
 
 ### Added
