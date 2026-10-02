@@ -2228,8 +2228,13 @@ def api_image():
     return resp
 
 
-@app.route("/api/labels", methods=["GET", "POST"])
-def api_labels():
+@app.route("/api/annotations", methods=["GET", "POST"])
+def api_annotations():
+    """Read/write one image's annotations: its boxes and tags.
+
+    GET returns `{"boxes": [...], "tags": [...]}`. POST writes the label file,
+    the image's tag file, and adds any new tag names to tags.yaml.
+    """
     entry = _request_entry()
     split = _split_by_name(entry["split"])
     if split is None:
@@ -2239,7 +2244,13 @@ def api_labels():
     if request.method == "GET":
         boxes = _parse_label_file(label_path(entry))
         return jsonify(
-            [{"class": c, "cx": cx, "cy": cy, "w": w, "h": h} for c, cx, cy, w, h in boxes]
+            {
+                "boxes": [
+                    {"class": c, "cx": cx, "cy": cy, "w": w, "h": h}
+                    for c, cx, cy, w, h in boxes
+                ],
+                "tags": _read_tag_lines(tag_path(entry)),
+            }
         )
 
     if STATE["readonly"]:
@@ -2285,25 +2296,6 @@ def api_labels():
     return jsonify(payload)
 
 
-@app.route("/api/tags.yaml", methods=["GET", "POST"])
-def api_tags_yaml():
-    """Read/write the dataset's available-tags list (tags.yaml beside data.yaml)."""
-    if request.method == "GET":
-        return jsonify({"tags": read_tags_yaml()})
-
-    if STATE["readonly"]:
-        return jsonify({"ok": False, "error": "read-only mode"}), 403
-    if not STATE["data_yaml"]:
-        return jsonify({"ok": False, "error": "no dataset loaded"}), 400
-
-    data = request.get_json(silent=True) or {}
-    tags = _normalize_tags(data.get("tags"))
-    path = save_tags_yaml(tags)
-    if path is None:
-        return jsonify({"ok": False, "error": "no dataset loaded"}), 400
-    return jsonify({"ok": True, "tags_yaml": path, "tags": read_tags_yaml()})
-
-
 @app.route("/api/tags-dir", methods=["POST"])
 def api_tags_dir():
     """Set (or clear) the per-dataset tags folder and re-derive the split paths.
@@ -2333,27 +2325,6 @@ def api_tags_dir():
     cfg = api_config().get_json()
     cfg["ok"] = True
     return jsonify(cfg)
-
-
-@app.route("/api/tags", methods=["GET", "POST"])
-def api_tags():
-    """Read/write one image's tag list (its <stem>.txt under the split's tags dir)."""
-    entry = _request_entry()
-    split = _split_by_name(entry["split"])
-    if split is None:
-        abort(404)
-    assert split is not None
-
-    if request.method == "GET":
-        return jsonify({"tags": _read_tag_lines(tag_path(entry))})
-
-    if STATE["readonly"]:
-        return jsonify({"ok": False, "error": "read-only mode"}), 403
-
-    data = request.get_json(silent=True) or {}
-    tags = _normalize_tags(data.get("tags"))
-    write_image_tags(entry, tags)
-    return jsonify({"ok": True, "count": len(tags)})
 
 
 # --------------------------------------------------------------------------- #

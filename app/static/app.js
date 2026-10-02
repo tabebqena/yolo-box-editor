@@ -1539,28 +1539,27 @@ function loadImage(i) {
     image: entry ? `${entry.split}/${entry.name}` : null });
 
   const q = keyQuery(entry);
-  Promise.all([
-    fetch('/api/labels' + q).then((r) => (r.ok ? r.json() : null)),
-    fetch('/api/tags' + q).then((r) => (r.ok ? r.json() : null)),
-  ]).then(([labelData, tagData]) => {
-    if (requested !== currentIndex) return; // a newer loadImage superseded us
-    boxes = Array.isArray(labelData) ? labelData : [];
-    imageTags = (tagData && tagData.tags) || [];
-    undoStack = []; // history is per image
-    redoStack = [];
-    imageEl.src = '/api/image' + q + '&_=' + Date.now();
-    rememberLastImage();
-    renderTagBar();
-    updateHistoryButtons();
-    dbg('loadImage resolved', { index: currentIndex, boxes: boxes.length,
-      tags: imageTags.length, src: imageEl.src });
-    runHook('on_image_loaded');
-  }).catch((err) => {
-    // e.g. the key is no longer in the server list (a stale tab): blank it
-    // rather than surfacing an unhandled rejection, and let the image onerror
-    // clear the canvas.
-    dbgWarn('loadImage failed', { image: imageKey(entry), error: String(err) });
-  });
+  fetch('/api/annotations' + q)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      if (requested !== currentIndex) return; // a newer loadImage superseded us
+      boxes = Array.isArray(data && data.boxes) ? data.boxes : [];
+      imageTags = (data && data.tags) || [];
+      undoStack = []; // history is per image
+      redoStack = [];
+      imageEl.src = '/api/image' + q + '&_=' + Date.now();
+      rememberLastImage();
+      renderTagBar();
+      updateHistoryButtons();
+      dbg('loadImage resolved', { index: currentIndex, boxes: boxes.length,
+        tags: imageTags.length, src: imageEl.src });
+      runHook('on_image_loaded');
+    }).catch((err) => {
+      // e.g. the key is no longer in the server list (a stale tab): blank it
+      // rather than surfacing an unhandled rejection, and let the image onerror
+      // clear the canvas.
+      dbgWarn('loadImage failed', { image: imageKey(entry), error: String(err) });
+    });
 }
 
 // Remember the current image so the app can resume here on reload. One entry
@@ -1953,7 +1952,7 @@ async function save(opts = {}) {
   }
   let ok = false;
   try {
-    const res = await fetch('/api/labels' + keyQuery(images[currentIndex]), {
+    const res = await fetch('/api/annotations' + keyQuery(images[currentIndex]), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ boxes, tags: imageTags }),
@@ -2344,7 +2343,7 @@ const DOCK_SIDE_MAX = 720;
 const DOCK_BOTTOM_MIN = 100;
 const DOCK_LOCATIONS = ['default', 'float', 'left', 'right', 'bottom'];
 
-let panelSide = 'right';
+let panelSide = 'left';
 
 // The dockable widgets. `default` puts the content back where it lives in the
 // markup; the other locations are the floating window or an edge panel.
@@ -2699,7 +2698,7 @@ function savedVisible(key) {
 }
 
 function initAppearance() {
-  panelSide = settingsGet(PANEL_SIDE_KEY) === 'left' ? 'left' : 'right';
+  panelSide = settingsGet(PANEL_SIDE_KEY) === 'right' ? 'right' : 'left';
   widgetNames().forEach((name) => {
     dockState[name] = savedDock(dockKey(name));
     visibleState[name] = savedVisible(WIDGETS[name].visibleKey);

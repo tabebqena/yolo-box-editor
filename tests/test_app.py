@@ -936,29 +936,33 @@ def test_api_image_out_of_range_404(clean_state, tmp_path):
     assert client.get("/api/image?key=train/nope.jpg").status_code == 404
 
 
-def test_api_labels_get_empty_without_file(clean_state, tmp_path):
+def test_api_annotations_get_empty_without_file(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    assert client.get("/api/labels?key=train/a.jpg").get_json() == []
+    assert client.get("/api/annotations?key=train/a.jpg").get_json() == {
+        "boxes": [], "tags": []}
 
 
-def test_api_labels_get_parses_existing(clean_state, tmp_path):
+def test_api_annotations_get_parses_existing(clean_state, tmp_path):
     root = make_dataset(tmp_path)
     (root / "labels" / "train").mkdir(parents=True)
     (root / "labels" / "train" / "a.txt").write_text(
         "1 0.5 0.25 0.2 0.4\nbad line\n", encoding="utf-8"
     )
+    (root / "tags" / "train").mkdir(parents=True)
+    (root / "tags" / "train" / "a.txt").write_text("fire\nsmoke\n\n", encoding="utf-8")
     client = ybe.app.test_client()
     load_dataset(client, root)
-    boxes = client.get("/api/labels?key=train/a.jpg").get_json()
-    assert boxes == [{"class": 1, "cx": 0.5, "cy": 0.25, "w": 0.2, "h": 0.4}]
+    data = client.get("/api/annotations?key=train/a.jpg").get_json()
+    assert data["boxes"] == [{"class": 1, "cx": 0.5, "cy": 0.25, "w": 0.2, "h": 0.4}]
+    assert data["tags"] == ["fire", "smoke"]
 
 
-def test_api_labels_post_writes_clamped(clean_state, tmp_path):
+def test_api_annotations_post_writes_clamped(clean_state, tmp_path):
     root = make_dataset(tmp_path)
     client = ybe.app.test_client()
     load_dataset(client, root)
-    resp = client.post("/api/labels?key=train/a.jpg", json={"boxes": [
+    resp = client.post("/api/annotations?key=train/a.jpg", json={"boxes": [
         {"class": 2, "cx": -1.0, "cy": 0.5, "w": 2.0, "h": 0.1},
         {"class": -3, "cx": 0.4, "cy": 0.4, "w": 0.2, "h": 0.2},
     ]})
@@ -969,29 +973,29 @@ def test_api_labels_post_writes_clamped(clean_state, tmp_path):
     assert written[1].startswith("0 0.400000 0.400000")
 
 
-def test_api_labels_post_invalid_box(clean_state, tmp_path):
+def test_api_annotations_post_invalid_box(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
-    resp = client.post("/api/labels?key=train/a.jpg", json={"boxes": [{"class": "x", "cx": 0, "cy": 0, "w": 0, "h": 0}]})
+    resp = client.post("/api/annotations?key=train/a.jpg", json={"boxes": [{"class": "x", "cx": 0, "cy": 0, "w": 0, "h": 0}]})
     assert resp.status_code == 400
 
 
-def test_api_labels_post_readonly_rejected(clean_state, tmp_path, monkeypatch):
+def test_api_annotations_post_readonly_rejected(clean_state, tmp_path, monkeypatch):
     ybe.STATE["readonly"] = True
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
     cfg = client.get("/api/config").get_json()
     assert cfg["readonly"] is True
-    resp = client.post("/api/labels?key=train/a.jpg", json={"boxes": []})
+    resp = client.post("/api/annotations?key=train/a.jpg", json={"boxes": []})
     assert resp.status_code == 403
 
 
-def test_api_labels_post_writes_tags(clean_state, tmp_path):
+def test_api_annotations_post_writes_tags(clean_state, tmp_path):
     root = make_dataset(tmp_path)
     client = ybe.app.test_client()
     load_dataset(client, root)
     resp = client.post(
-        "/api/labels?key=train/a.jpg",
+        "/api/annotations?key=train/a.jpg",
         json={"boxes": [], "tags": ["fire", "", "smoke", "fire"]},
     )
     assert resp.status_code == 200
@@ -1001,51 +1005,57 @@ def test_api_labels_post_writes_tags(clean_state, tmp_path):
     assert written == ["fire", "smoke"]
 
 
-def test_api_labels_post_registers_new_tags_in_yaml(clean_state, tmp_path):
+def test_api_annotations_post_registers_new_tags_in_yaml(clean_state, tmp_path):
     root = make_dataset(tmp_path)
     (root / "tags.yaml").write_text("- fire\n", encoding="utf-8")
     client = ybe.app.test_client()
     load_dataset(client, root)
     body = client.post(
-        "/api/labels?key=train/a.jpg",
+        "/api/annotations?key=train/a.jpg",
         json={"boxes": [], "tags": ["fire", "smoke"]},
     ).get_json()
     assert body["available_tags"] == ["fire", "smoke"]
     assert (root / "tags.yaml").read_text() == "- fire\n- smoke\n"
 
 
-def test_api_labels_post_does_not_rewrite_known_tags_yaml(clean_state, tmp_path):
+def test_api_annotations_post_does_not_rewrite_known_tags_yaml(clean_state, tmp_path):
     root = make_dataset(tmp_path)
     (root / "tags.yaml").write_text("# keep me\n- fire\n", encoding="utf-8")
     before = (root / "tags.yaml").read_text()
     client = ybe.app.test_client()
     load_dataset(client, root)
     body = client.post(
-        "/api/labels?key=train/a.jpg",
+        "/api/annotations?key=train/a.jpg",
         json={"boxes": [], "tags": ["fire"]},
     ).get_json()
     assert body["available_tags"] == ["fire"]
     assert (root / "tags.yaml").read_text() == before
 
 
-def test_api_labels_post_without_tags_leaves_tag_file(clean_state, tmp_path):
+def test_api_annotations_post_without_tags_leaves_tag_file(clean_state, tmp_path):
     root = make_dataset(tmp_path)
     (root / "tags" / "train").mkdir(parents=True)
     (root / "tags" / "train" / "a.txt").write_text("keep\n", encoding="utf-8")
     client = ybe.app.test_client()
     load_dataset(client, root)
-    client.post("/api/labels?key=train/a.jpg", json={"boxes": []})
+    client.post("/api/annotations?key=train/a.jpg", json={"boxes": []})
     assert (root / "tags" / "train" / "a.txt").read_text() == "keep\n"
 
 
-def test_api_labels_post_clears_tags_when_empty(clean_state, tmp_path):
+def test_api_annotations_post_clears_tags_when_empty(clean_state, tmp_path):
     root = make_dataset(tmp_path)
     (root / "tags" / "train").mkdir(parents=True)
     (root / "tags" / "train" / "a.txt").write_text("old\n", encoding="utf-8")
     client = ybe.app.test_client()
     load_dataset(client, root)
-    client.post("/api/labels?key=train/a.jpg", json={"boxes": [], "tags": []})
+    client.post("/api/annotations?key=train/a.jpg", json={"boxes": [], "tags": []})
     assert (root / "tags" / "train" / "a.txt").read_text() == ""
+
+
+def test_api_annotations_out_of_range_404(clean_state, tmp_path):
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    assert client.get("/api/annotations?key=train/nope.jpg").status_code == 404
 
 
 # --------------------------------------------------------------------------- #
@@ -1173,72 +1183,6 @@ def test_save_tags_yaml_normalises_plain_list(clean_state, tmp_path):
     assert text.count("- ") == 3
     assert "other" not in text
     assert ybe.read_tags_yaml() == ["fire", "smoke", "new"]
-
-
-def test_api_tags_yaml_get_and_post(clean_state, tmp_path):
-    client = ybe.app.test_client()
-    load_dataset(client, make_dataset(tmp_path))
-    assert client.get("/api/tags.yaml").get_json() == {"tags": []}
-
-    resp = client.post("/api/tags.yaml", json={"tags": ["fire", "smoke", "fire"]})
-    assert resp.status_code == 200
-    assert resp.get_json()["ok"] and resp.get_json()["tags"] == ["fire", "smoke"]
-    assert client.get("/api/tags.yaml").get_json() == {"tags": ["fire", "smoke"]}
-
-
-def test_api_tags_yaml_post_requires_dataset(clean_state, tmp_path):
-    resp = ybe.app.test_client().post("/api/tags.yaml", json={"tags": ["fire"]})
-    assert resp.status_code == 400
-
-
-def test_api_tags_yaml_post_readonly_rejected(clean_state, tmp_path):
-    ybe.STATE["readonly"] = True
-    client = ybe.app.test_client()
-    load_dataset(client, make_dataset(tmp_path))
-    resp = client.post("/api/tags.yaml", json={"tags": ["fire"]})
-    assert resp.status_code == 403
-
-
-# --------------------------------------------------------------------------- #
-# tags: per-image routes
-# --------------------------------------------------------------------------- #
-def test_api_tags_get_empty_without_file(clean_state, tmp_path):
-    client = ybe.app.test_client()
-    load_dataset(client, make_dataset(tmp_path))
-    assert client.get("/api/tags?key=train/a.jpg").get_json() == {"tags": []}
-
-
-def test_api_tags_get_parses_existing(clean_state, tmp_path):
-    root = make_dataset(tmp_path)
-    (root / "tags" / "train").mkdir(parents=True)
-    (root / "tags" / "train" / "a.txt").write_text("fire\nsmoke\n\n", encoding="utf-8")
-    client = ybe.app.test_client()
-    load_dataset(client, root)
-    assert client.get("/api/tags?key=train/a.jpg").get_json() == {"tags": ["fire", "smoke"]}
-
-
-def test_api_tags_post_writes_deduped(clean_state, tmp_path):
-    root = make_dataset(tmp_path)
-    client = ybe.app.test_client()
-    load_dataset(client, root)
-    resp = client.post("/api/tags?key=train/a.jpg", json={"tags": ["fire", "", "smoke", "fire"]})
-    assert resp.status_code == 200
-    assert resp.get_json()["ok"] and resp.get_json()["count"] == 2
-    written = (root / "tags" / "train" / "a.txt").read_text().splitlines()
-    assert written == ["fire", "smoke"]
-
-
-def test_api_tags_post_readonly_rejected(clean_state, tmp_path):
-    ybe.STATE["readonly"] = True
-    client = ybe.app.test_client()
-    load_dataset(client, make_dataset(tmp_path))
-    assert client.post("/api/tags?key=train/a.jpg", json={"tags": ["fire"]}).status_code == 403
-
-
-def test_api_tags_out_of_range_404(clean_state, tmp_path):
-    client = ybe.app.test_client()
-    load_dataset(client, make_dataset(tmp_path))
-    assert client.get("/api/tags?key=train/nope.jpg").status_code == 404
 
 
 # --------------------------------------------------------------------------- #

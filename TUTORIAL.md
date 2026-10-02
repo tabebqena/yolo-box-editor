@@ -111,7 +111,7 @@ canvas.
    (or press its number). Done: a green box with the class label appears.
 
 The new box is automatically *selected*: it is yellow on the canvas, and its row
-in the right panel is **active** (controls enabled).
+in the side panel is **active** (controls enabled).
 
 > **Drawing on top of an existing box?** A normal drag inside a box grabs and
 > moves that box. Hold the force-draw modifier (default **`Ctrl`**) and drag to

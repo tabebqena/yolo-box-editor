@@ -4,15 +4,19 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [3.7.0] - 2026-10-02
+## [4.0.0] - 2026-10-02
 
 ### Changed
 
+- The control panel (Tags, Boxes, Actions, Navigation, Save) now sits on the
+  **left** by default. Change it in **Settings → Layout → Control panel side**.
 - Saving an image now writes its labels and tags together: the backend writes
   the image's tag file and adds only new tag names to `tags.yaml` (no rewrite
   when nothing is new). Tag edits are written on save instead of instantly.
 - Tag edits now take part in undo/redo (`Z` / `Y`), and the undo history is
   reset per image.
+- `GET`/`POST /api/labels` is now `GET`/`POST /api/annotations`. `GET` returns
+  `{"boxes": [...], "tags": [...]}`; `POST` still saves the boxes and tags.
 
 ### Removed
 
@@ -20,6 +24,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   ran it; tag persistence is handled by the save itself. `app_update_tags` is no
   longer a built-in app action. `on_after_save` remains a valid hook event for
   your own hooks.
+- The `/api/tags` and `/api/tags.yaml` endpoints; per-image tags are read and
+  written through `/api/annotations` (the dataset tag list is still
+  `tags.yaml`, managed server-side).
 
 ## [3.6.0] - 2026-10-02
 
