@@ -10,6 +10,7 @@
 #   ybe stop|restart|status     manage the background process
 #   ybe logs [-f]               show / follow the log file
 #   ybe version|check-update|update|upgrade   installation management (ybx.sh)
+#   ybe uninstall                             remove the app (ybx.sh)
 
 DIR="@DIR@"
 VENV="@VENV@"
@@ -133,6 +134,7 @@ Usage:
   ybe version                 print the installed version
   ybe check-update            check for a newer version (via ybx.sh)
   ybe update                  update in place (via ybx.sh)
+  ybe uninstall               remove the app, venv and launchers (via ybx.sh)
 
 OPTIONS are the app's flags, e.g.:
   --data /path/to/data.yaml   dataset to open
@@ -152,7 +154,7 @@ case "$cmd" in
   restart)       shift; do_restart "$@" ;;
   status)        shift; do_status ;;
   logs)          shift; do_logs "$@" ;;
-  version|check-update|update|upgrade)
+  version|check-update|update|upgrade|uninstall)
                  shift; ensure_ybx; exec "$DIR/ybx.sh" "$cmd" --dir "$DIR" "$@" ;;
   help|-h|--help|"") usage ;;
   *)             usage >&2; exit 2 ;;

@@ -8,6 +8,7 @@
 #   update         alias of upgrade
 #   version        print the installed version
 #   check-update   compare the installed version with the latest one
+#   uninstall      remove the app, venv and launchers (keeps your files)
 #
 # Options:
 #   --dir DIR       install/user folder (default: ~/.local/share/yolo-box-editor)
@@ -20,6 +21,8 @@
 #   --link          add yolo-box-editor and ybe to ~/.local/bin (default)
 #   --no-link       do not create the launchers
 #   --no-start      do not start the app after installing/upgrading
+#   --purge         uninstall: also delete the user folder (with --yes)
+#   --yes, -y       uninstall: skip the --purge confirmation
 #   --python CMD    python used to build the venv (default: python3)
 #   -h, --help      show this help
 #
@@ -42,6 +45,8 @@ LATEST=0
 FROM=""
 LINK=1
 START=1
+PURGE=0
+ASSUME_YES=0
 PYTHON_CMD="${PYTHON_CMD:-python3}"
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 CMD=""
@@ -69,6 +74,7 @@ Usage:
   ybx.sh upgrade        [options]   install a newer version (alias: update)
   ybx.sh version        [--dir DIR] print the installed version
   ybx.sh check-update   [--dir DIR] compare installed vs latest
+  ybx.sh uninstall      [options]   remove the app, venv and launchers
 
 Options:
   --dir DIR       install/user folder (default: ~/.local/share/yolo-box-editor)
@@ -81,8 +87,14 @@ Options:
   --link          add yolo-box-editor and ybe to ~/.local/bin (default)
   --no-link       do not create the launchers
   --no-start      do not start the app after installing/upgrading
+  --purge         uninstall: also delete the user folder (with --yes)
+  --yes, -y       uninstall: skip the --purge confirmation
   --python CMD    python used to build the venv (default: python3)
   -h, --help      show this help
+
+uninstall removes <dir>/app, <dir>/.venv, ybx.sh and the launchers; your
+actions/ hooks/ filters/ scripts/ shortcuts.txt are kept (add --purge --yes to
+remove the whole folder).
 
 After installing/upgrading, the app is started in the background (unless
 --no-start) so it is ready at http://127.0.0.1:5000.
@@ -98,7 +110,7 @@ need_curl() {
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    install|upgrade|update|version|check-update) CMD="$1" ;;
+    install|upgrade|update|version|check-update|uninstall) CMD="$1" ;;
     --dir|--home) DIR="${2:?$1 needs a value}"; shift ;;
     --version) REF_ARG="${2:?--version needs a value}"; shift ;;
     --latest) LATEST=1 ;;
@@ -107,6 +119,8 @@ while [ $# -gt 0 ]; do
     --link) LINK=1 ;;
     --no-link) LINK=0 ;;
     --no-start) START=0 ;;
+    --purge) PURGE=1 ;;
+    --yes|-y) ASSUME_YES=1 ;;
     --python) PYTHON_CMD="${2:?--python needs a value}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -465,10 +479,73 @@ cmd_check_update() {
   exit "$rc"
 }
 
+stop_installed() {
+  local pid="" i=0
+  if [ -f "$DIR/ybe.pid" ]; then
+    pid=$(cat "$DIR/ybe.pid" 2>/dev/null || true)
+  fi
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null || true
+    while [ "$i" -lt 50 ] && kill -0 "$pid" 2>/dev/null; do sleep 0.1; i=$((i + 1)); done
+    if kill -0 "$pid" 2>/dev/null; then kill -9 "$pid" 2>/dev/null || true; fi
+    say "Stopped the running app (pid $pid)."
+  fi
+  rm -f "$DIR/ybe.pid"
+}
+
+# Remove the launchers, but only ones that belong to this install.
+remove_launchers() {
+  local path
+  for path in "$BIN_DIR/yolo-box-editor" "$BIN_DIR/ybe"; do
+    [ -e "$path" ] || [ -L "$path" ] || continue
+    if [ -L "$path" ]; then
+      rm -f "$path"; say "Removed launcher $path"
+    elif grep -q -- "$DIR" "$path" 2>/dev/null; then
+      rm -f "$path"; say "Removed launcher $path"
+    else
+      warn "left $path (does not belong to $DIR)"
+    fi
+  done
+}
+
+cmd_uninstall() {
+  if [ ! -d "$DIR" ]; then
+    say "Nothing installed in $DIR."
+    return 0
+  fi
+  stop_installed
+  remove_launchers
+
+  if [ "$PURGE" -eq 1 ]; then
+    if [ "$ASSUME_YES" -ne 1 ]; then
+      if [ -t 0 ]; then
+        printf 'Remove %s and ALL its files (actions/, hooks/, filters/, scripts/, …)? [y/N] ' "$DIR"
+        read -r ans
+        case "$ans" in
+          y|Y|yes|YES) ;;
+          *) say "Aborted; nothing else was removed."; return 1 ;;
+        esac
+      else
+        die "--purge needs --yes when not run interactively."
+      fi
+    fi
+    rm -rf "$DIR"
+    say "Removed $DIR"
+    return 0
+  fi
+
+  rm -rf "$DIR/app" "$DIR/.venv"
+  rm -f "$DIR/ybx.sh" "$DIR/ybe.log"
+  say "Removed the app and its virtual environment from $DIR."
+  say "Kept your files: actions/ hooks/ filters/ scripts/ shortcuts.txt"
+  say "Remove everything with: ybx.sh uninstall --purge --yes"
+}
+
 case "$CMD" in
   install) cmd_install ;;
   upgrade|update) cmd_upgrade ;;
   version) cmd_version ;;
   check-update) cmd_check_update ;;
+  uninstall) cmd_uninstall ;;
   *) usage; exit 0 ;;
 esac

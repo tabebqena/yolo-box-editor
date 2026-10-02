@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.12.0] - 2026-10-02
+
+### Added
+
+- **`ybx.sh uninstall`** (also `ybe uninstall`): stops a running instance,
+  removes the launchers, `<dir>/app`, `<dir>/.venv` and `ybx.sh`, and keeps your
+  `actions/`, `hooks/`, `filters/`, `scripts/` and `shortcuts.txt`. Add
+  `--purge --yes` to delete the whole user folder as well (`--purge` alone asks
+  interactively, or refuses when not run from a terminal).
+
 ## [2.11.0] - 2026-10-02
 
 ### Added
