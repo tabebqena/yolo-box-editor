@@ -47,7 +47,8 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   selecting another box or pressing `Esc` disables them again. Typing clamps
   values to `0..1` and updates the canvas live; while a coordinate input is
   focused its value is highlighted on the image in orange.
-- **Layout** (Settings → Layout, remembered per browser): put the control panel
+- **Layout** (Settings → Layout, remembered per browser *and* on the server —
+  see [Settings are cross-browser](#settings-are-cross-browser)): put the control panel
   on the **left** or **right**, and choose where each **widget** — **Tags**,
   **Boxes**, **Actions**, **Navigation** (Prev / counter / Next) and
   **Save / Undo** — lives: its default spot, a **floating window**, or the
@@ -63,7 +64,7 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   `Esc`).
 - **Undo / Redo / Save**: `z` undoes, `y` redoes, `s` saves — Save is enabled
   only while the image has unsaved changes.
-- **Auto-save** (Settings → View switch, remembered per browser): after each edit the
+- **Auto-save** (Settings → View switch, saved per browser and on the server): after each edit the
   current image's labels are saved automatically (edits are coalesced into one
   write). While it is on, Prev/Next and the counter jump no longer ask to
   save/discard — any pending write is flushed first (navigation is kept on the
@@ -162,6 +163,7 @@ The app is split into a relocatable **code folder** and your **user folder**:
 ├── .venv/                    virtual environment (created by the installer)
 ├── actions/ hooks/ filters/ scripts/ shortcuts.txt   your files
 ├── .recent_data_yamls.json .view_state.json          your app state
+├── .settings.json                                    UI settings (cross-browser)
 └── app/                      the shipped app (replaced on upgrade)
     ├── app.py static/ templates/ requirements.txt VERSION
     └── actions/ hooks/ filters/ scripts/ shortcuts.txt   built-ins
@@ -173,6 +175,15 @@ is the repo root in a clone and the install root in an installed copy — so bot
 behave the same with no flags. Your files are read after the shipped ones and
 win on a name clash. The app creates the folders when they are missing and logs
 `[ybe] user dir: …` (override with `--home`).
+
+### Settings are cross-browser
+
+Your UI settings (View and Layout preferences, panel sizes and floating-window
+positions) are saved both in the browser and in `.settings.json` in the user
+folder. A browser you have not used before starts from the saved settings; a
+value you change in a given browser is remembered there and wins over the saved
+one. This makes a fresh browser inherit your setup without overwriting choices
+you already made elsewhere.
 
 ## Install
 

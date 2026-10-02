@@ -77,6 +77,7 @@ USER_SCRIPT_DIR = os.path.join(YBX_HOME, "scripts")
 USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
 RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
 VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")  # active split/filter per dataset
+SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")  # cross-browser UI prefs
 UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")  # cached update result
 
 # Update check: compare the shipped VERSION with the newest GitHub one. A check
@@ -100,7 +101,7 @@ def configure_home(path):
     """Point the user folders at `path` (the `--home` override)."""
     global YBX_HOME, USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR
     global USER_SCRIPT_DIR, USER_SHORTCUTS_FILE, RECENT_FILE, VIEW_FILE
-    global UPDATE_CHECK_FILE
+    global SETTINGS_FILE, UPDATE_CHECK_FILE
     YBX_HOME = os.path.abspath(os.path.expanduser(path))
     USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
     USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
@@ -109,6 +110,7 @@ def configure_home(path):
     USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
     RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
     VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")
+    SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")
     UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")
 
 
@@ -413,6 +415,39 @@ def _save_view(data_yaml, split, filter_names):
             f.write("\n")
     except OSError:
         pass
+
+
+def _load_settings():
+    """Read the cross-browser UI settings (a flat `{key: value}` map)."""
+    try:
+        with open(SETTINGS_FILE, encoding="utf-8") as f:
+            settings = json.load(f)
+        return settings if isinstance(settings, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _update_settings(changes):
+    """Merge `{key: value}` into the settings file; a null value deletes the key.
+
+    The browser sends only the keys the user just changed, so a partial merge
+    keeps every other browser's settings intact.
+    """
+    if not isinstance(changes, dict):
+        return _load_settings()
+    settings = _load_settings()
+    for key, value in changes.items():
+        if value is None:
+            settings.pop(key, None)
+        else:
+            settings[key] = value
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+            f.write("\n")
+    except OSError:
+        pass
+    return settings
 
 
 def _restore_view(data_yaml):
@@ -1644,6 +1679,7 @@ def api_config():
             "active_filters": STATE["active_filters"],
             "filter_error": STATE["filter_error"],
             "recent_data_yamls": _load_recent(),
+            "settings": _load_settings(),
             "actions": [a["name"] for a in actions],
             "hooks": [h["name"] for h in hooks],
             "hook_errors": hook_errors,
@@ -1680,6 +1716,24 @@ def api_update_check():
         if data.get("force"):
             return jsonify({"ok": True, "update": check_for_update(force=True)})
     return jsonify({"ok": True, "update": update_status()})
+
+
+@app.route("/api/settings", methods=["GET", "POST"])
+def api_settings():
+    """Cross-browser UI settings.
+
+    GET returns the stored `{key: value}` map. POST body `{"settings": {...}}`
+    merges the given keys (a null value removes one) and returns the result. A
+    browser keeps its own `localStorage` value for any key it has set, so these
+    act as the fallback a fresh browser starts from.
+    """
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        changes = data.get("settings")
+        if not isinstance(changes, dict):
+            return jsonify({"ok": False, "error": "settings must be an object"}), 400
+        return jsonify({"ok": True, "settings": _update_settings(changes)})
+    return jsonify({"ok": True, "settings": _load_settings()})
 
 
 @app.route("/api/presence", methods=["POST"])

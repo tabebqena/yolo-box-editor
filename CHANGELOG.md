@@ -4,6 +4,15 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.3.0] - 2026-10-02
+
+### Added
+
+- UI settings (View and Layout preferences, panel sizes and floating-window
+  positions) are now also saved on the server, so a browser you have not used
+  before starts with the same setup. A value you change in a given browser still
+  wins there.
+
 ## [3.2.0] - 2026-10-02
 
 ### Added

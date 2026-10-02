@@ -43,6 +43,7 @@ def test_configure_home_repoints_user_dirs(clean_state, tmp_path):
     assert ybe.USER_ACTIONS_DIR == str(target / "actions")
     assert ybe.USER_SCRIPT_DIR == str(target / "scripts")
     assert ybe.RECENT_FILE == str(target / ".recent_data_yamls.json")
+    assert ybe.SETTINGS_FILE == str(target / ".settings.json")
 
 
 # --------------------------------------------------------------------------- #
@@ -83,6 +84,7 @@ def clean_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "YBX_HOME", str(tmp_path))
     monkeypatch.setattr(ybe, "RECENT_FILE", str(tmp_path / "recent.json"))
     monkeypatch.setattr(ybe, "VIEW_FILE", str(tmp_path / "view.json"))
+    monkeypatch.setattr(ybe, "SETTINGS_FILE", str(tmp_path / "settings.json"))
     monkeypatch.setattr(ybe, "UPDATE_CHECK_FILE", str(tmp_path / "update.json"))
     monkeypatch.setattr(ybe, "VERSION_FILE", str(tmp_path / "VERSION"))
     monkeypatch.setattr(ybe, "CHANGES_FILE", str(tmp_path / "CHANGES"))
@@ -712,6 +714,44 @@ def test_api_config_defaults(clean_state):
     assert cfg["actions"] == [] and cfg["hooks"] == []
     assert cfg["hook_errors"] == []
     assert cfg["debug"] is False
+
+
+def test_api_config_includes_settings(clean_state):
+    Path(ybe.SETTINGS_FILE).write_text(
+        json.dumps({"autoSave": "1", "ybe_panel_side": "left"}), encoding="utf-8"
+    )
+    cfg = ybe.app.test_client().get("/api/config").get_json()
+    assert cfg["settings"] == {"autoSave": "1", "ybe_panel_side": "left"}
+
+
+def test_api_settings_defaults_empty(clean_state):
+    data = ybe.app.test_client().get("/api/settings").get_json()
+    assert data["ok"] is True and data["settings"] == {}
+
+
+def test_api_settings_post_merges_and_deletes(clean_state):
+    client = ybe.app.test_client()
+    data = client.post(
+        "/api/settings", json={"settings": {"autoSave": "1", "ybe_show_boxes": "0"}}
+    ).get_json()
+    assert data["settings"] == {"autoSave": "1", "ybe_show_boxes": "0"}
+
+    # a partial update leaves the other keys alone
+    data = client.post("/api/settings", json={"settings": {"ybe_panel_side": "left"}}).get_json()
+    assert data["settings"] == {
+        "autoSave": "1", "ybe_show_boxes": "0", "ybe_panel_side": "left",
+    }
+
+    # null removes a key
+    data = client.post("/api/settings", json={"settings": {"autoSave": None}}).get_json()
+    assert "autoSave" not in data["settings"]
+    assert client.get("/api/settings").get_json()["settings"] == data["settings"]
+
+
+def test_api_settings_rejects_non_object(clean_state):
+    resp = ybe.app.test_client().post("/api/settings", json={"settings": ["nope"]})
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
 
 
 def test_api_config_reports_debug_flag(clean_state):

@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 3.3.0
+- UI settings (View/Layout, panel sizes, floating-window positions) are saved on the server too, so a new browser starts with your setup. A value you change in a browser still wins there.
+
 ## 3.2.0
 - Settings > Layout now has a block per widget with a Show toggle and a Location selector.
 - Tags are visible by default; the old View > Tags switch is gone.

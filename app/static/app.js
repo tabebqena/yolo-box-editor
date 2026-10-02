@@ -80,6 +80,56 @@ function dbgWarn(...args) {
 }
 
 // ------------------------------------------------------------------------- //
+// settings: browser-local, mirrored to the backend for cross-browser use
+//
+// A key set in this browser (localStorage) always wins; the server value is the
+// fallback a fresh browser starts from. Every write updates both, so another
+// browser that never set the key inherits it. Loaded before appearance init.
+// ------------------------------------------------------------------------- //
+let serverSettings = {};      // {key: value} last seen from /api/config
+let settingsSaveTimer = null; // debounce for batched POST /api/settings
+let pendingSettings = {};     // changes waiting to be flushed
+
+function settingsGet(key) {
+  let local = null;
+  try { local = localStorage.getItem(key); } catch (e) { /* storage unavailable */ }
+  if (local !== null) return local;
+  if (Object.prototype.hasOwnProperty.call(serverSettings, key)) {
+    const v = serverSettings[key];
+    return v === null || v === undefined ? null : String(v);
+  }
+  return null;
+}
+
+function settingsSet(key, value) {
+  const str = value === null || value === undefined ? null : String(value);
+  try {
+    if (str === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, str);
+  } catch (e) { /* ignore */ }
+  if (str === null) delete serverSettings[key];
+  else serverSettings[key] = str;
+  pendingSettings[key] = str;
+  clearTimeout(settingsSaveTimer);
+  settingsSaveTimer = setTimeout(flushSettings, 150);
+}
+
+function flushSettings() {
+  settingsSaveTimer = null;
+  if (!Object.keys(pendingSettings).length) return;
+  const body = { settings: pendingSettings };
+  pendingSettings = {};
+  fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    keepalive: true,
+  }).then((r) => r.json()).then((data) => {
+    if (data && data.ok && data.settings) serverSettings = data.settings;
+  }).catch(() => { /* offline: the local copy still wins */ });
+}
+
+// ------------------------------------------------------------------------- //
 // notifications (fixed toasts + bell history; never in the layout flow)
 // ------------------------------------------------------------------------- //
 const TOAST_MAX = 5;       // at most this many toasts on screen at once
@@ -1047,6 +1097,8 @@ function populateClasses() {
 
 async function loadConfig(startIdx = 0, opts = {}) {
   const cfg0 = await (await fetch('/api/config')).json();
+  serverSettings = cfg0.settings || {};
+  initSettings();
   debugMode = !!cfg0.debug;
   if (cfg0.update) updateInfo = cfg0.update;
   if (debugMode) console.log('[ybe] debug mode on — verbose logging enabled (--debug)');
@@ -1939,7 +1991,7 @@ function initSidePanelResizer() {
     dragging = false;
     handle.classList.remove('active');
     document.body.style.cursor = '';
-    if (pending !== null) localStorage.setItem(SIDEBAR_W_KEY, String(pending));
+    if (pending !== null) settingsSet(SIDEBAR_W_KEY, pending);
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
   };
@@ -1955,20 +2007,20 @@ function initSidePanelResizer() {
 }
 
 function initSidePanel() {
-  sidePanelOpen = localStorage.getItem('sidePanelOpen') !== '0';
-  toggleSidePanel(sidePanelOpen);
-  const saved = parseInt(localStorage.getItem(SIDEBAR_W_KEY) || '', 10);
+  sidePanelOpen = settingsGet('sidePanelOpen') !== '0';
+  toggleSidePanel(sidePanelOpen, false);
+  const saved = parseInt(settingsGet(SIDEBAR_W_KEY) || '', 10);
   if (saved) applySidePanelWidth(saved);
   el('sidePanelToggle').addEventListener('click', () => toggleSidePanel());
   initSidePanelResizer();
 }
 
-function toggleSidePanel(show) {
+function toggleSidePanel(show, persist = true) {
   const open = show !== undefined ? !!show : !sidePanelOpen;
   sidePanelOpen = open;
   el('sidebar').classList.toggle('collapsed', !open);
   el('sidePanelToggle').classList.toggle('active', open);
-  localStorage.setItem('sidePanelOpen', open ? '1' : '0');
+  if (persist) settingsSet('sidePanelOpen', open ? '1' : '0');
 }
 
 // ------------------------------------------------------------------------- //
@@ -2067,11 +2119,9 @@ function setFloatPos(win, x, y) {
 }
 
 function saveFloatPos(win) {
-  try {
-    localStorage.setItem(floatKey(win.id), JSON.stringify({
-      x: win.offsetLeft, y: win.offsetTop,
-    }));
-  } catch (e) { /* storage unavailable */ }
+  settingsSet(floatKey(win.id), JSON.stringify({
+    x: win.offsetLeft, y: win.offsetTop,
+  }));
 }
 
 function defaultFloatPos(win) {
@@ -2086,7 +2136,7 @@ function defaultFloatPos(win) {
 
 function restoreFloatPos(win) {
   let pos = null;
-  try { pos = JSON.parse(localStorage.getItem(floatKey(win.id)) || 'null'); } catch (e) { /* ignore */ }
+  try { pos = JSON.parse(settingsGet(floatKey(win.id)) || 'null'); } catch (e) { /* ignore */ }
   if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
     setFloatPos(win, pos.x, pos.y);
   } else {
@@ -2172,7 +2222,7 @@ function getWidgetVisible(name) { return visibleState[name] !== false; }
 
 function setWidgetVisible(name, on) {
   visibleState[name] = !!on;
-  try { localStorage.setItem(WIDGETS[name].visibleKey, on ? '1' : '0'); } catch (e) { /* ignore */ }
+  settingsSet(WIDGETS[name].visibleKey, on ? '1' : '0');
   const sw = el(WIDGETS[name].visibleSw);
   if (sw) sw.checked = !!on;
   applyWidget(name);
@@ -2203,7 +2253,7 @@ function setWidgetDock(name, loc) {
     toggleSidePanel(true);
   }
   setDockState(name, loc);
-  try { localStorage.setItem(dockKey(name), loc); } catch (e) { /* ignore */ }
+  settingsSet(dockKey(name), loc);
   const sel = el(dockSelectId(name));
   if (sel) sel.value = loc;
   applyWidget(name);
@@ -2244,7 +2294,7 @@ function initDockResizers() {
       document.body.style.cursor = '';
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
-      try { localStorage.setItem(DOCK_SIDE_W_KEY, String(el('dockSide').offsetWidth)); } catch (e) { /* ignore */ }
+      settingsSet(DOCK_SIDE_W_KEY, el('dockSide').offsetWidth);
     };
     side.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -2275,7 +2325,7 @@ function initDockResizers() {
       document.body.style.cursor = '';
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
-      try { localStorage.setItem(DOCK_BOTTOM_H_KEY, String(el('dockBottomBody').offsetHeight)); } catch (e) { /* ignore */ }
+      settingsSet(DOCK_BOTTOM_H_KEY, el('dockBottomBody').offsetHeight);
     };
     bottom.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -2340,16 +2390,16 @@ function setAppearanceControls() {
 }
 
 function savedDock(key) {
-  const raw = localStorage.getItem(key);
+  const raw = settingsGet(key);
   return DOCK_LOCATIONS.includes(raw) ? raw : 'default';
 }
 
 function savedVisible(key) {
-  return localStorage.getItem(key) !== '0';
+  return settingsGet(key) !== '0';
 }
 
 function initAppearance() {
-  panelSide = localStorage.getItem(PANEL_SIDE_KEY) === 'left' ? 'left' : 'right';
+  panelSide = settingsGet(PANEL_SIDE_KEY) === 'left' ? 'left' : 'right';
   widgetNames().forEach((name) => {
     dockState[name] = savedDock(dockKey(name));
     visibleState[name] = savedVisible(WIDGETS[name].visibleKey);
@@ -2357,10 +2407,10 @@ function initAppearance() {
   // migrate the old "detach into a floating window" checkboxes
   const tagsKey = dockKey('tags');
   const boxesKey = dockKey('boxes');
-  if (!localStorage.getItem(tagsKey) && localStorage.getItem(LEGACY_DETACH_TAGS_KEY) === '1') dockState.tags = 'float';
-  if (!localStorage.getItem(boxesKey) && localStorage.getItem(LEGACY_DETACH_BOXES_KEY) === '1') dockState.boxes = 'float';
+  if (settingsGet(tagsKey) === null && localStorage.getItem(LEGACY_DETACH_TAGS_KEY) === '1') dockState.tags = 'float';
+  if (settingsGet(boxesKey) === null && localStorage.getItem(LEGACY_DETACH_BOXES_KEY) === '1') dockState.boxes = 'float';
   // migrate the old View > Tags switch (now the Tags widget's Show toggle)
-  if (localStorage.getItem(WIDGETS.tags.visibleKey) === null
+  if (settingsGet(WIDGETS.tags.visibleKey) === null
       && localStorage.getItem(LEGACY_TAGGING_KEY) !== null) {
     visibleState.tags = localStorage.getItem(LEGACY_TAGGING_KEY) !== '0';
   }
@@ -2374,9 +2424,9 @@ function initAppearance() {
   widgetNames().forEach((name) => initFloatWindow(widgetFrame(name)));
   initDockResizers();
 
-  const sideW = parseInt(localStorage.getItem(DOCK_SIDE_W_KEY) || '', 10);
+  const sideW = parseInt(settingsGet(DOCK_SIDE_W_KEY) || '', 10);
   if (sideW) applyDockSideWidth(sideW);
-  const bottomH = parseInt(localStorage.getItem(DOCK_BOTTOM_H_KEY) || '', 10);
+  const bottomH = parseInt(settingsGet(DOCK_BOTTOM_H_KEY) || '', 10);
   if (bottomH) applyDockBottomHeight(bottomH);
 
   applyAllWidgets();
@@ -2384,9 +2434,9 @@ function initAppearance() {
 
   el('panelSideSel').addEventListener('change', () => {
     panelSide = el('panelSideSel').value === 'left' ? 'left' : 'right';
-    try { localStorage.setItem(PANEL_SIDE_KEY, panelSide); } catch (e) { /* ignore */ }
+    settingsSet(PANEL_SIDE_KEY, panelSide);
     applyPanelSide();
-    const saved = parseInt(localStorage.getItem(SIDEBAR_W_KEY) || '', 10);
+    const saved = parseInt(settingsGet(SIDEBAR_W_KEY) || '', 10);
     if (saved) applySidePanelWidth(saved);
     // a widget's left/right location resolves against the new control side
     applyAllWidgets();
@@ -2806,7 +2856,7 @@ el('actionResultClose').addEventListener('click', closeActionResult);
 
 el('autoSaveSw').addEventListener('change', (e) => {
   autoSave = e.target.checked;
-  localStorage.setItem('autoSave', autoSave ? '1' : '0');
+  settingsSet('autoSave', autoSave ? '1' : '0');
   if (autoSave) scheduleAutoSave(); // save what is already pending
   else clearTimeout(autoSaveTimer);
 });
@@ -2908,7 +2958,7 @@ const APP_SHORTCUT_HANDLERS = {
   app_show_hide: (e) => {
     e.preventDefault();
     boxesVisible = !boxesVisible;
-    try { localStorage.setItem(SHOW_BOXES_KEY, boxesVisible ? '1' : '0'); } catch (err) { /* ignore */ }
+    settingsSet(SHOW_BOXES_KEY, boxesVisible ? '1' : '0');
     draw();
   },
   app_fix_box: (e) => {
@@ -3143,18 +3193,29 @@ function runActionForShortcut(e) {
   }
 }
 
-el('autoSaveSw').checked = localStorage.getItem('autoSave') === '1';
-autoSave = el('autoSaveSw').checked;
-boxesVisible = localStorage.getItem(SHOW_BOXES_KEY) !== '0';
+// Set up the appearance controls once, after /api/config has supplied the
+// server's settings (so `settingsGet` can fall back to them). Idempotent: the
+// fallback path below and later config reloads must not re-init.
+let settingsInitialized = false;
+function initSettings() {
+  if (settingsInitialized) return;
+  settingsInitialized = true;
+  initSidePanel();
+  initAppearance();
+  el('autoSaveSw').checked = settingsGet('autoSave') === '1';
+  autoSave = el('autoSaveSw').checked;
+  boxesVisible = settingsGet(SHOW_BOXES_KEY) !== '0';
+}
 
 // With --debug these surface any error that would otherwise only show in the
 // browser console; without it they are no-ops.
 window.addEventListener('error', (e) => dbgWarn('uncaught error', e.error || e.message));
 window.addEventListener('unhandledrejection', (e) => dbgWarn('unhandled rejection', e.reason));
 
-loadConfig();
-initSidePanel();
-initAppearance();
+loadConfig().catch((err) => {
+  console.error('[ybe] config load failed:', err);
+  initSettings(); // still build the UI with browser-only settings
+});
 startPresence();
 // The start-thread check may not have finished when the page loads; retry so a
 // freshly found update still reaches the user without a reload.
