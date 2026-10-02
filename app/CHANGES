@@ -2,6 +2,11 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 3.7.0
+- Saving an image now writes its labels and tags together: the image's tag file is written and new tag names are added to tags.yaml. Tag edits are saved with the image instead of instantly.
+- Tag edits now work with Undo/Redo (Z / Y).
+- Removed the built-in update_tags action and the shipped on_after_save hook; on_after_save is still a valid event for your own hooks.
+
 ## 3.6.0
 - Fixed: tags.yaml is now read as a plain list (`- tag` per line, as written by dataset_autotag.py), so the tag bar shows every tag. A nested `tags:` key is ignored and saving rewrites the file as a plain list.
 

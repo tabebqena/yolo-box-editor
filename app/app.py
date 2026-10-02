@@ -192,7 +192,6 @@ APP_ACTIONS = {
     "app_refresh_images_list",
     "app_reload_images_list",
     "app_refresh_image",
-    "app_update_tags",
 }
 
 # Server-side built-in actions (name -> callable) usable as a `steps` /
@@ -220,7 +219,7 @@ TIPS = [
     "Read-only mode (--readonly) is a safe way to browse a dataset without changing labels.",
     "Save (S) writes only when there are changes; Undo (Z) and Redo (Y) cover every edit.",
     "After an external tool edits the current image, use app_refresh_image to reload it in place.",
-    "New tag names reach tags.yaml on the next save, via the built-in update_tags action.",
+    "New tag names are added to tags.yaml when you save the image.",
     "Paste the path to your data.yaml in Settings → Dataset, or use the Recent… dropdown.",
     "Click a box on the image to select it; its row in the Boxes list becomes editable.",
     "Type a number in the counter and press Enter to jump straight to that image.",
@@ -1724,6 +1723,43 @@ def save_tags_yaml(tags):
     return path
 
 
+def write_image_tags(entry, tags):
+    """Write one image's tag file (normalized, one tag per line).
+
+    Creates the split's tags folder when needed. Returns the written path, or
+    None when the split is unknown.
+    """
+    split = _split_by_name(entry["split"])
+    path = tag_path(entry)
+    if split is None or path is None:
+        return None
+    tags = _normalize_tags(tags)
+    os.makedirs(split["tags_dir"], exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(tags))
+        if tags:
+            f.write("\n")
+    return path
+
+
+def register_available_tags(tags):
+    """Add tag names not yet in tags.yaml, preserving order.
+
+    `tags.yaml` is rewritten only when there is at least one new name; when
+    every name is already known the file is left untouched. Returns the
+    resulting available-tags list ([] when no dataset is loaded).
+    """
+    available = read_tags_yaml()
+    if tags_yaml_path() is None:
+        return available
+    fresh = [t for t in _normalize_tags(tags) if t not in available]
+    if not fresh:
+        return available
+    available = available + fresh
+    save_tags_yaml(available)
+    return available
+
+
 def _parse_label_file(path):
     """Return a list of (class, cx, cy, w, h) tuples from a YOLO label file."""
     boxes = []
@@ -2236,7 +2272,17 @@ def api_labels():
         f.write("\n".join(lines))
         if lines:
             f.write("\n")
-    return jsonify({"ok": True, "count": len(lines)})
+
+    payload = {"ok": True, "count": len(lines)}
+    # Tags ride along with the save: write the image's tag file and register any
+    # new names in tags.yaml. Absent `tags` leaves tag files untouched (a plain
+    # label write from an older client).
+    if "tags" in data:
+        tags = _normalize_tags(data.get("tags"))
+        write_image_tags(entry, tags)
+        payload["tags_count"] = len(tags)
+        payload["available_tags"] = register_available_tags(tags)
+    return jsonify(payload)
 
 
 @app.route("/api/tags.yaml", methods=["GET", "POST"])
@@ -2306,14 +2352,7 @@ def api_tags():
 
     data = request.get_json(silent=True) or {}
     tags = _normalize_tags(data.get("tags"))
-
-    path = tag_path(entry)
-    assert path is not None
-    os.makedirs(split["tags_dir"], exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write("\n".join(tags))
-        if tags:
-            f.write("\n")
+    write_image_tags(entry, tags)
     return jsonify({"ok": True, "count": len(tags)})
 
 

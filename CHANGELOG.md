@@ -4,6 +4,23 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.7.0] - 2026-10-02
+
+### Changed
+
+- Saving an image now writes its labels and tags together: the backend writes
+  the image's tag file and adds only new tag names to `tags.yaml` (no rewrite
+  when nothing is new). Tag edits are written on save instead of instantly.
+- Tag edits now take part in undo/redo (`Z` / `Y`), and the undo history is
+  reset per image.
+
+### Removed
+
+- The built-in `update_tags` action and the shipped `on_after_save` hook that
+  ran it; tag persistence is handled by the save itself. `app_update_tags` is no
+  longer a built-in app action. `on_after_save` remains a valid hook event for
+  your own hooks.
+
 ## [3.6.0] - 2026-10-02
 
 ### Fixed

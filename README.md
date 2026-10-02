@@ -85,9 +85,8 @@ inactive ones are outlined, and clicking toggles.
 
 ![Tag bar](docs/tags.svg)
 
-New tag names reach `tags.yaml` on the next save (via the built-in `update_tags`
-action). If a tag seems missing, see
-[Why can't I see my tag?](docs/tags.md#why-cant-i-see-my-tag).
+New tag names are added to `tags.yaml` when you save the image. If a tag seems
+missing, see [Why can't I see my tag?](docs/tags.md#why-cant-i-see-my-tag).
 
 ## Further reading
 

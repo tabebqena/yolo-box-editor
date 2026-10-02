@@ -1546,9 +1546,12 @@ function loadImage(i) {
     if (requested !== currentIndex) return; // a newer loadImage superseded us
     boxes = Array.isArray(labelData) ? labelData : [];
     imageTags = (tagData && tagData.tags) || [];
+    undoStack = []; // history is per image
+    redoStack = [];
     imageEl.src = '/api/image' + q + '&_=' + Date.now();
     rememberLastImage();
     renderTagBar();
+    updateHistoryButtons();
     dbg('loadImage resolved', { index: currentIndex, boxes: boxes.length,
       tags: imageTags.length, src: imageEl.src });
     runHook('on_image_loaded');
@@ -1750,8 +1753,8 @@ function renderTagBar() {
   el('tagHint').classList.toggle('hidden', availableTags.length === 0);
 
   // Explain why a tag on the image is not a normal (defined) badge: either
-  // there is no tags.yaml at all, or the tag is new and only reaches tags.yaml
-  // on the next save (the update_tags action).
+  // there is no tags.yaml at all, or the tag is new and is written to tags.yaml
+  // on the next save.
   const warn = el('tagWarn');
   const fresh = imageTags.filter((t) => !availableTags.includes(t));
   let warnMsg = '';
@@ -1778,76 +1781,24 @@ function renderTagBar() {
   updateDockPanels();
 }
 
-async function saveImageTags() {
-  if (currentIndex < 0) return;
-  try {
-    const res = await fetch('/api/tags' + keyQuery(images[currentIndex]), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tags: imageTags }),
-    });
-    const data = await res.json();
-    if (res.ok && data.ok) {
-      dbg('tags saved', { index: currentIndex, count: data.count, tags: imageTags });
-      setTagStatus(`Saved ${data.count} tag(s)`);
-    } else {
-      dbgWarn('tag save failed', { status: res.status, error: data.error });
-      setTagStatus('Tag save failed: ' + (data.error || res.status), 'error');
-    }
-  } catch (err) {
-    dbgWarn('tag save error', err);
-    setTagStatus('Tag save failed: ' + err.message, 'error');
-  }
-  renderTagBar();
-}
-
-// Built-in app action `app_update_tags`: write the current image's tag file
-// and, only when the image carries a tag not yet in tags.yaml, append the new
-// names to tags.yaml (no rewrite when there is nothing new). The shipped
-// on_after_save hook calls it as `action_update_tags` after every save.
-async function updateTagsForImage() {
-  if (readonly || currentIndex < 0) return;
-  await saveImageTags(); // persist the image's tag file
-  const fresh = imageTags.filter((t) => !availableTags.includes(t));
-  if (!fresh.length) {
-    dbg('update_tags: no new tags, tags.yaml untouched');
-    renderTagBar();
-    return;
-  }
-  const next = [...availableTags, ...fresh];
-  try {
-    const res = await fetch('/api/tags.yaml', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tags: next }),
-    });
-    const data = await res.json();
-    if (res.ok && data.ok) {
-      availableTags = data.tags || next;
-      dbg('update_tags: added to tags.yaml', fresh);
-    } else {
-      dbgWarn('update_tags: tags.yaml update failed', { status: res.status, error: data.error });
-    }
-  } catch (err) {
-    dbgWarn('update_tags: tags.yaml update error', err);
-  }
-  renderTagBar();
-}
-
-// Add a tag to the current image only. A brand-new name reaches tags.yaml on
-// the next save, via the built-in update_tags action (see updateTagsForImage).
-async function addTag(name) {
+// Tag edits join the undo/redo history and are written with the image on Save:
+// the backend stores the image's tag file and adds new names to tags.yaml.
+function addTag(name) {
   if (readonly || currentIndex < 0) return;
   if (imageTags.includes(name)) return;
+  pushUndo();
   imageTags = [...imageTags, name];
-  await saveImageTags();
+  markDirty();
+  renderTagBar();
   setTagStatus(`Tag "${name}" added`);
 }
 
-async function removeTag(name) {
+function removeTag(name) {
   if (readonly || currentIndex < 0) return;
+  pushUndo();
   imageTags = imageTags.filter((t) => t !== name);
-  await saveImageTags();
+  markDirty();
+  renderTagBar();
   setTagStatus(`Tag "${name}" removed`);
 }
 
@@ -1890,7 +1841,7 @@ function toggleTagByNumber(n) {
 // actions
 // ------------------------------------------------------------------------- //
 function snapshot() {
-  return boxes.map((b) => ({ ...b }));
+  return { boxes: boxes.map((b) => ({ ...b })), tags: [...imageTags] };
 }
 
 function updateHistoryButtons() {
@@ -1912,26 +1863,34 @@ function pushUndo() {
 function undo() {
   if (readonly || !undoStack.length) return;
   redoStack.push(snapshot());
-  boxes = undoStack.pop();
+  const snap = undoStack.pop();
+  boxes = snap.boxes;
+  imageTags = snap.tags;
   selected = -1;
   justDrawn = false;
   markDirty();
   syncClassSelect(-1);
   updateHistoryButtons();
-  dbg('undo', { boxes: boxes.length, undo: undoStack.length, redo: redoStack.length });
+  renderTagBar();
+  dbg('undo', { boxes: boxes.length, tags: imageTags.length,
+    undo: undoStack.length, redo: redoStack.length });
   draw();
 }
 
 function redo() {
   if (readonly || !redoStack.length) return;
   undoStack.push(snapshot());
-  boxes = redoStack.pop();
+  const snap = redoStack.pop();
+  boxes = snap.boxes;
+  imageTags = snap.tags;
   selected = -1;
   justDrawn = false;
   markDirty();
   syncClassSelect(-1);
   updateHistoryButtons();
-  dbg('redo', { boxes: boxes.length, undo: undoStack.length, redo: redoStack.length });
+  renderTagBar();
+  dbg('redo', { boxes: boxes.length, tags: imageTags.length,
+    undo: undoStack.length, redo: redoStack.length });
   draw();
 }
 
@@ -1997,14 +1956,16 @@ async function save(opts = {}) {
     const res = await fetch('/api/labels' + keyQuery(images[currentIndex]), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ boxes }),
+      body: JSON.stringify({ boxes, tags: imageTags }),
     });
     const data = await res.json();
     if (res.ok && data.ok) {
       dirty = false;
       ok = true;
-      dbg('save ok', { index: currentIndex, count: data.count });
+      if (Array.isArray(data.available_tags)) availableTags = data.available_tags;
+      dbg('save ok', { index: currentIndex, count: data.count, tags: data.tags_count });
       if (!opts.silent) toast(`Saved ${data.count} box(es)`, { type: 'success' });
+      renderTagBar();
       updateHistoryButtons();
       runHook('on_after_save');
     } else {
@@ -3365,9 +3326,6 @@ const APP_SHORTCUT_HANDLERS = {
       console.error('[app_reload_images_list] failed:', err);
     }
   },
-  // Built-in tagging action, run by the shipped on_after_save hook (as
-  // action_update_tags): persist the image's tags and add new names to tags.yaml.
-  app_update_tags: () => updateTagsForImage(),
   // Re-fetch the current image from the server (cache-busted); e.g. after an
   // external editor wrote a new version of the file.
   app_refresh_image: (e) => {

@@ -986,6 +986,68 @@ def test_api_labels_post_readonly_rejected(clean_state, tmp_path, monkeypatch):
     assert resp.status_code == 403
 
 
+def test_api_labels_post_writes_tags(clean_state, tmp_path):
+    root = make_dataset(tmp_path)
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    resp = client.post(
+        "/api/labels?key=train/a.jpg",
+        json={"boxes": [], "tags": ["fire", "", "smoke", "fire"]},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["ok"] and body["tags_count"] == 2
+    written = (root / "tags" / "train" / "a.txt").read_text().splitlines()
+    assert written == ["fire", "smoke"]
+
+
+def test_api_labels_post_registers_new_tags_in_yaml(clean_state, tmp_path):
+    root = make_dataset(tmp_path)
+    (root / "tags.yaml").write_text("- fire\n", encoding="utf-8")
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    body = client.post(
+        "/api/labels?key=train/a.jpg",
+        json={"boxes": [], "tags": ["fire", "smoke"]},
+    ).get_json()
+    assert body["available_tags"] == ["fire", "smoke"]
+    assert (root / "tags.yaml").read_text() == "- fire\n- smoke\n"
+
+
+def test_api_labels_post_does_not_rewrite_known_tags_yaml(clean_state, tmp_path):
+    root = make_dataset(tmp_path)
+    (root / "tags.yaml").write_text("# keep me\n- fire\n", encoding="utf-8")
+    before = (root / "tags.yaml").read_text()
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    body = client.post(
+        "/api/labels?key=train/a.jpg",
+        json={"boxes": [], "tags": ["fire"]},
+    ).get_json()
+    assert body["available_tags"] == ["fire"]
+    assert (root / "tags.yaml").read_text() == before
+
+
+def test_api_labels_post_without_tags_leaves_tag_file(clean_state, tmp_path):
+    root = make_dataset(tmp_path)
+    (root / "tags" / "train").mkdir(parents=True)
+    (root / "tags" / "train" / "a.txt").write_text("keep\n", encoding="utf-8")
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    client.post("/api/labels?key=train/a.jpg", json={"boxes": []})
+    assert (root / "tags" / "train" / "a.txt").read_text() == "keep\n"
+
+
+def test_api_labels_post_clears_tags_when_empty(clean_state, tmp_path):
+    root = make_dataset(tmp_path)
+    (root / "tags" / "train").mkdir(parents=True)
+    (root / "tags" / "train" / "a.txt").write_text("old\n", encoding="utf-8")
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    client.post("/api/labels?key=train/a.jpg", json={"boxes": [], "tags": []})
+    assert (root / "tags" / "train" / "a.txt").read_text() == ""
+
+
 # --------------------------------------------------------------------------- #
 # tags: paths / tags.yaml IO
 # --------------------------------------------------------------------------- #

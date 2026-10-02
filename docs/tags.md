@@ -34,7 +34,7 @@ widget in **Settings → Layout**.
 
 - Every tag in `tags.yaml` is a clickable badge. A badge is **active** (green)
   when the tag is on the current image and **inactive** (outlined) when it is
-  not. Clicking toggles it and writes the image's tag file.
+  not. Clicking toggles it; the change is written when you save.
 - **Add a tag**: click the `+` button, type a name and press `Enter`. The name is
   attached to the image; if it is new it is added to `tags.yaml` on the next
   save (see below).
@@ -51,8 +51,8 @@ a tag seems to be missing:
 
 1. **The tag is not in `tags.yaml`.** A tag that exists only on an image is
    shown as an active badge, with a warning: *"N tag(s) not in tags.yaml — added
-   on save"*. Press **Save** and the built-in `update_tags` action adds the new
-   names to `tags.yaml`, so they become normal badges.
+   on save"*. Press **Save** and the new names are added to `tags.yaml`, so they
+   become normal badges.
 2. **There is no `tags.yaml`.** The bar warns *"No tags.yaml found beside
    data.yaml"*. Create `tags.yaml` next to `data.yaml` (or add a tag with `+`
    and save) and it will be used.
@@ -60,21 +60,15 @@ a tag seems to be missing:
    live somewhere other than `tags/` beside `images/`, set **Settings → Dataset
    → Tags folder** to that base folder (each split uses a subfolder of it).
 
-## update_tags and the after-save hook
+## Saving tags
 
-The built-in `update_tags` action:
+Saving an image writes its labels and tags together. The backend:
 
 - writes the current image's tag file, and
-- appends only the **new** tag names to `tags.yaml` — if there is nothing new,
+- adds only the **new** tag names to `tags.yaml` — if there is nothing new,
   `tags.yaml` is left untouched.
 
-It is run automatically after every save by the shipped
-`app/hooks/on_after_save.yaml` hook. To turn that off (or replace it), create
-your own `<home>/hooks/on_after_save.yaml`:
-
-```yaml
-event_name: after_save
-active: false
-```
+There is no built-in tag action or hook to configure; the save does it. Tag
+edits also join the undo/redo history, so `Z` / `Y` cover them like box edits.
 
 Removing a tag from an image never deletes it from `tags.yaml`.

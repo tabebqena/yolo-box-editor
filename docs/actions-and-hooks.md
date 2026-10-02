@@ -32,14 +32,13 @@ references).
 | `app_refresh_images_list` | — | re-scan the image folders; stay on the same image by path |
 | `app_reload_images_list` | — | re-read the server list **without** re-scanning the disk |
 | `app_refresh_image` | — | re-fetch the current image (cache-busted) |
-| `app_update_tags` | — | write the image's tags and add new names to `tags.yaml` |
 
 `app_force_draw` is special: its binding is a *modifier* (`Ctrl`, `Alt`,
 `Shift`, `Meta`, or a `+`-joined combination), not a key.
 
 Editing actions (`app_del`, `app_save`, `app_undo`, `app_redo`, `app_ch_box`,
-`app_fix_box`, `app_update_tags`) do nothing in read-only mode; navigation,
-`app_drop` and `app_show_hide` still work.
+`app_fix_box`) do nothing in read-only mode; navigation, `app_drop` and
+`app_show_hide` still work.
 
 ## User actions
 
@@ -157,15 +156,3 @@ steps:
 Hooks are event-only: they are never shown as buttons and cannot be bound in
 `shortcuts.txt`. A hook whose `after_success` refreshes the image list cannot
 re-trigger itself — re-entrant runs of the same hook are skipped.
-
-### Shipped after-save hook
-
-The app ships `app/hooks/on_after_save.yaml`, which runs the built-in
-`update_tags` action after every save (see [tags.md](tags.md)). To turn it off
-or replace it, create your own `<home>/hooks/on_after_save.yaml` with the same
-event:
-
-```yaml
-event_name: after_save
-active: false
-```
