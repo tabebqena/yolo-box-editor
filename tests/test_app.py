@@ -457,6 +457,8 @@ def test_is_hook_name_matches_only_on_prefix():
     assert ybe.is_hook_name("on_box_created")
     assert ybe.is_hook_name("on_prev")
     assert ybe.is_hook_name("on_next")
+    assert ybe.is_hook_name("on_before_prev")
+    assert ybe.is_hook_name("on_before_next")
     assert not ybe.is_hook_name("app_save")
     assert not ybe.is_hook_name("Remove")
     assert not ybe.is_hook_name("")
@@ -480,6 +482,19 @@ def test_load_hooks_event_from_filename(tmp_path, monkeypatch):
     assert [h["name"] for h in hooks] == ["on_after_save"]
     assert hooks[0]["event"] == "after_save"
     assert hooks[0]["steps"] == ["echo saved"]
+
+
+def test_load_hooks_before_navigation_events(tmp_path, monkeypatch):
+    assert "before_prev" in ybe.HOOK_EVENTS
+    assert "before_next" in ybe.HOOK_EVENTS
+    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
+    write_hook(tmp_path, "on_before_prev.yaml", "steps:\n  - echo prev\n")
+    write_hook(tmp_path, "on_before_next.yaml", "steps:\n  - echo next\n")
+    hooks, errors = ybe.load_hooks()
+    assert errors == []
+    assert [h["name"] for h in hooks] == ["on_before_next", "on_before_prev"]
+    assert [h["event"] for h in hooks] == ["before_next", "before_prev"]
 
 
 def test_load_hooks_event_name_fallback(tmp_path, monkeypatch):

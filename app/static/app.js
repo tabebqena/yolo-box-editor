@@ -2294,6 +2294,10 @@ async function go(delta) {
   const next = currentIndex + delta;
   if (next < 0 || next >= images.length) { dbg('go blocked', { delta, next, of: images.length }); return; }
   dbg('go', { delta, from: currentIndex, to: next, dirty });
+  // "before leave" hooks run at the very start of navigation, before the
+  // unsaved-changes / auto-save handling; the on_prev/on_next hooks below still
+  // run on the image being left, just before it is replaced.
+  await runHook(delta < 0 ? 'on_before_prev' : 'on_before_next');
   if (dirty) {
     if (autoSave) {
       if (!(await flushAutoSave())) return; // stay put if the save failed

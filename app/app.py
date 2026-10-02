@@ -248,6 +248,8 @@ HOOK_PREFIX = "on_"
 HOOK_EVENTS = (
     "images_list_loaded",
     "image_loaded",
+    "before_prev",
+    "before_next",
     "prev",
     "next",
     "before_save",

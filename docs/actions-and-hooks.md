@@ -160,6 +160,8 @@ Set `active: false` to skip a hook without deleting it. Your hooks live in
 | --------- | ---------- |
 | `on_images_list_loaded.yaml` | the image list is (re)loaded |
 | `on_image_loaded.yaml` | an image is opened in the editor |
+| `on_before_prev.yaml` | before leaving to the previous image, before the unsaved-changes / auto-save handling |
+| `on_before_next.yaml` | before leaving to the next image, before the unsaved-changes / auto-save handling |
 | `on_prev.yaml` | before navigating to the previous image |
 | `on_next.yaml` | before navigating to the next image |
 | `on_before_save.yaml` | just before labels are written — a failure **aborts the save** |

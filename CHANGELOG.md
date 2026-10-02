@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.3.0] - 2026-10-02
+
+### Added
+
+- Two **before-leave event hooks**, `on_before_prev` and `on_before_next`,
+  fired when leaving the current image with the previous / next navigation,
+  **before** the unsaved-changes / auto-save handling. They appear in the
+  Settings → Hooks event list. The existing `on_prev` / `on_next` hooks are
+  unchanged and still fire just before the image is replaced.
+
 ## [6.1.0] - 2026-10-02
 
 ### Fixed

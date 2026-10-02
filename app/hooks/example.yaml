@@ -20,6 +20,10 @@
 #
 #   on_images_list_loaded   image list loaded / rescanned
 #   on_image_loaded         an image opened in the editor
+#   on_before_prev          before leaving to the previous image, before the
+#                           unsaved-changes / auto-save handling
+#   on_before_next          before leaving to the next image, before the
+#                           unsaved-changes / auto-save handling
 #   on_prev                 before navigating to the previous image
 #   on_next                 before navigating to the next image
 #   on_before_save          before labels are written (a failure aborts the save)
