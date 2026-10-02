@@ -4,6 +4,20 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.9.0] - 2026-10-02
+
+### Added
+
+- **Layout settings** (Settings → Layout, remembered per browser):
+  - **Panel side** — put the side panel on the left or right (border, resize
+    handle, collapsed buttons and notification panel flip with it).
+  - **Floating Tags / Boxes** — detach the tags bar or the box list into a
+    movable floating window. Drag by the title bar; release near an edge snaps
+    it flush, or use the `⇤ ⇧ ⇥ ⇩` dock buttons. Position is remembered per
+    window and the `×` button re-attaches the section to the panel/bar.
+  - Detaching moves the existing section into the window (its controls keep
+    working); the tag window shows only while tags are visible.
+
 ## [2.8.0] - 2026-10-02
 
 ### Added

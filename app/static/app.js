@@ -1437,6 +1437,7 @@ function renderTagBar() {
   const bar = el('tagBar');
   const show = taggingEnabled && datasetLoaded && currentIndex >= 0;
   bar.classList.toggle('hidden', !show);
+  if (detachTags) el('tagFloat').classList.toggle('hidden', !show);
   if (!show) {
     bar.classList.remove('expanded');
     el('tagExpandBtn').classList.add('hidden');
@@ -1976,8 +1977,10 @@ function initSidePanelResizer() {
   const onMove = (e) => {
     if (!dragging) return;
     e.preventDefault();
-    const right = el('sidebar').getBoundingClientRect().right;
-    pending = applySidePanelWidth(right - e.clientX);
+    const rect = el('sidebar').getBoundingClientRect();
+    pending = panelSide === 'left'
+      ? applySidePanelWidth(e.clientX - rect.left)
+      : applySidePanelWidth(rect.right - e.clientX);
   };
   const onUp = () => {
     if (!dragging) return;
@@ -2014,6 +2017,216 @@ function toggleSidePanel(show) {
   el('sidebar').classList.toggle('collapsed', !open);
   el('sidePanelToggle').classList.toggle('active', open);
   localStorage.setItem('sidePanelOpen', open ? '1' : '0');
+}
+
+// ------------------------------------------------------------------------- //
+// appearance: panel side + detachable tag/box floating windows
+// ------------------------------------------------------------------------- //
+const PANEL_SIDE_KEY = 'ybe_panel_side';
+const DETACH_TAGS_KEY = 'ybe_detach_tags';
+const DETACH_BOXES_KEY = 'ybe_detach_boxes';
+const FLOAT_SNAP = 28; // release within this many px of an edge -> snap flush
+const FLOAT_MARGIN = 8;
+
+let panelSide = 'right';
+let detachTags = false;
+let detachBoxes = false;
+
+function applyPanelSide() {
+  document.body.classList.toggle('panel-left', panelSide === 'left');
+}
+
+function floatKey(id) { return 'ybe_float_' + id; }
+
+function clampFloatPos(win, x, y) {
+  const w = win.offsetWidth || 260;
+  const h = win.offsetHeight || 120;
+  const maxX = Math.max(FLOAT_MARGIN, window.innerWidth - w - FLOAT_MARGIN);
+  const maxY = Math.max(FLOAT_MARGIN, window.innerHeight - h - FLOAT_MARGIN);
+  return {
+    x: Math.min(maxX, Math.max(FLOAT_MARGIN, x)),
+    y: Math.min(maxY, Math.max(FLOAT_MARGIN, y)),
+  };
+}
+
+function setFloatPos(win, x, y) {
+  const p = clampFloatPos(win, x, y);
+  win.style.left = p.x + 'px';
+  win.style.top = p.y + 'px';
+  return p;
+}
+
+function saveFloatPos(win) {
+  try {
+    localStorage.setItem(floatKey(win.id), JSON.stringify({
+      x: win.offsetLeft, y: win.offsetTop,
+    }));
+  } catch (e) { /* storage unavailable */ }
+}
+
+function defaultFloatPos(win) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  if (win.id === 'boxFloat') return { x: Math.max(20, vw - 340), y: 90 };
+  return { x: 24, y: Math.max(20, vh - 200) };
+}
+
+function restoreFloatPos(win) {
+  let pos = null;
+  try { pos = JSON.parse(localStorage.getItem(floatKey(win.id)) || 'null'); } catch (e) { /* ignore */ }
+  if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
+    setFloatPos(win, pos.x, pos.y);
+  } else {
+    const d = defaultFloatPos(win);
+    setFloatPos(win, d.x, d.y);
+  }
+}
+
+function dockFloat(win, side) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const w = win.offsetWidth || 260;
+  const h = win.offsetHeight || 120;
+  let x = win.offsetLeft;
+  let y = win.offsetTop;
+  if (side === 'left') x = FLOAT_MARGIN;
+  else if (side === 'right') x = vw - w - FLOAT_MARGIN;
+  else if (side === 'top') y = FLOAT_MARGIN;
+  else if (side === 'bottom') y = vh - h - FLOAT_MARGIN;
+  setFloatPos(win, x, y);
+  saveFloatPos(win);
+}
+
+// Release near an edge snaps the window flush to the closest one.
+function snapFloatToEdge(win) {
+  const w = win.offsetWidth || 260;
+  const h = win.offsetHeight || 120;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const dist = {
+    left: win.offsetLeft,
+    right: vw - (win.offsetLeft + w),
+    top: win.offsetTop,
+    bottom: vh - (win.offsetTop + h),
+  };
+  let best = null;
+  let bestD = FLOAT_SNAP;
+  Object.keys(dist).forEach((side) => {
+    if (dist[side] < bestD) { best = side; bestD = dist[side]; }
+  });
+  if (best) dockFloat(win, best);
+}
+
+function initFloatWindow(win) {
+  if (!win) return;
+  const head = win.querySelector('.float-head');
+  let dragging = false;
+  let grabX = 0;
+  let grabY = 0;
+  head.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    dragging = true;
+    grabX = e.clientX - win.offsetLeft;
+    grabY = e.clientY - win.offsetTop;
+    try { head.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    win.classList.add('dragging');
+    e.preventDefault();
+  });
+  head.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    setFloatPos(win, e.clientX - grabX, e.clientY - grabY);
+  });
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    win.classList.remove('dragging');
+    snapFloatToEdge(win);
+    saveFloatPos(win);
+  };
+  head.addEventListener('pointerup', end);
+  head.addEventListener('pointercancel', end);
+  win.querySelectorAll('.float-dock').forEach((btn) => {
+    btn.addEventListener('click', () => dockFloat(win, btn.dataset.dock));
+  });
+  restoreFloatPos(win);
+  window.addEventListener('resize', () => setFloatPos(win, win.offsetLeft, win.offsetTop));
+}
+
+function applyDetachTags() {
+  const bar = el('tagBar');
+  const float = el('tagFloat');
+  if (detachTags) {
+    el('tagFloatBody').appendChild(bar);
+    float.classList.remove('hidden');
+  } else {
+    const imagebar = document.querySelector('.imagebar');
+    imagebar.insertBefore(bar, imagebar.firstChild);
+    float.classList.add('hidden');
+  }
+  renderTagBar();
+}
+
+function applyDetachBoxes() {
+  const section = document.querySelector('.boxes-section');
+  const float = el('boxFloat');
+  if (detachBoxes) {
+    el('boxFloatBody').appendChild(section);
+    float.classList.remove('hidden');
+  } else {
+    document.querySelector('.sidebar-body').appendChild(section);
+    float.classList.add('hidden');
+  }
+}
+
+function setAppearanceControls() {
+  el('panelSideSel').value = panelSide;
+  el('detachTagsSw').checked = detachTags;
+  el('detachBoxesSw').checked = detachBoxes;
+}
+
+function initAppearance() {
+  panelSide = localStorage.getItem(PANEL_SIDE_KEY) === 'left' ? 'left' : 'right';
+  detachTags = localStorage.getItem(DETACH_TAGS_KEY) === '1';
+  detachBoxes = localStorage.getItem(DETACH_BOXES_KEY) === '1';
+  applyPanelSide();
+  initFloatWindow(el('tagFloat'));
+  initFloatWindow(el('boxFloat'));
+  applyDetachTags();
+  applyDetachBoxes();
+  setAppearanceControls();
+
+  el('panelSideSel').addEventListener('change', () => {
+    panelSide = el('panelSideSel').value === 'left' ? 'left' : 'right';
+    localStorage.setItem(PANEL_SIDE_KEY, panelSide);
+    applyPanelSide();
+    const saved = parseInt(localStorage.getItem(SIDEBAR_W_KEY) || '', 10);
+    if (saved) applySidePanelWidth(saved);
+  });
+  el('detachTagsSw').addEventListener('change', () => {
+    detachTags = el('detachTagsSw').checked;
+    localStorage.setItem(DETACH_TAGS_KEY, detachTags ? '1' : '0');
+    applyDetachTags();
+  });
+  el('detachBoxesSw').addEventListener('change', () => {
+    detachBoxes = el('detachBoxesSw').checked;
+    localStorage.setItem(DETACH_BOXES_KEY, detachBoxes ? '1' : '0');
+    applyDetachBoxes();
+  });
+  document.querySelectorAll('.float-close').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.floatClose === 'tags') {
+        detachTags = false;
+        localStorage.setItem(DETACH_TAGS_KEY, '0');
+        el('detachTagsSw').checked = false;
+        applyDetachTags();
+      } else {
+        detachBoxes = false;
+        localStorage.setItem(DETACH_BOXES_KEY, '0');
+        el('detachBoxesSw').checked = false;
+        applyDetachBoxes();
+      }
+    });
+  });
 }
 
 function selectFromPanel(i) {
@@ -2797,6 +3010,7 @@ window.addEventListener('unhandledrejection', (e) => dbgWarn('unhandled rejectio
 
 loadConfig();
 initSidePanel();
+initAppearance();
 startPresence();
 // The start-thread check may not have finished when the page loads; retry so a
 // freshly found update still reaches the user without a reload.

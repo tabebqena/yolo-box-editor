@@ -117,6 +117,14 @@ select, input {
 .sidebar-resizer:hover,
 .sidebar-resizer.active { background: var(--accent); opacity: 0.5; }
 
+/* Panel on the left: flip the row, border and resize handle. */
+body.panel-left .app { flex-direction: row-reverse; }
+body.panel-left .sidebar { border-left: none; border-right: 1px solid var(--border); }
+body.panel-left .sidebar.collapsed { border-right: none; }
+body.panel-left .sidebar-resizer { left: auto; right: -3px; }
+body.panel-left .sidebar.collapsed .sidebar-head { left: 8px; right: auto; }
+body.panel-left .notif-panel { left: 10px; right: auto; }
+
 .sidebar-head {
   display: flex;
   align-items: center;
@@ -532,6 +540,63 @@ canvas {
   box-shadow: 0 0 0 1px var(--border);
   cursor: crosshair;
 }
+
+/* detachable floating windows (tags / boxes) */
+.float-window {
+  position: fixed;
+  z-index: 45;
+  width: 320px;
+  max-width: 94vw;
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  resize: both;
+}
+.float-window.hidden { display: none; }
+.float-window.dragging { opacity: 0.92; }
+.float-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  background: #23242c;
+  border-bottom: 1px solid var(--border);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+.float-title {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.float-actions { display: flex; align-items: center; gap: 2px; }
+.float-dock, .float-close {
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  min-width: 0;
+}
+.float-close { color: var(--muted); }
+.float-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+/* tags moved into a floating window: fill it and wrap freely */
+.float-body .tagbar { border-bottom: none; padding: 8px; }
+.float-body .tag-badges { flex-wrap: wrap; }
+.float-body .boxes-section { flex: 1 1 auto; }
 
 .class-picker {
   position: fixed;

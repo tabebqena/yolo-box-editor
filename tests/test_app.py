@@ -680,6 +680,11 @@ def test_index_serves_page():
     assert "id=\"autoSaveSw\"" in html
     assert "id=\"filtersBtn\"" in html
     assert "id=\"filterModal\"" in html
+    assert "id=\"tagFloat\"" in html
+    assert "id=\"boxFloat\"" in html
+    assert "id=\"panelSideSel\"" in html
+    assert "id=\"detachTagsSw\"" in html
+    assert "id=\"detachBoxesSw\"" in html
 
 
 def test_api_config_defaults(clean_state):

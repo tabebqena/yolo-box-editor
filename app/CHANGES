@@ -2,6 +2,10 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 2.9.0
+- New Layout settings: choose the panel side (left/right) and detach Tags or Boxes into movable floating windows.
+- Float windows snap to a screen edge on release (or use the L/T/R/B buttons); their position is remembered.
+
 ## 2.8.0
 - Added a first-run "Load a dataset" dialog: paste a data.yaml path and click Load.
 - Settings now uses tabs (View / Dataset / Shortcuts / Updates); the dataset dropdown, path input and Load button sit on one row.

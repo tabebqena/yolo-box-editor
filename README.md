@@ -16,8 +16,8 @@ read [TUTORIAL.md](TUTORIAL.md) first.
 - **Recent list**: the last 10 opened `data.yaml` paths are remembered in
   `.recent_data_yamls.json` in your user folder; reopen one from the *Recent…*
   dropdown or type a new path. Starting with a plain run (no `--data`) reopens
-  the last dataset automatically — pass `--no-resume` to get the Settings dialog
-  instead.
+  the last dataset automatically — pass `--no-resume` to get the *Load a dataset*
+  dialog instead (it also opens on a fresh start with no dataset).
 - **Browse** across `train` / `val` / `test` with Prev/Next buttons or the
   `→` / `←` arrow keys.
   The `current / total` counter is an input — type a number and press Enter to
@@ -41,12 +41,17 @@ read [TUTORIAL.md](TUTORIAL.md) first.
   dragging (moving / resizing) but can still be clicked, selected and deleted,
   which lets you protect it while drawing inside it. Fixing is transient — it
   is never saved and is cleared when the image changes.
-- **Boxes panel** (right column, `Panel` toggle): one row per box, each with its
+- **Boxes panel** (side column, `Panel` toggle): one row per box, each with its
   class dropdown, `cx cy w h` numeric inputs and a `×` delete button. Controls
   are disabled until the row — or its box on the canvas — is *selected*;
   selecting another box or pressing `Esc` disables them again. Typing clamps
   values to `0..1` and updates the canvas live; while a coordinate input is
   focused its value is highlighted on the image in orange.
+- **Layout** (Settings → Layout, remembered per browser): put the side panel on
+  the **left** or **right**, and detach the **Tags** or **Boxes** into movable
+  floating windows. Drag a window by its title bar and release near a screen edge
+  to snap it flush; the `⇤ ⇧ ⇥ ⇩` buttons dock it to an edge and `×` re-attaches
+  it. While detached, the section leaves the side panel.
 - **Keyboard-first row editing**: with a box selected, `Tab` cycles between the
   class select and the four coordinate inputs of its row; `Esc` deactivates the
   row. `Shift` selects the next box (resuming from the last active one after
@@ -248,7 +253,7 @@ and run `python app/app.py`:
 python app/app.py --data /path/to/data.yaml
 python app/app.py --data /path/to/data.yaml --readonly   # viewer only
 python app/app.py --data /path/to/data.yaml --debug      # verbose browser console
-python app/app.py --no-resume                            # Settings dialog, no auto-open
+python app/app.py --no-resume                            # Load-a-dataset dialog, no auto-open
 python app/app.py --data /path/to/data.yaml --keep-pipe  # keep each run's {PIPE_PATH} file
 python app/app.py --data /path/to/data.yaml --keep-filter-pipes  # keep filter-chain pipe files
 python app/app.py --data /path/to/data.yaml --home ./my-user-files  # custom user folder
@@ -257,12 +262,13 @@ python app/app.py --data /path/to/data.yaml --no-reload  # disable the auto-relo
 python app/app.py --data /path/to/data.yaml --log-file ./ybe.log  # log to a file
 ```
 
-Open <http://127.0.0.1:5000>. You can also leave out `--data` and paste the
-`data.yaml` path into the **Settings** dialog (the gear button), then click
-*Load data.yaml* — or just run `python app/app.py`, which reopens the dataset you
-used last (add `--no-resume` to start with the Settings dialog instead). The
-dataset, split, filter chain, last image and view switches are all restored, so
-the app comes back as you left it.
+Open <http://127.0.0.1:5000>. You can also leave out `--data`: a **Load a
+dataset** dialog opens where you paste the `data.yaml` path and click **Load**
+(the same field lives in **Settings → Dataset**) — or just run
+`python app/app.py`, which reopens the dataset you used last (add `--no-resume`
+to start with the *Load a dataset* dialog instead). The dataset, split, filter
+chain, last image and view switches are all restored, so the app comes back as
+you left it.
 
 `--debug` writes verbose messages to the **browser console** (prefixed `[ybe]`):
 the loaded config, image loads, saves, tag writes, user actions / `after_success`

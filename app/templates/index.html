@@ -111,6 +111,34 @@
     </aside>
   </div>
 
+  <div id="tagFloat" class="float-window hidden">
+    <div class="float-head">
+      <span class="float-title">Tags</span>
+      <div class="float-actions">
+        <button type="button" class="float-dock" data-dock="left" title="Snap to the left edge">&#8676;</button>
+        <button type="button" class="float-dock" data-dock="top" title="Snap to the top edge">&#8679;</button>
+        <button type="button" class="float-dock" data-dock="right" title="Snap to the right edge">&#8677;</button>
+        <button type="button" class="float-dock" data-dock="bottom" title="Snap to the bottom edge">&#8681;</button>
+        <button type="button" class="float-close" data-float-close="tags" title="Re-attach the tags">&#10005;</button>
+      </div>
+    </div>
+    <div id="tagFloatBody" class="float-body"></div>
+  </div>
+
+  <div id="boxFloat" class="float-window hidden">
+    <div class="float-head">
+      <span class="float-title">Boxes</span>
+      <div class="float-actions">
+        <button type="button" class="float-dock" data-dock="left" title="Snap to the left edge">&#8676;</button>
+        <button type="button" class="float-dock" data-dock="top" title="Snap to the top edge">&#8679;</button>
+        <button type="button" class="float-dock" data-dock="right" title="Snap to the right edge">&#8677;</button>
+        <button type="button" class="float-dock" data-dock="bottom" title="Snap to the bottom edge">&#8681;</button>
+        <button type="button" class="float-close" data-float-close="boxes" title="Re-attach the boxes">&#10005;</button>
+      </div>
+    </div>
+    <div id="boxFloatBody" class="float-body"></div>
+  </div>
+
   <div id="classPicker" class="class-picker hidden"></div>
 
   <div id="settingsModal" class="modal hidden">
@@ -121,6 +149,7 @@
       </div>
       <div class="settings-tabs" role="tablist">
         <button class="settings-tab active" type="button" role="tab" data-tab="view">View</button>
+        <button class="settings-tab" type="button" role="tab" data-tab="layout">Layout</button>
         <button class="settings-tab" type="button" role="tab" data-tab="dataset">Dataset</button>
         <button class="settings-tab" type="button" role="tab" data-tab="shortcuts">Shortcuts</button>
         <button class="settings-tab" type="button" role="tab" data-tab="updates">Updates</button>
@@ -138,6 +167,24 @@
           <label class="settings-row" for="autoSaveSw" title="Save labels automatically after each edit (no save/discard prompt when navigating)">
             <input type="checkbox" id="autoSaveSw">
             <span>Auto-save</span>
+          </label>
+        </section>
+
+        <section class="settings-panel" data-panel="layout">
+          <label class="settings-row" for="panelSideSel" title="Which side the panel sits on">
+            <span>Panel side</span>
+            <select id="panelSideSel">
+              <option value="right">Right</option>
+              <option value="left">Left</option>
+            </select>
+          </label>
+          <label class="settings-row" for="detachTagsSw" title="Show the tags in a movable floating window">
+            <input type="checkbox" id="detachTagsSw">
+            <span>Tags as a floating window</span>
+          </label>
+          <label class="settings-row" for="detachBoxesSw" title="Show the box list in a movable floating window">
+            <input type="checkbox" id="detachBoxesSw">
+            <span>Boxes as a floating window</span>
           </label>
         </section>
 
