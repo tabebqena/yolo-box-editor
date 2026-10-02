@@ -1,0 +1,11 @@
+# Built-in action: persist the current image's tags and register any new names.
+#
+# It writes the image's tag file and, only when the image carries a tag that is
+# not yet in tags.yaml, appends the new names to tags.yaml (no rewrite when
+# there is nothing new). The shipped on_after_save hook calls it as
+# `action_update_tags`, so it runs after every successful label save.
+#
+# The app_update_tags step is a built-in UI action; see README for the full list.
+name: update_tags
+steps:
+  - app_update_tags

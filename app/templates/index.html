@@ -87,6 +87,7 @@
         <div id="tagBar" class="tagbar hidden">
           <span class="tagbar-title">Tags</span>
           <span id="tagHint" class="tagbar-hint hidden">Alt+1..9 toggles</span>
+          <span id="tagWarn" class="tagbar-warn hidden"></span>
           <div id="tagBadges" class="tag-badges"></div>
           <button id="tagExpandBtn" class="tag-expand hidden" title="Show all tags">&#8230;</button>
           <div class="tagbar-add">
@@ -324,6 +325,14 @@
             <input id="dataYaml" type="text" placeholder="/path/to/data.yaml">
             <button id="setDataBtn" class="primary">Load</button>
           </div>
+          <label class="settings-group-title" for="tagsDirInput">Tags folder</label>
+          <div class="dataset-row">
+            <input id="tagsDirInput" type="text"
+                   placeholder="default: tags/ beside images &amp; labels">
+            <button id="tagsDirBtn">Save</button>
+          </div>
+          <p class="hint">Per-dataset. Each split uses a subfolder
+            here; leave empty to derive <code>tags/</code> from the images path.</p>
         </section>
 
         <section class="settings-panel" data-panel="filters">

@@ -59,6 +59,7 @@ DEFAULT_STATE = {
     "filter_images": None,
     "filter_error": None,
     "classes": [],
+    "tags_dir": None,
     "readonly": False,
     "debug": False,
     "keep_pipe": False,
@@ -896,12 +897,57 @@ def test_api_labels_post_readonly_rejected(clean_state, tmp_path, monkeypatch):
 # --------------------------------------------------------------------------- #
 # tags: paths / tags.yaml IO
 # --------------------------------------------------------------------------- #
-def test_tags_dir_replaces_images_segment():
+def test_tags_dir_replaces_images_segment(clean_state):
     assert ybe._tags_dir_for("/d/images/train") == "/d/tags/train"
 
 
-def test_tags_dir_fallback_sibling():
+def test_tags_dir_fallback_sibling(clean_state):
     assert ybe._tags_dir_for("/d/train") == "/d/tags/train"
+
+
+def test_tags_dir_override_uses_split_subfolder(clean_state):
+    ybe.STATE["tags_dir"] = "/custom/tags"
+    assert ybe._tags_dir_for("/d/images/train", "train") == "/custom/tags/train"
+
+
+def test_api_tags_dir_sets_and_clears(clean_state, tmp_path):
+    root = make_dataset(tmp_path)
+    custom = tmp_path / "mytags"
+    custom.mkdir()
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+
+    resp = client.post("/api/tags-dir", json={"tags_dir": str(custom)})
+    assert resp.status_code == 200
+    assert resp.get_json()["tags_dir"] == str(custom)
+    assert ybe.STATE["splits"][0]["tags_dir"] == str(custom / "train")
+
+    resp = client.post("/api/tags-dir", json={"tags_dir": ""})
+    assert resp.status_code == 200
+    assert resp.get_json()["tags_dir"] is None
+    assert ybe.STATE["splits"][0]["tags_dir"] == str(root / "tags" / "train")
+
+
+def test_api_tags_dir_rejects_missing_folder(clean_state, tmp_path):
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    resp = client.post("/api/tags-dir", json={"tags_dir": str(tmp_path / "nope")})
+    assert resp.status_code == 400
+    assert resp.get_json()["ok"] is False
+
+
+def test_tags_dir_persists_in_view_state(clean_state, tmp_path):
+    root = make_dataset(tmp_path)
+    custom = tmp_path / "mytags"
+    custom.mkdir()
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    client.post("/api/tags-dir", json={"tags_dir": str(custom)})
+
+    # reloading the dataset re-applies the saved folder
+    ybe.STATE["tags_dir"] = None
+    load_dataset(client, root)
+    assert ybe.STATE["tags_dir"] == str(custom)
 
 
 def test_normalize_tags_dedupes_and_cleans():
@@ -1845,6 +1891,7 @@ def test_view_state_saved_on_split_and_filter(clean_state, tmp_path):
     assert ybe._load_views()[str(root / "data.yaml")] == {
         "split": "train",
         "filters": ["OnlyA"],
+        "tags_dir": None,
     }
 
 

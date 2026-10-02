@@ -192,6 +192,7 @@ APP_ACTIONS = {
     "app_refresh_images_list",
     "app_reload_images_list",
     "app_refresh_image",
+    "app_update_tags",
 }
 
 # Server-side built-in actions (name -> callable) usable as a `steps` /
@@ -248,6 +249,7 @@ STATE = {
     "filter_images": None,  # cached filter-chain result (list of {split, name})
     "filter_error": None,   # last filter failure/notice message (shown in the UI)
     "classes": [],  # resolved class names from data.yaml `names`
+    "tags_dir": None,  # per-dataset override for the tags folder (None = derive)
     "readonly": False,
     "debug": False,  # --debug: the UI logs verbose messages to the browser console
     "keep_pipe": False,  # --keep-pipe: do not delete the {PIPE_PATH} file after a run
@@ -404,17 +406,30 @@ def _load_views():
 
 
 def _save_view(data_yaml, split, filter_names):
-    """Remember a dataset's active split/filter chain so a restart reopens it."""
+    """Remember a dataset's split/filter chain and tags folder so a restart reopens it."""
     if not data_yaml:
         return
     views = _load_views()
-    views[data_yaml] = {"split": split, "filters": list(filter_names or [])}
+    views[data_yaml] = {
+        "split": split,
+        "filters": list(filter_names or []),
+        "tags_dir": STATE.get("tags_dir"),
+    }
     try:
         with open(VIEW_FILE, "w", encoding="utf-8") as f:
             json.dump(views, f, indent=2)
             f.write("\n")
     except OSError:
         pass
+
+
+def _restore_tags_dir(data_yaml):
+    """Apply a dataset's remembered tags folder and re-derive the split paths."""
+    view = _load_views().get(data_yaml) if data_yaml else None
+    tags_dir = view.get("tags_dir") if isinstance(view, dict) else None
+    STATE["tags_dir"] = tags_dir if tags_dir and os.path.isdir(tags_dir) else None
+    if STATE["splits"]:
+        STATE["splits"] = scan_splits()
 
 
 def _load_settings():
@@ -459,6 +474,7 @@ def _restore_view(data_yaml):
     view = _load_views().get(data_yaml)
     if not isinstance(view, dict):
         return
+    _restore_tags_dir(data_yaml)
     split = view.get("split")
     if split in {s["name"] for s in STATE["splits"]}:
         STATE["active_split"] = split
@@ -1334,8 +1350,15 @@ def _labels_dir_for(images_dir):
     return _replace_images_segment(images_dir, "labels")
 
 
-def _tags_dir_for(images_dir):
-    """Derive the tags dir by replacing the last `images` segment with `tags`."""
+def _tags_dir_for(images_dir, split_name=None):
+    """The tags dir: the per-dataset override, else `images` -> `tags`.
+
+    An override is a base folder; each split keeps its own subfolder
+    (`<override>/<split>`), matching the default `tags/<split>` layout.
+    """
+    override = STATE.get("tags_dir")
+    if override:
+        return os.path.join(override, split_name) if split_name else override
     return _replace_images_segment(images_dir, "tags")
 
 
@@ -1367,7 +1390,7 @@ def scan_splits():
                 "name": key,
                 "images_dir": images_dir,
                 "labels_dir": _labels_dir_for(images_dir),
-                "tags_dir": _tags_dir_for(images_dir),
+                "tags_dir": _tags_dir_for(images_dir, key),
             }
         )
     return splits
@@ -1680,6 +1703,7 @@ def api_config():
             "filter_error": STATE["filter_error"],
             "recent_data_yamls": _load_recent(),
             "settings": _load_settings(),
+            "tags_dir": STATE.get("tags_dir"),
             "actions": [a["name"] for a in actions],
             "hooks": [h["name"] for h in hooks],
             "hook_errors": hook_errors,
@@ -1771,6 +1795,7 @@ def api_data():
         return jsonify({"ok": False, "error": f"not a file: {path}"}), 400
 
     _load_dataset(path)
+    _restore_tags_dir(STATE["data_yaml"])  # re-apply this dataset's tags folder
     _clear_filter()  # a filter belongs to the dataset that was active
     names = {s["name"] for s in STATE["splits"]}
     if STATE["active_split"] not in names:
@@ -2066,6 +2091,37 @@ def api_tags_yaml():
     if path is None:
         return jsonify({"ok": False, "error": "no dataset loaded"}), 400
     return jsonify({"ok": True, "tags_yaml": path, "tags": read_tags_yaml()})
+
+
+@app.route("/api/tags-dir", methods=["POST"])
+def api_tags_dir():
+    """Set (or clear) the per-dataset tags folder and re-derive the split paths.
+
+    Body `{"tags_dir": "<folder>"}` sets an override base folder (each split uses
+    `<folder>/<split>`); an empty value restores the default `images` -> `tags`
+    derivation. Saved with the dataset's view state.
+    """
+    if not STATE["splits"]:
+        return jsonify({"ok": False, "error": "no dataset loaded"}), 400
+    if STATE["readonly"]:
+        return jsonify({"ok": False, "error": "read-only mode"}), 403
+
+    data = request.get_json(silent=True) or {}
+    raw = (data.get("tags_dir") or "").strip()
+    path = os.path.abspath(os.path.expanduser(raw)) if raw else None
+    if path and not os.path.isdir(path):
+        return jsonify({"ok": False, "error": f"not a folder: {path}"}), 400
+
+    STATE["tags_dir"] = path
+    STATE["splits"] = scan_splits()
+    if STATE["active_filters"]:
+        error = apply_filters(STATE["active_filters"])
+        if error:
+            STATE["filter_error"] = error
+    _save_view(STATE["data_yaml"], STATE["active_split"], STATE["active_filters"])
+    cfg = api_config().get_json()
+    cfg["ok"] = True
+    return jsonify(cfg)
 
 
 @app.route("/api/tags", methods=["GET", "POST"])

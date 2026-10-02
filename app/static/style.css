@@ -368,6 +368,11 @@ button.action .btn-shortcut {
   font-size: 11px;
   white-space: nowrap;
 }
+.tagbar .tagbar-warn {
+  color: var(--amber, #e0a94b);
+  font-size: 11px;
+  white-space: nowrap;
+}
 .tag-badges {
   display: flex;
   align-items: center;

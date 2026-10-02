@@ -1120,6 +1120,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
   availableTags = cfg.tags || [];
   datasetLoaded = !!cfg.data_yaml;
   el('dataYaml').value = cfg.data_yaml || '';
+  el('tagsDirInput').value = cfg.tags_dir || '';
   currentDataYaml = cfg.data_yaml || '';
   {
     const dsPath = cfg.dataset_path || cfg.data_yaml || '';
@@ -1420,7 +1421,7 @@ function tagBadge(name, active, num) {
   b.addEventListener('click', () => {
     if (readonly || currentIndex < 0) return;
     if (active) removeTag(name);
-    else addTag(name, false);
+    else addTag(name);
   });
   return b;
 }
@@ -1472,6 +1473,22 @@ function renderTagBar() {
   el('addTagBtn').disabled = readonly;
   el('tagHint').classList.toggle('hidden', availableTags.length === 0);
 
+  // Explain why a tag on the image is not a normal (defined) badge: either
+  // there is no tags.yaml at all, or the tag is new and only reaches tags.yaml
+  // on the next save (the update_tags action).
+  const warn = el('tagWarn');
+  const fresh = imageTags.filter((t) => !availableTags.includes(t));
+  let warnMsg = '';
+  if (!availableTags.length) {
+    warnMsg = 'No tags.yaml found beside data.yaml — add tags with +';
+  } else if (fresh.length) {
+    warnMsg = readonly
+      ? `${fresh.length} tag(s) not in tags.yaml`
+      : `${fresh.length} tag(s) not in tags.yaml — added on save`;
+  }
+  warn.textContent = warnMsg;
+  warn.classList.toggle('hidden', !warnMsg);
+
   const dl = el('tagSuggestions');
   dl.innerHTML = '';
   availableTags.forEach((t) => {
@@ -1508,24 +1525,44 @@ async function saveImageTags() {
   renderTagBar();
 }
 
-async function addTag(name, addToDataset) {
+// Built-in app action `app_update_tags`: write the current image's tag file
+// and, only when the image carries a tag not yet in tags.yaml, append the new
+// names to tags.yaml (no rewrite when there is nothing new). The shipped
+// on_after_save hook calls it as `action_update_tags` after every save.
+async function updateTagsForImage() {
   if (readonly || currentIndex < 0) return;
-  if (imageTags.includes(name)) return;
-  if (addToDataset) {
-    const next = [...availableTags, name];
+  await saveImageTags(); // persist the image's tag file
+  const fresh = imageTags.filter((t) => !availableTags.includes(t));
+  if (!fresh.length) {
+    dbg('update_tags: no new tags, tags.yaml untouched');
+    renderTagBar();
+    return;
+  }
+  const next = [...availableTags, ...fresh];
+  try {
     const res = await fetch('/api/tags.yaml', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tags: next }),
     });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setTagStatus('Failed to add to tags.yaml: ' + (data.error || res.status), 'error');
-      return;
-    }
     const data = await res.json();
-    availableTags = (data && data.tags) || next;
+    if (res.ok && data.ok) {
+      availableTags = data.tags || next;
+      dbg('update_tags: added to tags.yaml', fresh);
+    } else {
+      dbgWarn('update_tags: tags.yaml update failed', { status: res.status, error: data.error });
+    }
+  } catch (err) {
+    dbgWarn('update_tags: tags.yaml update error', err);
   }
+  renderTagBar();
+}
+
+// Add a tag to the current image only. A brand-new name reaches tags.yaml on
+// the next save, via the built-in update_tags action (see updateTagsForImage).
+async function addTag(name) {
+  if (readonly || currentIndex < 0) return;
+  if (imageTags.includes(name)) return;
   imageTags = [...imageTags, name];
   await saveImageTags();
   setTagStatus(`Tag "${name}" added`);
@@ -1560,7 +1597,7 @@ function addTagFromInput() {
     setTagStatus(`Tag "${name}" is already on this image`);
     return;
   }
-  addTag(name, !availableTags.includes(name));
+  addTag(name);
 }
 
 function toggleTagByNumber(n) {
@@ -1570,7 +1607,7 @@ function toggleTagByNumber(n) {
   if (!getWidgetVisible('tags')) setWidgetVisible('tags', true);
   const name = availableTags[i];
   if (imageTags.includes(name)) removeTag(name);
-  else addTag(name, false);
+  else addTag(name);
 }
 
 // ------------------------------------------------------------------------- //
@@ -1761,6 +1798,30 @@ async function setSplit(split, resumeOk = false) {
     }
   } catch (err) {
     dbgWarn('split switch error', err);
+    toast('Error: ' + err.message, { type: 'error' });
+  }
+}
+
+// Set the per-dataset tags folder (empty restores the images -> tags default).
+async function setTagsDir() {
+  const anchor = captureImageAnchor(false);
+  try {
+    const res = await fetch('/api/tags-dir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags_dir: el('tagsDirInput').value.trim() }),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      dbg('tags dir changed', { tags_dir: data.tags_dir });
+      toast('Tags folder updated', { type: 'success' });
+      await loadConfig(0, { noResume: true, anchor });
+    } else {
+      dbgWarn('tags dir update failed', { status: res.status, error: data.error });
+      toast(data.error || 'Tags folder update failed', { type: 'error' });
+    }
+  } catch (err) {
+    dbgWarn('tags dir update error', err);
     toast('Error: ' + err.message, { type: 'error' });
   }
 }
@@ -2785,6 +2846,10 @@ el('saveBtn').addEventListener('click', () => save());
 el('undoBtn').addEventListener('click', undo);
 el('redoBtn').addEventListener('click', redo);
 el('setDataBtn').addEventListener('click', setDataYaml);
+el('tagsDirBtn').addEventListener('click', setTagsDir);
+el('tagsDirInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') setTagsDir();
+});
 el('actionsExpandBtn').addEventListener('click', () => {
   actionsExpanded = !actionsExpanded;
   applyActionOverflow();
@@ -3010,6 +3075,9 @@ const APP_SHORTCUT_HANDLERS = {
       console.error('[app_reload_images_list] failed:', err);
     }
   },
+  // Built-in tagging action, run by the shipped on_after_save hook (as
+  // action_update_tags): persist the image's tags and add new names to tags.yaml.
+  app_update_tags: () => updateTagsForImage(),
   // Re-fetch the current image from the server (cache-busted); e.g. after an
   // external editor wrote a new version of the file.
   app_refresh_image: (e) => {
