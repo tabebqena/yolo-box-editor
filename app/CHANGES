@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 2.10.0
+- `ybx.sh install` / `upgrade` now start the app automatically (background) and restart a running instance; use `--no-start` to skip.
+
 ## 2.9.0
 - New Layout settings: choose the panel side (left/right) and detach Tags or Boxes into movable floating windows.
 - Float windows snap to a screen edge on release (or use the L/T/R/B buttons); their position is remembered.

@@ -17,6 +17,7 @@
 #   --from PATH     install from a local clone/folder or a .tar.gz (offline)
 #   --link          add yolo-box-editor and ybe to ~/.local/bin (default)
 #   --no-link       do not create the launchers
+#   --no-start      do not start the app after installing/upgrading
 #   --python CMD    python used to build the venv (default: python3)
 #   -h, --help      show this help
 #
@@ -36,6 +37,7 @@ DIR="$DEFAULT_DIR"
 REF_ARG=""
 FROM=""
 LINK=1
+START=1
 PYTHON_CMD="${PYTHON_CMD:-python3}"
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 CMD=""
@@ -72,8 +74,12 @@ Options:
   --from PATH     install from a local clone/folder or a .tar.gz (offline)
   --link          add yolo-box-editor and ybe to ~/.local/bin (default)
   --no-link       do not create the launchers
+  --no-start      do not start the app after installing/upgrading
   --python CMD    python used to build the venv (default: python3)
   -h, --help      show this help
+
+After installing/upgrading, the app is started in the background (unless
+--no-start) so it is ready at http://127.0.0.1:5000.
 
 The app code goes to <dir>/app and is replaced atomically; your files
 (actions/ hooks/ filters/ scripts/ shortcuts.txt) and the venv are never touched.
@@ -92,6 +98,7 @@ while [ $# -gt 0 ]; do
     --from) FROM="${2:?--from needs a value}"; shift ;;
     --link) LINK=1 ;;
     --no-link) LINK=0 ;;
+    --no-start) START=0 ;;
     --python) PYTHON_CMD="${2:?--python needs a value}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -319,11 +326,47 @@ do_install() {
   printf '\n'
   say "Done: yolo-box-editor $(cat "$DIR/app/VERSION")"
   echo "User folder: $DIR"
+  maybe_start
+}
+
+print_run_hint() {
   if [ "$LINK" -eq 1 ]; then
     echo "Run:         yolo-box-editor start --data /path/to/data.yaml   (or: ybe start …)"
   else
     echo "Run:         \"$DIR/.venv/bin/python\" \"$DIR/app/app.py\" --data /path/to/data.yaml"
   fi
+}
+
+# Start the app after installing/upgrading (unless --no-start), so it is ready
+# to use. Uses the launcher when available; restarts it if it was already up.
+maybe_start() {
+  [ "$START" -eq 1 ] || { print_run_hint; return 0; }
+  local launcher="$BIN_DIR/yolo-box-editor"
+  if [ "$LINK" -ne 1 ] || [ ! -x "$launcher" ]; then
+    warn "no launcher (--no-link); start it manually:"
+    print_run_hint
+    return 0
+  fi
+  say "Starting yolo-box-editor…"
+  local pid="" out=""
+  if [ -f "$DIR/ybe.pid" ]; then
+    pid=$(cat "$DIR/ybe.pid" 2>/dev/null || true)
+  fi
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    out=$("$launcher" restart 2>&1) || {
+      printf '%s\n' "$out" >&2
+      warn "could not restart; run 'ybe start' manually."
+      return 0
+    }
+  else
+    out=$("$launcher" start 2>&1) || {
+      printf '%s\n' "$out" >&2
+      warn "could not start; run 'ybe start' manually."
+      return 0
+    }
+  fi
+  echo "Open:        http://127.0.0.1:5000"
+  echo "Stop:        ybe stop        (logs: ybe logs -f)"
 }
 
 cmd_install() {

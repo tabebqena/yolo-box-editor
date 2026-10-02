@@ -4,6 +4,15 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.10.0] - 2026-10-02
+
+### Added
+
+- `ybx.sh install` / `upgrade` now **start the app** when done (background via
+  the launcher, restarting an already-running instance) so it is ready at
+  <http://127.0.0.1:5000>. Pass the new `--no-start` flag to skip it. With
+  `--no-link` (no launcher) the manual run command is printed instead.
+
 ## [2.9.0] - 2026-10-02
 
 ### Added

@@ -172,9 +172,11 @@ win on a name clash. The app creates the folders when they are missing and logs
 ## Install
 
 The installer is `ybx.sh`. It downloads the latest version, sets up an isolated
-`.venv` and adds a `yolo-box-editor` command (with the short alias `ybe`) to
-`~/.local/bin`. It works straight from the internet (no clone needed) or from a
-checkout:
+`.venv`, adds a `yolo-box-editor` command (with the short alias `ybe`) to
+`~/.local/bin`, and then **starts the app in the background** so it is ready at
+<http://127.0.0.1:5000> (pass `--no-start` to skip that; on an upgrade a running
+instance is restarted). It works straight from the internet (no clone needed) or
+from a checkout:
 
 ```bash
 # one-liner; installs to ~/.local/share/yolo-box-editor
