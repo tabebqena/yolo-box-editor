@@ -221,6 +221,13 @@ first open after installing a new version, the app shows that version's notes in
 a **What's new** dialog (once per version, per browser). The full developer
 changelog lives in `CHANGELOG.md`.
 
+### Releases
+
+`.github/workflows/release.yml` tags and publishes a GitHub release automatically
+when the **major or minor** part of `app/VERSION` changes on `main`
+(`1.2.0 → 1.3.0` or `1.2.0 → 2.0.0`). Patch bumps (`1.2.0 → 1.2.1`) are left for
+manual tagging. The release body is the matching `app/CHANGES` section.
+
 `ybx.sh` only ever replaces `<dir>/app/` (atomically); your `actions/`, `hooks/`,
 `filters/`, `scripts/`, `shortcuts.txt` and the `.venv` are never touched. It
 picks the latest GitHub release, else the newest tag, else the `main` branch

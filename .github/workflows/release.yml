@@ -1,0 +1,102 @@
+name: Release
+
+# Create a tag + GitHub release only when the major or minor part of the version
+# in app/VERSION changes (e.g. 1.2.0 -> 1.3.0, or 1.2.0 -> 2.0.0). Patch-only
+# bumps (1.2.0 -> 1.2.1) are left alone, since patches are tagged by hand.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/VERSION'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Decide whether to release
+        id: version
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          current=$(tr -d '[:space:]' < app/VERSION)
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "Current VERSION:  $current"
+
+          if ! printf '%s' "$current" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Not a major.minor.patch version; skipping."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$current" >/dev/null 2>&1 \
+             || git rev-parse -q --verify "refs/tags/v$current" >/dev/null 2>&1; then
+            echo "Tag for $current already exists; nothing to do."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Version just before this push (handles multi-commit pushes); fall
+          # back to the parent commit, then to the newest tag.
+          prev=""
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+             && git cat-file -e "${BEFORE}:app/VERSION" 2>/dev/null; then
+            prev=$(git show "${BEFORE}:app/VERSION" | tr -d '[:space:]')
+          elif git rev-parse -q --verify HEAD^ >/dev/null 2>&1 \
+             && git cat-file -e "HEAD^:app/VERSION" 2>/dev/null; then
+            prev=$(git show "HEAD^:app/VERSION" | tr -d '[:space:]')
+          else
+            prev=$(git tag -l | sed 's/^v//' \
+              | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -uV | tail -n1 || true)
+          fi
+          echo "Previous VERSION: ${prev:-<none>}"
+
+          release=false
+          if [ -z "$prev" ]; then
+            release=true  # very first release
+          elif printf '%s' "$prev" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            cur_mm="${current%.*}"
+            prev_mm="${prev%.*}"
+            newest=$(printf '%s\n%s\n' "$prev" "$current" | sort -V | tail -n1)
+            if [ "$cur_mm" != "$prev_mm" ] && [ "$newest" = "$current" ]; then
+              release=true
+            fi
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
+      - name: Build release notes from app/CHANGES
+        if: steps.version.outputs.release == 'true'
+        run: |
+          set -euo pipefail
+          ver="${{ steps.version.outputs.current }}"
+          notes=$(awk -v v="$ver" '
+            $0 ~ "^##[[:space:]]+" v "([[:space:]]|$)" {grab=1; next}
+            /^##[[:space:]]/ {grab=0}
+            grab {print}
+          ' app/CHANGES || true)
+          if [ -z "$(printf '%s' "$notes" | tr -d '[:space:]')" ]; then
+            notes="Release $ver"
+          fi
+          printf '%s\n' "$notes" > "$RUNNER_TEMP/release-notes.md"
+
+      - name: Create tag and release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ver="${{ steps.version.outputs.current }}"
+          gh release create "$ver" \
+            --title "$ver" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --target "$GITHUB_SHA"
+          echo "Created release $ver"
