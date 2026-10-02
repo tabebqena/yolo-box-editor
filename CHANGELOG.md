@@ -4,6 +4,14 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.4.1] - 2026-10-02
+
+### Fixed
+
+- The installer now reliably creates the **`ybe`** alias. A stale `ybe` symlink
+  or directory in the launcher folder made `ln` put the link inside it, so
+  `yolo-box-editor` was created but `ybe` was not.
+
 ## [3.4.0] - 2026-10-02
 
 ### Added

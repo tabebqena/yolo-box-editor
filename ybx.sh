@@ -327,8 +327,22 @@ exec "$venv/bin/python" "$DIR/app/app.py" --home "$DIR" "\$@"
 EOF
   fi
   chmod +x "$launcher"
-  ln -sf yolo-box-editor "$BIN_DIR/ybe"
-  say "Launchers: $launcher (and ybe)"
+  # (Re)create the short `ybe` alias. Clear any stale entry first: if `$BIN_DIR/ybe`
+  # is a symlink to a directory (or a directory), a plain `ln` would place the
+  # link *inside* it and leave `ybe` pointing at the wrong thing. A leftover
+  # directory is moved aside rather than deleted.
+  if [ -d "$BIN_DIR/ybe" ] && [ ! -L "$BIN_DIR/ybe" ]; then
+    warn "$BIN_DIR/ybe is a directory; moving it to $BIN_DIR/ybe.bak.$$"
+    mv "$BIN_DIR/ybe" "$BIN_DIR/ybe.bak.$$"
+  else
+    rm -f "$BIN_DIR/ybe"
+  fi
+  if ln -s yolo-box-editor "$BIN_DIR/ybe"; then
+    say "Launchers: $launcher (and ybe)"
+  else
+    warn "could not create the ybe alias at $BIN_DIR/ybe"
+    say "Launcher: $launcher"
+  fi
   case ":$PATH:" in
     *":$BIN_DIR:"*) ;;
     *) warn "$BIN_DIR is not on your PATH; add it or use the full path." ;;
