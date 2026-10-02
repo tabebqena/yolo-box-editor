@@ -4,6 +4,17 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.5.0] - 2026-10-02
+
+### Added
+
+- Edit keyboard shortcuts right in **Settings → Shortcuts**: an **Edit** button
+  switches the list to a key-capture view where you click a binding and press
+  the new combination (modifier-only bindings are set by pressing and releasing
+  the modifier). **Save** writes the changes to your own `shortcuts.txt` in the
+  user folder, preserving comments; `↺` restores the shipped default. The
+  shipped `app/shortcuts.txt` is never modified, so updates keep working.
+
 ## [3.4.2] - 2026-10-02
 
 ### Fixed

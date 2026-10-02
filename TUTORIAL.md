@@ -228,8 +228,11 @@ an image does **not** remove it from `tags.yaml`.
 | `Ctrl`+drag    | force-draw a new box, even inside an existing one |
 | `Alt+1`…`Alt+9`| toggle tag by number (from `tags.yaml`)     |
 
-All of these are configurable — edit your `shortcuts.txt` in the user folder (see the
-README) if you prefer different keys. The `Alt+1…9` tag toggles are built in.
+All of these are configurable. Open **Settings → Shortcuts** and click
+**Edit**, then click a key and press the new combination; **Save** writes it to
+your `shortcuts.txt` in the user folder (the shipped file is left alone). You
+can also edit that file by hand — see the README. The `Alt+1…9` tag toggles are
+built in.
 
 ## 12. When you are done
 

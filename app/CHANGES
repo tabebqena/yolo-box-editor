@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 3.5.0
+- Settings > Shortcuts now has an Edit view: click a binding and press the new key combination, then Save. Changes are written to your own shortcuts.txt (the shipped one is left alone), and a reset button restores the default.
+
 ## 3.4.2
 - Fixed: on a fresh install the Load a dataset, What's new and Tip of the day dialogs no longer appear at the same time; they now show one after another.
 

@@ -27,6 +27,11 @@ let editingPoint = null; // {i, name} -> coordinate input focused in the side pa
 let appShortcuts = {}; // app action  -> {shortcut, label} from shortcuts.txt
 let actionShortcuts = {}; // user action -> {shortcut, label} from shortcuts.txt
 let shortcutErrors = []; // validation errors from shortcuts.txt
+let shortcutDefaults = {}; // shipped-only {shortcut, label} (for the reset button)
+let userShortcutNames = new Set(); // names overridden in the user shortcuts.txt
+let shortcutEditMode = false; // Settings > Shortcuts: edit view on/off
+let shortcutDraft = {}; // name -> pending shortcut while editing
+let shortcutResets = new Set(); // names to drop from the user file on save
 let hookErrors = []; // validation errors from hooks/
 let undoStack = [];   // snapshots of `boxes` before each edit (fresh per image)
 let redoStack = [];
@@ -866,6 +871,10 @@ function selectSettingsTab(name) {
 
 function openSettingsModal() {
   el('settingsModal').classList.remove('hidden');
+  el('shortcutEditBtn').disabled = readonly;
+  el('shortcutEditBtn').title = readonly
+    ? 'Shortcuts cannot be changed in read-only mode'
+    : 'Edit the key bindings';
   // With no dataset, the Dataset tab is the only useful one.
   if (!datasetLoaded) selectSettingsTab('dataset');
   if (!datasetLoaded) {
@@ -1124,23 +1133,71 @@ function shortcutSection(title) {
   return h;
 }
 
+const SHORTCUT_MODIFIERS = ['Ctrl', 'Alt', 'Shift', 'Meta'];
+const SHORTCUT_MODIFIER_KEYS = { Control: 'Ctrl', Alt: 'Alt', Shift: 'Shift', Meta: 'Meta' };
+
+function shortcutDisplay(text) {
+  return text || '\u2014';
+}
+
+function currentShortcut(name) {
+  const info = appShortcuts[name] || actionShortcuts[name];
+  return info ? info.shortcut : '';
+}
+
+function shortcutEditRow(name, label) {
+  const row = document.createElement('div');
+  row.className = 'menu-row shortcut-edit-row';
+  const lbl = document.createElement('span');
+  lbl.className = 'menu-label';
+  lbl.textContent = label;
+  row.appendChild(lbl);
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'shortcut-capture';
+  btn.textContent = shortcutDisplay(shortcutDraft[name]);
+  btn.title = 'Click, then press the new key combination';
+  btn.addEventListener('click', () => startShortcutCapture(btn, name));
+  row.appendChild(btn);
+
+  if (userShortcutNames.has(name) || shortcutResets.has(name)) {
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'shortcut-reset';
+    reset.textContent = '\u21ba';
+    reset.title = 'Reset to the shipped default';
+    reset.addEventListener('click', () => resetShortcut(name));
+    row.appendChild(reset);
+  }
+  return row;
+}
+
 function renderShortcuts() {
   const wrap = el('shortcutItems');
   if (!wrap) return;
   wrap.innerHTML = '';
+  wrap.classList.toggle('editing', shortcutEditMode);
 
   const appNames = APP_SHORTCUT_ORDER.filter((name) => appShortcuts[name]);
+  const actionEntries = Object.entries(actionShortcuts);
+
   if (appNames.length) {
     wrap.appendChild(shortcutSection('App'));
     appNames.forEach((name) => {
       const info = appShortcuts[name];
-      wrap.appendChild(menuRow(info.label, info.shortcut));
+      wrap.appendChild(shortcutEditMode
+        ? shortcutEditRow(name, info.label)
+        : menuRow(info.label, info.shortcut));
     });
   }
-  if (Object.keys(actionShortcuts).length) {
+  if (actionEntries.length) {
     wrap.appendChild(shortcutSection('Actions'));
-    Object.entries(actionShortcuts).forEach(([name, info]) => {
-      wrap.appendChild(menuRow(`${name}: ${info.label}`.trim(), info.shortcut));
+    actionEntries.forEach(([name, info]) => {
+      const label = `${name}: ${info.label}`.trim();
+      wrap.appendChild(shortcutEditMode
+        ? shortcutEditRow(name, label)
+        : menuRow(label, info.shortcut));
     });
   }
   wrap.appendChild(shortcutSection('Mouse'));
@@ -1151,6 +1208,144 @@ function renderShortcuts() {
   mlabel.textContent = 'Drag to draw · \u2715 to delete box';
   mouse.appendChild(mlabel);
   wrap.appendChild(mouse);
+}
+
+// --- editing the bindings (Settings > Shortcuts > Edit) ------------------- //
+let shortcutCapture = null; // {name, btn, held:Set, used:Set, keyPressed}
+
+function shortcutKeyFromEvent(e) {
+  if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3);
+  if (/^Digit[0-9]$/.test(e.code)) return e.code.slice(5);
+  if (e.key === ' ') return null; // not representable inside <...>
+  if (e.key.length === 1) return e.key;
+  const named = {
+    Escape: 'Escape', Delete: 'Delete', Backspace: 'Backspace',
+    ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight', ArrowUp: 'ArrowUp',
+    ArrowDown: 'ArrowDown', Tab: 'Tab', Enter: 'Enter', Home: 'Home',
+    End: 'End', PageUp: 'PageUp', PageDown: 'PageDown', Insert: 'Insert',
+  };
+  return named[e.key] || null;
+}
+
+function startShortcutCapture(btn, name) {
+  stopShortcutCapture();
+  shortcutCapture = { name, btn, held: new Set(), used: new Set(), keyPressed: false };
+  btn.classList.add('capturing');
+  btn.textContent = 'Press a key…';
+  document.addEventListener('keydown', onShortcutCaptureKeyDown, true);
+  document.addEventListener('keyup', onShortcutCaptureKeyUp, true);
+  btn.focus();
+}
+
+function stopShortcutCapture() {
+  if (!shortcutCapture) return;
+  document.removeEventListener('keydown', onShortcutCaptureKeyDown, true);
+  document.removeEventListener('keyup', onShortcutCaptureKeyUp, true);
+  shortcutCapture.btn.classList.remove('capturing');
+  shortcutCapture.btn.textContent = shortcutDisplay(shortcutDraft[shortcutCapture.name]);
+  shortcutCapture = null;
+}
+
+function applyShortcutCapture(value) {
+  const name = shortcutCapture.name;
+  shortcutDraft[name] = value;
+  shortcutResets.delete(name);
+  stopShortcutCapture();
+  renderShortcuts();
+}
+
+function onShortcutCaptureKeyDown(e) {
+  if (!shortcutCapture) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (e.key === 'Escape') {
+    stopShortcutCapture();
+    renderShortcuts();
+    return;
+  }
+  const mod = SHORTCUT_MODIFIER_KEYS[e.key];
+  if (mod) {
+    shortcutCapture.held.add(mod);
+    shortcutCapture.used.add(mod);
+    return;
+  }
+  const key = shortcutKeyFromEvent(e);
+  if (!key) return;
+  shortcutCapture.keyPressed = true;
+  const mods = SHORTCUT_MODIFIERS.filter((m) => shortcutCapture.used.has(m));
+  applyShortcutCapture(mods.concat(key).join('+'));
+}
+
+function onShortcutCaptureKeyUp(e) {
+  if (!shortcutCapture) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  const mod = SHORTCUT_MODIFIER_KEYS[e.key];
+  if (!mod) return;
+  shortcutCapture.held.delete(mod);
+  // all modifiers released without a real key -> modifier-only binding
+  if (!shortcutCapture.keyPressed && shortcutCapture.held.size === 0 && shortcutCapture.used.size) {
+    const mods = SHORTCUT_MODIFIERS.filter((m) => shortcutCapture.used.has(m));
+    applyShortcutCapture(mods.join('+'));
+  }
+}
+
+function resetShortcut(name) {
+  shortcutResets.add(name);
+  const def = shortcutDefaults[name];
+  shortcutDraft[name] = def ? def.shortcut : '';
+  renderShortcuts();
+}
+
+function setShortcutEditMode(on) {
+  stopShortcutCapture();
+  shortcutEditMode = on;
+  shortcutDraft = {};
+  shortcutResets = new Set();
+  if (on) {
+    Object.entries(appShortcuts).forEach(([name, info]) => { shortcutDraft[name] = info.shortcut; });
+    Object.entries(actionShortcuts).forEach(([name, info]) => { shortcutDraft[name] = info.shortcut; });
+  }
+  el('shortcutEditBtn').classList.toggle('hidden', on);
+  el('shortcutEditHint').classList.toggle('hidden', !on);
+  el('shortcutEditActions').classList.toggle('hidden', !on);
+  renderShortcuts();
+}
+
+async function saveShortcuts() {
+  const set = {};
+  Object.entries(shortcutDraft).forEach(([name, value]) => {
+    if (shortcutResets.has(name)) return;
+    if (value && value !== currentShortcut(name)) set[name] = value;
+  });
+  const reset = [...shortcutResets].filter((name) => userShortcutNames.has(name));
+  const btn = el('shortcutSaveBtn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/shortcuts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ set, reset }),
+    });
+    const cfg = await res.json();
+    if (!res.ok || cfg.ok === false) {
+      toast(cfg.error || 'Could not save shortcuts', { type: 'error' });
+      return;
+    }
+    appShortcuts = cfg.shortcuts || {};
+    actionShortcuts = cfg.action_shortcuts || {};
+    shortcutErrors = cfg.shortcut_errors || [];
+    shortcutDefaults = cfg.shortcut_defaults || {};
+    userShortcutNames = new Set(cfg.user_shortcut_names || []);
+    setShortcutEditMode(false);
+    renderShortcutErrors();
+    toast('Shortcuts saved');
+  } catch (err) {
+    console.error(err);
+    toast('Could not save shortcuts', { type: 'error' });
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function populateClasses() {
@@ -1216,6 +1411,8 @@ async function loadConfig(startIdx = 0, opts = {}) {
   actionShortcuts = cfg.action_shortcuts || {};
   appShortcuts = cfg.shortcuts || {};
   shortcutErrors = cfg.shortcut_errors || [];
+  shortcutDefaults = cfg.shortcut_defaults || {};
+  userShortcutNames = new Set(cfg.user_shortcut_names || []);
   hookErrors = cfg.hook_errors || [];
   hooksByName = new Set(cfg.hooks || []);
   renderShortcutErrors();
@@ -2943,6 +3140,9 @@ el('settingsModal').addEventListener('click', (e) => {
 document.querySelectorAll('.settings-tab').forEach((tab) => {
   tab.addEventListener('click', () => selectSettingsTab(tab.dataset.tab));
 });
+el('shortcutEditBtn').addEventListener('click', () => setShortcutEditMode(true));
+el('shortcutCancelBtn').addEventListener('click', () => setShortcutEditMode(false));
+el('shortcutSaveBtn').addEventListener('click', saveShortcuts);
 el('loadDataBtn').addEventListener('click', loadDataFromModal);
 el('loadDataYaml').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') loadDataFromModal();

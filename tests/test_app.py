@@ -566,6 +566,86 @@ def test_split_shortcuts_rejects_hook_binding(clean_state):
     assert "event hook" in errors[0] and "on_after_save" in errors[0]
 
 
+def test_load_shortcuts_from_reads_one_file(clean_state):
+    path = clean_state / "one.txt"
+    path.write_text("app_next <N> next\n# comment\nbogus line\n",
+                    encoding="utf-8")
+    parsed = ybe.load_shortcuts_from(str(path))
+    assert parsed == {"app_next": {"shortcut": "N", "label": "next"}}
+
+
+def test_write_user_shortcuts_preserves_comments_and_upserts(clean_state):
+    path = Path(ybe.USER_SHORTCUTS_FILE)
+    path.write_text("# my remaps\napp_next <D> next\n\napp_undo <U> undo\n",
+                    encoding="utf-8")
+    ybe.write_user_shortcuts({"app_next": "Ctrl+N"}, [])
+    text = path.read_text(encoding="utf-8")
+    assert "# my remaps" in text
+    assert "app_next <Ctrl+N> next" in text  # label kept, key replaced
+    assert "app_undo <U> undo" in text
+    assert ybe.load_shortcuts()["app_next"]["shortcut"] == "Ctrl+N"
+
+
+def test_write_user_shortcuts_appends_and_resets(clean_state):
+    path = Path(ybe.USER_SHORTCUTS_FILE)
+    path.write_text("# keep\napp_next <D> next\n", encoding="utf-8")
+    ybe.write_user_shortcuts({"app_save": "Ctrl+S"}, ["app_next"])
+    text = path.read_text(encoding="utf-8")
+    assert "# keep" in text
+    assert "app_next" not in text
+    assert "app_save <Ctrl+S>" in text
+    assert ybe.user_shortcut_names() == {"app_save"}
+
+
+def test_api_config_exposes_shortcut_defaults(clean_state):
+    Path(ybe.SHORTCUTS_FILE).write_text("app_next <ArrowRight> next\n",
+                                        encoding="utf-8")
+    cfg = ybe.app.test_client().get("/api/config").get_json()
+    assert cfg["shortcut_defaults"]["app_next"]["shortcut"] == "ArrowRight"
+    assert cfg["user_shortcut_names"] == []
+
+
+def test_api_shortcuts_saves_override(clean_state):
+    client = ybe.app.test_client()
+    resp = client.post("/api/shortcuts", json={"set": {"app_next": "Ctrl+N"}})
+    assert resp.status_code == 200
+    cfg = resp.get_json()
+    assert cfg["ok"] is True
+    assert cfg["shortcuts"]["app_next"]["shortcut"] == "Ctrl+N"
+    assert cfg["user_shortcut_names"] == ["app_next"]
+    assert "app_next <Ctrl+N>" in Path(ybe.USER_SHORTCUTS_FILE).read_text(
+        encoding="utf-8")
+
+
+def test_api_shortcuts_resets_override(clean_state):
+    ybe.write_user_shortcuts({"app_next": "Ctrl+N"}, [])
+    client = ybe.app.test_client()
+    cfg = client.post("/api/shortcuts", json={"reset": ["app_next"]}).get_json()
+    assert cfg["ok"] is True
+    assert "app_next" not in cfg["shortcuts"]  # no shipped default in the test
+    assert cfg["user_shortcut_names"] == []
+
+
+def test_api_shortcuts_readonly_rejected(clean_state):
+    ybe.STATE["readonly"] = True
+    client = ybe.app.test_client()
+    resp = client.post("/api/shortcuts", json={"set": {"app_next": "N"}})
+    assert resp.status_code == 403
+
+
+def test_api_shortcuts_rejects_unknown_name(clean_state):
+    resp = ybe.app.test_client().post("/api/shortcuts",
+                                      json={"set": {"Nope": "N"}})
+    assert resp.status_code == 400
+    assert "unknown" in resp.get_json()["error"]
+
+
+def test_api_shortcuts_rejects_invalid_value(clean_state):
+    resp = ybe.app.test_client().post("/api/shortcuts",
+                                      json={"set": {"app_next": "<bad>"}})
+    assert resp.status_code == 400
+
+
 def test_recent_cap_and_order(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "RECENT_FILE", str(tmp_path / "r.json"))
     assert ybe._load_recent() == []
@@ -680,6 +760,9 @@ def test_index_serves_page():
     assert "id=\"settingsModal\"" in html
     assert "id=\"settingsBtn\"" in html
     assert "id=\"shortcutItems\"" in html
+    assert "id=\"shortcutEditBtn\"" in html
+    assert "id=\"shortcutSaveBtn\"" in html
+    assert "id=\"shortcutCancelBtn\"" in html
     assert "id=\"autoSaveSw\"" in html
     assert "id=\"filterPanelBody\"" in html
     assert "id=\"filterPanelApply\"" in html

@@ -1123,17 +1123,79 @@ def parse_shortcut_line(line):
     return name, shortcut, label
 
 
+def load_shortcuts_from(path):
+    """Parse one shortcuts.txt file into {name: {shortcut, label}} (read fresh)."""
+    shortcuts = {}
+    for raw in _read_text_lines(path):
+        parsed = parse_shortcut_line(raw)
+        if parsed is None:
+            continue
+        name, shortcut, label = parsed
+        shortcuts[name] = {"shortcut": shortcut, "label": label}
+    return shortcuts
+
+
 def load_shortcuts():
     """Parse the shipped + user shortcuts.txt into {name: {shortcut, label}} (read fresh)."""
-    shortcuts = {}
-    for path in (SHORTCUTS_FILE, USER_SHORTCUTS_FILE):
-        for raw in _read_text_lines(path):
-            parsed = parse_shortcut_line(raw)
-            if parsed is None:
-                continue
-            name, shortcut, label = parsed
-            shortcuts[name] = {"shortcut": shortcut, "label": label}
+    shortcuts = load_shortcuts_from(SHORTCUTS_FILE)
+    shortcuts.update(load_shortcuts_from(USER_SHORTCUTS_FILE))
     return shortcuts
+
+
+def user_shortcut_names():
+    """Names the user's shortcuts.txt overrides (read fresh)."""
+    return set(load_shortcuts_from(USER_SHORTCUTS_FILE))
+
+
+def _valid_shortcut(value):
+    """A storable shortcut token, or None when it cannot be written safely."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value or any(ch in value for ch in "<>\r\n"):
+        return None
+    return value
+
+
+def write_user_shortcuts(sets, resets):
+    """Upsert/remove shortcut overrides in the user shortcuts.txt.
+
+    `sets` maps name -> shortcut; `resets` is an iterable of names whose override
+    line is dropped (falling back to the shipped binding). Comments, blank lines
+    and untouched entries are preserved. Returns the file path.
+    """
+    sets = dict(sets or {})
+    resets = set(resets or [])
+    merged = load_shortcuts()
+    lines = _read_text(USER_SHORTCUTS_FILE).splitlines()
+
+    out, written = [], set()
+    for raw in lines:
+        parsed = parse_shortcut_line(raw)
+        if parsed is None:
+            out.append(raw)
+            continue
+        name, _shortcut, label = parsed
+        if name in resets:
+            continue
+        if name in sets:
+            out.append(f"{name} <{sets[name]}> {label}".rstrip())
+            written.add(name)
+            continue
+        out.append(raw)
+    for name, shortcut in sets.items():
+        if name in written:
+            continue
+        label = (merged.get(name) or {}).get("label", "")
+        out.append(f"{name} <{shortcut}> {label}".rstrip())
+
+    text = "\n".join(out)
+    if text:
+        text += "\n"
+    os.makedirs(os.path.dirname(USER_SHORTCUTS_FILE) or ".", exist_ok=True)
+    with open(USER_SHORTCUTS_FILE, "w", encoding="utf-8") as f:
+        f.write(text)
+    return USER_SHORTCUTS_FILE
 
 
 def split_shortcuts(shortcuts):
@@ -1742,6 +1804,8 @@ def api_config():
             "shortcuts": app_shortcuts,
             "action_shortcuts": user_shortcuts,
             "shortcut_errors": shortcut_errors,
+            "shortcut_defaults": load_shortcuts_from(SHORTCUTS_FILE),
+            "user_shortcut_names": sorted(user_shortcut_names()),
             "readonly": STATE["readonly"],
             "debug": STATE["debug"],
             "version": read_version(),
@@ -1790,6 +1854,39 @@ def api_settings():
             return jsonify({"ok": False, "error": "settings must be an object"}), 400
         return jsonify({"ok": True, "settings": _update_settings(changes)})
     return jsonify({"ok": True, "settings": _load_settings()})
+
+
+@app.route("/api/shortcuts", methods=["POST"])
+def api_shortcuts():
+    """Edit keyboard shortcuts; overrides are written to the user shortcuts.txt.
+
+    Body `{"set": {name: shortcut, ...}, "reset": [name, ...]}`. `set` upserts an
+    override, `reset` drops it so the shipped binding applies again. Names must
+    be app actions or actions from the actions/ folders; read-only is refused.
+    """
+    if STATE["readonly"]:
+        return jsonify({"ok": False, "error": "read-only mode"}), 403
+
+    data = request.get_json(silent=True) or {}
+    sets = data.get("set") or {}
+    resets = data.get("reset") or []
+    if not isinstance(sets, dict) or not isinstance(resets, list):
+        return jsonify({"ok": False, "error": "set must be an object and reset a list"}), 400
+
+    known = set(APP_ACTIONS) | {a["name"] for a in load_actions()}
+    clean_sets = {}
+    for name, value in sets.items():
+        if name not in known:
+            return jsonify({"ok": False, "error": f"unknown action '{name}'"}), 400
+        shortcut = _valid_shortcut(value)
+        if shortcut is None:
+            return jsonify({"ok": False, "error": f"invalid shortcut for '{name}'"}), 400
+        clean_sets[name] = shortcut
+
+    write_user_shortcuts(clean_sets, [n for n in resets if n in known])
+    cfg = api_config().get_json()
+    cfg["ok"] = True
+    return jsonify(cfg)
 
 
 @app.route("/api/presence", methods=["POST"])

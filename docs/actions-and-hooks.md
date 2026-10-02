@@ -7,10 +7,11 @@ an app event instead of a button.
 ## Built-in app actions
 
 The built-in app actions are defined in `app/app.py` (`APP_ACTIONS`) and
-implemented in `app/static/app.js`. Rebind them in your `shortcuts.txt`; the
-names themselves are fixed. They are also the valid values for an action's
-`after_success` — they are **not** valid in `steps` (those are shell commands or
-`action_<Name>` references).
+implemented in `app/static/app.js`. Rebind them from **Settings → Shortcuts →
+Edit** (or by hand in your `shortcuts.txt`); the names themselves are fixed.
+They are also the valid values for an action's `after_success` — they are
+**not** valid in `steps` (those are shell commands or `action_<Name>`
+references).
 
 | Action | Default key | What it does |
 | ------ | ----------- | ------------ |

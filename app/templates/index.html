@@ -348,7 +348,20 @@
         </section>
 
         <section class="settings-panel" data-panel="shortcuts">
+          <div class="shortcut-head">
+            <span class="settings-group-title">Shortcuts</span>
+            <button id="shortcutEditBtn" type="button" title="Edit the key bindings">Edit</button>
+          </div>
+          <p id="shortcutEditHint" class="hint hidden">
+            Click a key, then press the new combination. Modifier-only bindings
+            (like <code>Ctrl</code> for force-draw) are set by pressing and
+            releasing the modifier. &#8634; restores the shipped default.
+          </p>
           <div id="shortcutItems" class="shortcut-list"></div>
+          <div id="shortcutEditActions" class="settings-actions hidden">
+            <button id="shortcutCancelBtn" type="button">Cancel</button>
+            <button id="shortcutSaveBtn" class="primary" type="button">Save</button>
+          </div>
         </section>
 
         <section class="settings-panel" data-panel="updates">
