@@ -4,6 +4,26 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.4.0] - 2026-10-02
+
+### Added
+
+- **Daily tip** dialog: one random tip per day, cycling through the shipped list
+  without repeating until every tip has been shown.
+- Built-in **`update_tags`** action and a shipped **`on_after_save`** hook: after
+  a save, the image's tag file is written and any new tag names are added to
+  `tags.yaml` (skipped when there is nothing new).
+- A per-dataset **Tags folder** setting (Settings → Dataset), saved with the
+  view state, defaulting to `tags/` beside `images/` and `labels/`.
+- The tag bar warns when a tag on the image is not in `tags.yaml`, or when no
+  `tags.yaml` is found, explaining why a tag may look missing.
+
+### Changed
+
+- The Settings **View** tab is now **General**.
+- The README is a lightweight quick start; the detailed reference moved to
+  `docs/`.
+
 ## [3.3.0] - 2026-10-02
 
 ### Added

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 210" width="760" height="210" role="img" aria-label="Tag bar: active tags filled, inactive outlined">
+  <style>
+    .t { font-family: ui-sans-serif, system-ui, sans-serif; fill: #c9ccd6; }
+    .muted { fill: #8a8f9e; }
+    .small { font-size: 13px; }
+    .tiny { font-size: 11px; }
+    .badge { font-size: 13px; }
+  </style>
+  <rect x="0" y="0" width="760" height="210" rx="12" fill="#1a1b22" stroke="#2a2c36"/>
+
+  <text x="24" y="36" class="t" font-size="12" font-weight="600" letter-spacing="1">TAGS</text>
+  <text x="80" y="36" class="t muted tiny">Alt+1..9 toggles</text>
+
+  <!-- active -->
+  <rect x="80" y="50" width="62" height="28" rx="14" fill="#3ddc84"/>
+  <text x="111" y="69" text-anchor="middle" fill="#0c1a10" class="badge" font-weight="600">fire</text>
+  <rect x="150" y="50" width="76" height="28" rx="14" fill="#3ddc84"/>
+  <text x="188" y="69" text-anchor="middle" fill="#0c1a10" class="badge" font-weight="600">smoke</text>
+  <!-- inactive -->
+  <rect x="234" y="50" width="72" height="28" rx="14" fill="none" stroke="#3a3d49"/>
+  <text x="270" y="69" text-anchor="middle" class="t badge">danger</text>
+  <rect x="314" y="50" width="62" height="28" rx="14" fill="none" stroke="#3a3d49"/>
+  <text x="345" y="69" text-anchor="middle" class="t badge">night</text>
+  <rect x="384" y="50" width="72" height="28" rx="14" fill="none" stroke="#3a3d49"/>
+  <text x="420" y="69" text-anchor="middle" class="t badge">review</text>
+
+  <!-- legend -->
+  <line x1="24" y1="104" x2="736" y2="104" stroke="#2a2c36"/>
+  <rect x="24" y="124" width="24" height="16" rx="8" fill="#3ddc84"/>
+  <text x="58" y="137" class="t small">active — the tag is on this image</text>
+  <rect x="24" y="156" width="24" height="16" rx="8" fill="none" stroke="#3a3d49"/>
+  <text x="58" y="169" class="t small">inactive — click to add it</text>
+
+  <text x="420" y="137" class="t small muted">Click any badge to toggle it.</text>
+  <text x="420" y="169" class="t small muted">A tag not listed in tags.yaml appears</text>
+  <text x="420" y="187" class="t small muted">active and is added on the next save.</text>
+</svg>

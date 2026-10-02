@@ -2,6 +2,12 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 3.4.0
+- A daily tip dialog now suggests one random feature each day.
+- New built-in update_tags action (run after save by a shipped on_after_save hook) adds new tag names to tags.yaml on demand.
+- Per-dataset Tags folder setting; the tag bar warns when a tag is missing from tags.yaml.
+- Settings > View is now Settings > General; the README is a lighter quick start with docs/ for details.
+
 ## 3.3.0
 - UI settings (View/Layout, panel sizes, floating-window positions) are saved on the server too, so a new browser starts with your setup. A value you change in a browser still wins there.
 
