@@ -2,6 +2,12 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 5.0.0
+- Filters are now defined by YAML in filters/: name, description, active, arguments (name/required/default/options) and steps. Put the filter's script under scripts/ and call it from a step.
+- Steps get the action placeholders plus {DATA_YAML_PATH}, {DATASET_PATH}, {SPLIT}, {INPUT_PIPE}, {OUTPUT_PIPE}; each argument is usable in place as {NAME}.
+- Settings > Filters shows the name, a trimmed description and an input per argument; active:false filters are hidden.
+- app/filters/example.yaml is a working example backed by app/scripts/example_filter.py; the old filters/*.py form is removed.
+
 ## 4.0.0
 - The control panel now sits on the left by default; change it in Settings > Layout > Control panel side.
 - Saving an image now writes its labels and tags together: the image's tag file is written and new tag names are added to tags.yaml. Tag edits are saved with the image instead of instantly.

@@ -1,0 +1,64 @@
+# yolo-box-editor filters: one YAML file per filter in a filters/ dir.
+#
+# This is a working example: it keeps one image out of every `every`, optionally
+# reversing the order, using the shipped helper `app/scripts/example_filter.py`.
+# Copy it to a new <Name>.yaml to add your own filter, or write your own.
+#
+# Your filters live in <home>/filters/ (next to the app/ folder, or wherever
+# --home points) and are read after the shipped ones, so a file with the same
+# name wins and is never overwritten by an upgrade.
+#
+# Format (2-space indentation, lines starting with # are ignored):
+#
+#   name: Keep every N-th   # optional; defaults to the file name
+#   description: ...        # optional; shown (trimmed) in the Filters tab
+#   active: true            # optional; false hides the filter everywhere
+#   arguments:              # optional; each entry is a dict
+#     - name: every         # required; simple letters/digits/_ name
+#       required: false     # optional; a required arg must have a value
+#       default: "2"        # optional; pre-filled value
+#       options: ["2", "3"] # optional; inline or block list -> a <select>
+#   steps:                  # run in order; stops at the first failure
+#     - python {APP_SCRIPT_DIR}/example_filter.py {DATA_YAML_PATH} {SPLIT} \
+#         {INPUT_PIPE} {OUTPUT_PIPE} --every {EVERY} --reverse {REVERSE}
+#
+# Each `steps` entry is one shell command (a single value may also go on the
+# `steps:` line). There is no `after_success`. All steps of a filter share the
+# same input/output pipes: the filter reads candidate image paths from
+# {INPUT_PIPE} and writes the kept ones to {OUTPUT_PIPE}, one absolute path per
+# line. The next filter in the chain reads this filter's output.
+#
+# Placeholders (never quote them; the app shell-quotes each value):
+#   {DATA_YAML_PATH}  path of the loaded data.yaml
+#   {DATASET_PATH}    root path of the loaded dataset
+#   {SPLIT}           active split (train/val/test) or "" on All splits
+#   {INPUT_PIPE}      file with the candidate image paths (one per line)
+#   {OUTPUT_PIPE}     file to write the kept image paths to
+#   {APP_DIR}         the folder holding app.py (the shipped code)
+#   {HOME_DIR}        your user folder (the working directory of every run)
+#   {APP_SCRIPT_DIR}  the shipped helper scripts (`app/scripts/`)
+#   {USER_SCRIPT_DIR} your helper scripts (`<home>/scripts/`)
+#
+# Every argument is also usable in place: an argument named `every` is
+# `{EVERY}`. Argument names must be letters, digits and `_` (not starting with a
+# digit) and must not shadow a placeholder above; otherwise the filter is
+# dropped and the error is shown in the UI.
+#
+# A non-zero exit code or a timeout (120 s) stops the chain: nothing is applied
+# and the failing filter is named. Steps run with the working directory set to
+# {HOME_DIR}, so write files with explicit paths.
+
+name: Keep every N-th (example)
+description: Working example — keeps one image out of every N, optionally reversed.
+active: true
+arguments:
+  - name: every
+    required: false
+    default: "2"
+    options: ["2", "3", "5"]
+  - name: reverse
+    required: false
+    default: "false"
+    options: ["false", "true"]
+steps:
+  - python {APP_SCRIPT_DIR}/example_filter.py {DATA_YAML_PATH} {SPLIT} {INPUT_PIPE} {OUTPUT_PIPE} --every {EVERY} --reverse {REVERSE}

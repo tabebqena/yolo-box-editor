@@ -44,7 +44,7 @@ Full details: [install, update and run](docs/install.md).
   `cx cy w h`; edit numbers by typing, or use `Tab` to move through the fields.
 - **Navigate** with Prev/Next, the arrow keys, or type an image number to jump.
   `train` / `val` / `test` are selectable splits.
-- **Filters** narrow the list to what a script returns — stack up to 8 and run
+- **Filters** narrow the list to what a filter returns — stack up to 8 and run
   them top to bottom. See [filters](docs/filters.md).
 - **Tags** mark an image with labels like `fire` or `danger`. The tag bar shows
   every tag; click one to toggle it. See [tags](docs/tags.md).

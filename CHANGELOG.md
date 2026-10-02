@@ -4,6 +4,38 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [5.0.0] - 2026-10-02
+
+### Changed
+
+- **Filters are now defined by YAML** (breaking): one `filters/*.yaml` file per
+  filter instead of one Python script. A filter declares `name` (defaults to the
+  file name), an optional `description`, an `active` on/off switch, an
+  `arguments` list (`name`, `required`, `default`, `options`) and `steps` shell
+  commands. The filter logic moves to helper scripts under `scripts/` (shipped
+  helpers are `app/scripts/`). `app/filters/example.py` is replaced by a working
+  `app/filters/example.yaml` backed by `app/scripts/example_filter.py`.
+- Each step is run like an action step: the app substitutes and shell-quotes the
+  shared placeholders plus `{DATA_YAML_PATH}`, `{DATASET_PATH}`, `{SPLIT}`,
+  `{INPUT_PIPE}` and `{OUTPUT_PIPE}`; every declared argument is also usable in
+  place as its upper-cased name (`threshold` -> `{THRESHOLD}`). There is no
+  `after_success`.
+- **Settings → Filters** now shows each filter's name and a trimmed description,
+  and renders one input per argument (a dropdown when `options` is given).
+  `active: false` filters are hidden. Argument names must be simple identifiers
+  and must not shadow a built-in placeholder; a bad one drops the filter and the
+  error is shown.
+- `POST /api/filter` takes `{filters: [{name, arguments}, ...]}` (a list of
+  names and `{filter: name}` are still accepted); the active chain — including
+  argument values — is remembered per dataset. `GET /api/config` now returns a
+  filter metadata catalog plus `filter_errors`.
+
+### Removed
+
+- Python-script filters (`filters/*.py`) and the old fixed
+  `python <script> <data.yaml> <split> <in> <out>` contract; put the logic in a
+  `scripts/` helper and call it from a YAML `steps` entry instead.
+
 ## [4.0.0] - 2026-10-02
 
 ### Changed

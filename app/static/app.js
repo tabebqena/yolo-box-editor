@@ -11,7 +11,7 @@ const AUTO_SAVE_DELAY = 400; // ms to coalesce rapid edits into one auto-save
 
 let images = [];
 let splits = [];
-let filters = [];
+let filters = [];               // [{name, description, arguments}] (active only)
 let classes = [];
 let currentIndex = -1;
 let activeSplit = null;
@@ -33,6 +33,7 @@ let shortcutEditMode = false; // Settings > Shortcuts: edit view on/off
 let shortcutDraft = {}; // name -> pending shortcut while editing
 let shortcutResets = new Set(); // names to drop from the user file on save
 let hookErrors = []; // validation errors from hooks/
+let filterErrors = []; // validation errors from filters/
 let undoStack = [];   // snapshots of `boxes` before each edit (fresh per image)
 let redoStack = [];
 let moved = false;    // whether the current drag actually changed anything yet
@@ -920,6 +921,90 @@ function populateSplitSelect() {
 
 const FILTER_CHAIN_MAX = 8;
 
+function filterDef(name) {
+  return filters.find((f) => f.name === name) || null;
+}
+
+function buildFilterBlock(i) {
+  const block = document.createElement('div');
+  block.className = 'filter-chain-item';
+
+  const sel = document.createElement('select');
+  sel.className = 'filter-chain-select';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = i === 0 ? 'No filter' : '(none)';
+  sel.appendChild(none);
+  filters.forEach((f) => {
+    const opt = document.createElement('option');
+    opt.value = f.name;
+    opt.textContent = f.name;
+    sel.appendChild(opt);
+  });
+  const active = activeFilters[i];
+  sel.value = active && filterDef(active.name) ? active.name : '';
+  block.appendChild(sel);
+
+  const detail = document.createElement('div');
+  detail.className = 'filter-chain-detail';
+  block.appendChild(detail);
+
+  const renderDetail = () => {
+    detail.innerHTML = '';
+    const def = filterDef(sel.value);
+    if (!def) return;
+    if (def.description) {
+      const desc = document.createElement('p');
+      desc.className = 'filter-chain-desc';
+      desc.textContent = def.description;
+      desc.title = def.description;
+      detail.appendChild(desc);
+    }
+    const saved = active && active.name === def.name ? (active.arguments || {}) : {};
+    (def.arguments || []).forEach((arg) => {
+      const row = document.createElement('label');
+      row.className = 'filter-arg';
+      const label = document.createElement('span');
+      label.className = 'filter-arg-label';
+      label.textContent = arg.name + (arg.required ? ' *' : '');
+      row.appendChild(label);
+
+      const value = Object.prototype.hasOwnProperty.call(saved, arg.name)
+        ? saved[arg.name] : (arg.default != null ? arg.default : '');
+      let input;
+      if (Array.isArray(arg.options) && arg.options.length) {
+        input = document.createElement('select');
+        if (!arg.required) {
+          const empty = document.createElement('option');
+          empty.value = '';
+          empty.textContent = '';
+          input.appendChild(empty);
+        }
+        arg.options.forEach((opt) => {
+          const o = document.createElement('option');
+          o.value = opt;
+          o.textContent = opt;
+          input.appendChild(o);
+        });
+        input.value = value;
+      } else {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.value = value || '';
+        if (arg.default != null) input.placeholder = arg.default;
+      }
+      input.className = 'filter-arg-input';
+      input.dataset.arg = arg.name;
+      row.appendChild(input);
+      detail.appendChild(row);
+    });
+  };
+
+  sel.addEventListener('change', renderDetail);
+  renderDetail();
+  return block;
+}
+
 function populateFilterPanel() {
   const body = el('filterPanelBody');
   if (!body) return;
@@ -931,31 +1016,26 @@ function populateFilterPanel() {
     body.appendChild(empty);
     return;
   }
-  const count = Math.min(filters.length, FILTER_CHAIN_MAX);
+  const count = Math.min(
+    Math.max(filters.length, activeFilters.length), FILTER_CHAIN_MAX);
   for (let i = 0; i < count; i++) {
-    const sel = document.createElement('select');
-    const none = document.createElement('option');
-    none.value = '';
-    none.textContent = i === 0 ? 'No filter' : '(none)';
-    sel.appendChild(none);
-    filters.forEach((name) => {
-      const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name;
-      sel.appendChild(opt);
-    });
-    sel.value = activeFilters[i] || '';
-    body.appendChild(sel);
+    body.appendChild(buildFilterBlock(i));
   }
 }
 
 function selectedFilterChain() {
-  const names = [];
+  const chain = [];
   const body = el('filterPanelBody');
-  if (body) body.querySelectorAll('select').forEach((s) => {
-    if (s.value) names.push(s.value);
+  if (body) body.querySelectorAll('.filter-chain-item').forEach((block) => {
+    const sel = block.querySelector('.filter-chain-select');
+    if (!sel || !sel.value) return;
+    const args = {};
+    block.querySelectorAll('.filter-arg-input').forEach((input) => {
+      args[input.dataset.arg] = input.value;
+    });
+    chain.push({ name: sel.value, arguments: args });
   });
-  return names;
+  return chain;
 }
 
 function populateRecent(paths) {
@@ -1051,7 +1131,7 @@ let shownShortcutErrors = '';
 function renderShortcutErrors() {
   const dismissed = JSON.parse(sessionStorage.getItem('dismissedShortcutErrors') || '[]');
   // messages are self-describing ("'shortcuts.txt': ..." / "'hooks/x.yaml': ...")
-  const all = shortcutErrors.concat(hookErrors);
+  const all = shortcutErrors.concat(hookErrors, filterErrors);
   const visible = all.filter((msg) => !dismissed.includes(msg));
   if (!visible.length) return;
   const msg = visible.join(' | ');
@@ -1414,6 +1494,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
   shortcutDefaults = cfg.shortcut_defaults || {};
   userShortcutNames = new Set(cfg.user_shortcut_names || []);
   hookErrors = cfg.hook_errors || [];
+  filterErrors = cfg.filter_errors || [];
   hooksByName = new Set(cfg.hooks || []);
   renderShortcutErrors();
   populateActions(cfg.actions || []);
@@ -1508,7 +1589,13 @@ async function maybeRestoreView(cfg) {
   }
   const wanted = Array.isArray(saved.filters) ? saved.filters
     : (saved.filter ? [saved.filter] : []);
-  const valid = wanted.filter((f) => (cfg.filters || []).includes(f));
+  // Entries are {name, arguments}; a bare name is the older saved shape.
+  const valid = wanted.map((item) => {
+    const name = typeof item === 'string' ? item : (item && item.name);
+    const known = name && (cfg.filters || []).some((f) => f.name === name);
+    if (!known) return null;
+    return typeof item === 'string' ? { name, arguments: {} } : item;
+  }).filter(Boolean);
   if (!cfg.active_filters.length && valid.length) {
     const data = await postJson('/api/filter', { filters: valid });
     if (data.ok) return data;

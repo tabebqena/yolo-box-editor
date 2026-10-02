@@ -100,7 +100,7 @@ canvas.
   only appears while it holds a widget (the bottom panel also disappears once
   its widgets are moved away).
 - **Settings** (⚙) — tabs for _View_, _Layout_, _Dataset_, _Filters_, _Shortcuts_
-  and _Updates_; the _Filters_ tab chains filter scripts and the _Shortcuts_ tab
+  and _Updates_; the _Filters_ tab chains YAML filters and the _Shortcuts_ tab
   lists every binding in a scrollable panel.
 
 ## 5. Your first box

@@ -63,7 +63,7 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 # Built-in, shipped files (inside app/); replaced wholesale on upgrade.
 ACTIONS_DIR = os.path.join(BASE_DIR, "actions")  # one YAML file per action
 HOOKS_DIR = os.path.join(BASE_DIR, "hooks")  # one YAML file per event hook
-FILTERS_DIR = os.path.join(BASE_DIR, "filters")  # one Python script per filter
+FILTERS_DIR = os.path.join(BASE_DIR, "filters")  # one YAML file per filter
 APP_SCRIPT_DIR = os.path.join(BASE_DIR, "scripts")  # shipped helper programs
 SHORTCUTS_FILE = os.path.join(BASE_DIR, "shortcuts.txt")
 VERSION_FILE = os.path.join(BASE_DIR, "VERSION")  # shipped app version
@@ -275,7 +275,7 @@ STATE = {
     "splits": [],   # [{"name": "train", "images_dir": ..., "labels_dir": ...}]
     "images": [],   # flat navigation list: [{"split": "train", "name": "a.jpg"}]
     "active_split": None,  # None = all splits; or a single split name
-    "active_filters": [],   # chain of filter names from filters/ ([] = none)
+    "active_filters": [],   # chain of {name, arguments} from filters/ ([] = none)
     "filter_images": None,  # cached filter-chain result (list of {split, name})
     "filter_error": None,   # last filter failure/notice message (shown in the UI)
     "classes": [],  # resolved class names from data.yaml `names`
@@ -435,14 +435,14 @@ def _load_views():
         return {}
 
 
-def _save_view(data_yaml, split, filter_names):
+def _save_view(data_yaml, split, active_filters):
     """Remember a dataset's split/filter chain and tags folder so a restart reopens it."""
     if not data_yaml:
         return
     views = _load_views()
     views[data_yaml] = {
         "split": split,
-        "filters": list(filter_names or []),
+        "filters": list(active_filters or []),
         "tags_dir": STATE.get("tags_dir"),
     }
     try:
@@ -508,13 +508,20 @@ def _restore_view(data_yaml):
     split = view.get("split")
     if split in {s["name"] for s in STATE["splits"]}:
         STATE["active_split"] = split
-    # `filters` is the current shape; `filter` was a single-name (legacy) view.
-    names = view.get("filters")
-    if not isinstance(names, list):
-        names = [view["filter"]] if view.get("filter") else []
-    names = [n for n in names if n and n in load_filters()]
-    if names:
-        apply_filters(names)
+    # `filters` is the current shape ({name, arguments}); `filter` was a
+    # single-name (legacy) view and a list of names is the older chain shape.
+    raw = view.get("filters")
+    if not isinstance(raw, list):
+        raw = [view["filter"]] if view.get("filter") else []
+    known = load_filters()[0]
+    chain = []
+    for item in raw:
+        if isinstance(item, str):
+            item = {"name": item}
+        if isinstance(item, dict) and item.get("name") in known:
+            chain.append(item)
+    if chain:
+        apply_filters(chain)
 
 
 # --------------------------------------------------------------------------- #
@@ -1220,15 +1227,155 @@ def split_shortcuts(shortcuts):
 
 
 # --------------------------------------------------------------------------- #
-# filters/ (one Python script per filter; narrows the loaded image list)
+# filters/ (one YAML file per filter; narrows the loaded image list)
 # --------------------------------------------------------------------------- #
+# Placeholders a filter argument may never shadow (defined by the app).
+FILTER_RESERVED_PLACEHOLDERS = {
+    "DATASET_PATH",
+    "DATA_YAML_PATH",
+    "APP_DIR",
+    "HOME_DIR",
+    "APP_SCRIPT_DIR",
+    "USER_SCRIPT_DIR",
+    "SPLIT",
+    "INPUT_PIPE",
+    "OUTPUT_PIPE",
+}
+# A filter argument name; its in-place placeholder is the upper-cased name.
+_FILTER_ARG_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _set_filter_arg_field(arg, key, value):
+    """Set one argument field; return True while a block `options:` list may follow."""
+    value = _strip_comment(value)
+    if key == "name":
+        arg["name"] = _yaml_scalar(value)
+    elif key == "required":
+        arg["required"] = value.lower() not in ("false", "no", "0", "")
+    elif key == "default":
+        arg["default"] = _yaml_scalar(value) if value else None
+    elif key == "options":
+        if value.startswith("["):
+            arg["options"] = _parse_yaml_names_value(value)
+        elif value:
+            arg["options"] = [_yaml_scalar(p) for p in value.split(",") if p.strip()]
+        else:
+            arg["options"] = []
+            return True
+    return False
+
+
+def _parse_filter_file(text):
+    """Parse one filter YAML file into a dict of its keys.
+
+    Format (2-space indentation, whole-line # comments):
+        name: Keep every N-th   # optional; the file name is used otherwise
+        description: ...        # optional
+        active: true            # optional; false hides the filter
+        arguments:              # optional list of dicts
+          - name: every         # -> the in-place placeholder {EVERY}
+            required: false
+            default: "2"
+            options: ["2", "3"]  # inline list, or a block of `- item` lines
+        steps:                  # one shell command per entry
+          - python {APP_SCRIPT_DIR}/x.py ... {EVERY}
+    `steps` may also be a single value on the key line.
+    """
+    data = {"name": None, "description": None, "active": True,
+            "arguments": [], "steps": []}
+    mode, current, arg_indent, options_pending = None, None, None, False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if indent == 0 and ":" in stripped:
+            key, _, value = stripped.partition(":")
+            key, value = key.strip(), value.strip()
+            mode, current, arg_indent, options_pending = None, None, None, False
+            if key == "name":
+                if value:
+                    data["name"] = _yaml_scalar(value)
+            elif key == "description":
+                if value:
+                    data["description"] = _yaml_scalar(value)
+            elif key == "active":
+                if value:
+                    data["active"] = value.lower() not in ("false", "no", "0")
+            elif key == "arguments":
+                mode = "arguments"
+            elif key == "steps":
+                mode = "steps"
+                if value and value != "[]":
+                    data["steps"].append(_yaml_scalar(value))
+            continue
+        if mode == "steps":
+            if stripped.startswith("- "):
+                data["steps"].append(_yaml_scalar(stripped[2:].strip()))
+        elif mode == "arguments":
+            if stripped.startswith("- ") and (arg_indent is None or indent <= arg_indent):
+                if arg_indent is None:
+                    arg_indent = indent
+                current = {"name": None, "required": False,
+                           "default": None, "options": None}
+                data["arguments"].append(current)
+                options_pending = False
+                rest = stripped[2:].strip()
+                if ":" in rest:
+                    field, _, value = rest.partition(":")
+                    options_pending = _set_filter_arg_field(current, field.strip(), value.strip())
+            elif current is not None:
+                if options_pending and stripped.startswith("- "):
+                    current["options"].append(_yaml_scalar(stripped[2:].strip()))
+                elif ":" in stripped:
+                    field, _, value = stripped.partition(":")
+                    options_pending = _set_filter_arg_field(current, field.strip(), value.strip())
+    return data
+
+
+def _validate_filter_arguments(fname, filter_name, raw_args):
+    """Normalize a filter's `arguments`; return (arguments, errors).
+
+    An invalid name or a collision with a reserved placeholder drops the whole
+    filter: the caller reports every error and skips it.
+    """
+    arguments, errors, seen = [], [], set()
+    for raw in raw_args:
+        arg_name = (raw.get("name") or "").strip()
+        if not arg_name:
+            errors.append(f"'filters/{fname}': filter \"{filter_name}\": an argument has no name")
+            return [], errors
+        if not _FILTER_ARG_NAME_RE.match(arg_name):
+            errors.append(
+                f"'filters/{fname}': filter \"{filter_name}\": invalid argument name "
+                f"\"{arg_name}\" (letters, digits and _ only; cannot start with a digit)")
+            return [], errors
+        if arg_name.upper() in FILTER_RESERVED_PLACEHOLDERS:
+            errors.append(
+                f"'filters/{fname}': filter \"{filter_name}\": argument \"{arg_name}\" "
+                f"collides with the reserved placeholder {{{arg_name.upper()}}}")
+            return [], errors
+        if arg_name in seen:
+            errors.append(
+                f"'filters/{fname}': filter \"{filter_name}\": duplicate argument \"{arg_name}\"")
+            return [], errors
+        seen.add(arg_name)
+        arguments.append({
+            "name": arg_name,
+            "required": bool(raw.get("required")),
+            "default": raw.get("default"),
+            "options": raw.get("options"),
+        })
+    return arguments, errors
+
+
 def _filter_files(dirpath):
-    """Sorted `.py` paths in `dirpath`."""
+    """Sorted `.yaml` paths in `dirpath`."""
     if not os.path.isdir(dirpath):
         return []
     paths = []
     for fname in sorted(os.listdir(dirpath)):
-        if not fname.endswith(".py"):
+        if not fname.endswith(".yaml"):
             continue
         path = os.path.join(dirpath, fname)
         if os.path.isfile(path):
@@ -1236,23 +1383,33 @@ def _filter_files(dirpath):
     return paths
 
 
-def _filter_name(path):
-    """The filter's name: its file name without the `.py` suffix."""
-    return os.path.basename(path)[: -len(".py")]
-
-
 def load_filters():
-    """Map every filter name to its script path (read fresh).
+    """Parse the filters/ folders into (filters, errors) (read fresh).
 
-    The shipped app/filters/ folder is read first, the user's <home>/filters/
-    second (it wins on a name clash).
+    One filter per `.yaml` file; its name is the `name:` key, else the file name.
+    `active: false` and files with no `steps` are skipped. An argument that is
+    invalid or shadows a reserved placeholder drops the filter and is reported in
+    `errors`. The shipped app/filters/ folder is read first, the user's
+    <home>/filters/ second (it wins on a name clash).
     """
-    merged = {}
+    merged, errors = {}, []
     for path in _filter_files(FILTERS_DIR) + _filter_files(USER_FILTERS_DIR):
-        name = _filter_name(path)
-        if name:
-            merged[name] = path
-    return merged
+        data = _parse_filter_file(_read_text(path))
+        fname = os.path.basename(path)
+        name = (data["name"] or "").strip() or fname[: -len(".yaml")]
+        if not name or not data["active"] or not data["steps"]:
+            continue
+        arguments, arg_errors = _validate_filter_arguments(fname, name, data["arguments"])
+        if arg_errors:
+            errors.extend(arg_errors)
+            continue
+        merged[name] = {
+            "name": name,
+            "description": (data["description"] or "").strip(),
+            "arguments": arguments,
+            "steps": data["steps"],
+        }
+    return merged, errors
 
 
 def _entry_path(entry):
@@ -1314,53 +1471,119 @@ def _read_filter_output(path, known):
         return [], 0
 
 
-def run_filter(name, data_yaml, split, input_pipe, output_pipe):
+def effective_filter_arguments(flt, arguments):
+    """The filter's arguments as `{name: value}`, user values over defaults.
+
+    Every declared argument gets a value (its default when none was given); a
+    missing default becomes an empty string.
+    """
+    provided = arguments if isinstance(arguments, dict) else {}
+    effective = {}
+    for arg in flt["arguments"]:
+        value = provided.get(arg["name"])
+        if value is None or (isinstance(value, str) and not value.strip()):
+            value = arg.get("default")
+        effective[arg["name"]] = "" if value is None else str(value)
+    return effective
+
+
+def _filter_placeholder_values(flt, data_yaml, split, input_pipe, output_pipe, arguments):
+    """Substitution values for a filter's steps (shared paths + pipes + args)."""
+    values = {
+        "DATASET_PATH": STATE["dataset_path"] or "",
+        "DATA_YAML_PATH": data_yaml or "",
+        "APP_DIR": BASE_DIR,
+        "HOME_DIR": YBX_HOME,
+        "APP_SCRIPT_DIR": APP_SCRIPT_DIR,
+        "USER_SCRIPT_DIR": USER_SCRIPT_DIR,
+        "SPLIT": split or "",
+        "INPUT_PIPE": input_pipe,
+        "OUTPUT_PIPE": output_pipe,
+    }
+    effective = effective_filter_arguments(flt, arguments)
+    for arg in flt["arguments"]:
+        key = arg["name"].upper()
+        if key not in values:
+            values[key] = effective.get(arg["name"], "")
+    return values
+
+
+def run_filter(name, data_yaml, split, input_pipe, output_pipe, arguments=None,
+               filters=None):
     """Run filter `name` once; return {ok, error}.
 
-    The filter reads candidate image paths from `input_pipe` and writes the kept
-    ones to `output_pipe`; the caller validates the output.
+    Every `steps` entry is a shell command; the app substitutes the shared
+    placeholders, the pipe paths and each argument (as `{<NAME>}`) before it
+    runs. The filter reads candidate image paths from `input_pipe` and writes the
+    kept ones to `output_pipe`; the caller validates the output.
     """
-    path = load_filters().get(name)
-    if path is None:
+    if filters is None:
+        filters = load_filters()[0]
+    flt = filters.get(name)
+    if flt is None:
         return {"ok": False, "error": f"unknown filter: {name}"}
 
-    command = [
-        sys.executable,
-        path,
-        data_yaml or "",
-        split or "",
-        input_pipe,
-        output_pipe,
-    ]
-    print(f"[ybe] filter: cwd={YBX_HOME} cmd={' '.join(command)}", file=sys.stderr)
-    try:
-        proc = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=FILTER_TIMEOUT,
-            cwd=YBX_HOME,
-            env=_subprocess_env(),
-        )
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "filter timed out"}
-    except OSError as exc:
-        return {"ok": False, "error": f"could not run filter: {exc}"}
-    if proc.returncode != 0:
-        detail = proc.stderr.strip() or f"exit code {proc.returncode}"
-        return {"ok": False, "error": detail}
+    values = _filter_placeholder_values(flt, data_yaml, split, input_pipe, output_pipe, arguments)
+    for step in flt["steps"]:
+        command = build_command(step, values)
+        print(f"[ybe] filter: cwd={YBX_HOME} cmd={command}", file=sys.stderr)
+        try:
+            proc = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=FILTER_TIMEOUT,
+                cwd=YBX_HOME,
+                env=_subprocess_env(),
+            )
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error": "filter timed out"}
+        except OSError as exc:
+            return {"ok": False, "error": f"could not run filter: {exc}"}
+        if proc.returncode != 0:
+            detail = proc.stderr.strip() or f"exit code {proc.returncode}"
+            return {"ok": False, "error": detail}
     return {"ok": True}
 
 
-def run_filter_chain(names, split):
-    """Run `names` in order, piping each result into the next.
+def _normalize_filter_chain(items):
+    """Validate an active filter chain; return (chain, error).
 
-    `split` selects the first filter's input (its images, or every scanned image
-    when it is empty/"All"). Returns {ok, images, skipped, error, chain_dir};
-    `chain_dir` is the scratch directory (kept only with --keep-filter-pipes).
+    `items` may be strings (legacy) or `{name, arguments}` dicts. The returned
+    chain fills each argument with its value/default and checks `required`.
+    """
+    filters, _ = load_filters()
+    chain = []
+    for item in items or []:
+        if isinstance(item, str):
+            item = {"name": item}
+        if not isinstance(item, dict):
+            return None, "invalid filter entry"
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        flt = filters.get(name)
+        if flt is None:
+            return None, f"unknown filter: {name}"
+        effective = effective_filter_arguments(flt, item.get("arguments"))
+        for arg in flt["arguments"]:
+            if arg["required"] and not effective.get(arg["name"], "").strip():
+                return None, f'Filter "{name}": argument "{arg["name"]}" is required'
+        chain.append({"name": name, "arguments": effective})
+    return chain, None
+
+
+def run_filter_chain(chain, split):
+    """Run `chain` in order, piping each result into the next.
+
+    Each item is `{name, arguments}`. `split` selects the first filter's input
+    (its images, or every scanned image when it is empty/"All"). Returns
+    {ok, images, skipped, error, chain_dir}; `chain_dir` is the scratch directory
+    (kept only with --keep-filter-pipes).
     """
     known = _known_image_paths()
-    if not names:
+    if not chain:
         return {"ok": True, "images": [], "skipped": 0, "error": None,
                 "chain_dir": None}
 
@@ -1371,17 +1594,19 @@ def run_filter_chain(names, split):
         return {"ok": False, "error": f"could not create filter pipes: {exc}",
                 "chain_dir": None}
 
+    filters, _ = load_filters()
     initial = [e for e in STATE["images"] if e["split"] == split] if split \
         else STATE["images"]
     in_path = os.path.join(chain_dir, "input_0.txt")
     _write_filter_input(in_path, initial)
 
     entries, skipped, error = initial, 0, None
-    for i, name in enumerate(names):
+    for i, item in enumerate(chain):
         out_path = os.path.join(chain_dir, f"output_{i}.txt")
-        result = run_filter(name, STATE["data_yaml"], split, in_path, out_path)
+        result = run_filter(item["name"], STATE["data_yaml"], split, in_path,
+                            out_path, item.get("arguments"), filters)
         if not result["ok"]:
-            error = f'Filter "{name}" failed: {result["error"]}'
+            error = f'Filter "{item["name"]}" failed: {result["error"]}'
             entries = None
             break
         entries, skipped = _read_filter_output(out_path, known)
@@ -1403,20 +1628,23 @@ def _clear_filter():
     STATE["filter_error"] = None
 
 
-def apply_filters(names):
+def apply_filters(items):
     """Run the filter chain for the current split and cache it in STATE.
 
-    `names` is a list of filter names ([] clears). Returns an error message on
-    failure (state untouched), or None on success.
+    `items` is a list of `{name, arguments}` (strings are accepted as legacy;
+    [] clears). Returns an error message on failure (state untouched), or None on
+    success.
     """
-    names = [n for n in (names or []) if n]
-    if not names:
+    chain, error = _normalize_filter_chain(items)
+    if error:
+        return error
+    if not chain:
         _clear_filter()
         return None
-    result = run_filter_chain(names, STATE["active_split"])
+    result = run_filter_chain(chain, STATE["active_split"])
     if not result["ok"]:
         return result["error"]
-    STATE["active_filters"] = names
+    STATE["active_filters"] = chain
     STATE["filter_images"] = result["images"]
     if STATE["keep_filter_pipes"] and result["chain_dir"]:
         print(f"[ybe] kept filter pipes: {result['chain_dir']}", file=sys.stderr)
@@ -1855,6 +2083,15 @@ def api_config():
     app_shortcuts, user_shortcuts, shortcut_errors = split_shortcuts(load_shortcuts())
     actions = load_actions()
     hooks, hook_errors = load_hooks()
+    filters, filter_errors = load_filters()
+    filter_catalog = sorted(
+        (
+            {"name": f["name"], "description": f["description"],
+             "arguments": f["arguments"]}
+            for f in filters.values()
+        ),
+        key=lambda f: f["name"],
+    )
     return jsonify(
         {
             "data_yaml": STATE["data_yaml"],
@@ -1863,9 +2100,10 @@ def api_config():
             "tags": read_tags_yaml(),
             "images": _current_images(),
             "active_split": STATE["active_split"],
-            "filters": sorted(load_filters()),
+            "filters": filter_catalog,
             "active_filters": STATE["active_filters"],
             "filter_error": STATE["filter_error"],
+            "filter_errors": filter_errors,
             "recent_data_yamls": _load_recent(),
             "settings": _load_settings(),
             "tags_dir": STATE.get("tags_dir"),
@@ -2048,22 +2286,23 @@ def api_split():
 def api_filter():
     """Set the active filter chain (narrows the image list), or clear it.
 
-    Body `{filters: [name, ...]}` runs the chain in order; an empty/missing list
-    clears it. `{filter: name}` (or `null`) is accepted for older clients.
+    Body `{filters: [{name, arguments}, ...]}` runs the chain in order; an
+    empty/missing list clears it. A list of names and `{filter: name}` (or
+    `null`) are accepted for older clients.
     """
     if not STATE["splits"]:
         return jsonify({"ok": False, "error": "no dataset loaded"}), 400
 
     data = request.get_json(silent=True) or {}
-    names = data.get("filters")
-    if names is None:
-        legacy = (data.get("filter") or "").strip()
-        names = [legacy] if legacy else []
-    if not isinstance(names, list):
+    items = data.get("filters")
+    if items is None:
+        legacy = data.get("filter")
+        legacy = legacy.strip() if isinstance(legacy, str) else ""
+        items = [legacy] if legacy else []
+    if not isinstance(items, list):
         return jsonify({"ok": False, "error": "filters must be a list"}), 400
-    names = [str(n).strip() for n in names if str(n).strip()]
 
-    error = apply_filters(names)
+    error = apply_filters(items)
     if error:
         return jsonify({"ok": False, "error": error}), 400
 
