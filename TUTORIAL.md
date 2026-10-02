@@ -94,8 +94,8 @@ canvas.
 - **Middle** — the picture (canvas).
 - **Bottom bar** — one row with the tag controls (when Tags is on) plus image
   navigation (Prev / Next, counter) and Undo / Redo / Save.
-- **Settings** (⚙) — the _Read-only_, _Tags_ and _Auto-save_ switches, the
-  dataset field and a **Show all shortcuts** button opening the full shortcut list.
+- **Settings** (⚙) — tabs for _View_, _Layout_, _Dataset_, _Shortcuts_ and
+  _Updates_; the _Shortcuts_ tab lists every binding in a scrollable panel.
 
 ## 5. Your first box
 

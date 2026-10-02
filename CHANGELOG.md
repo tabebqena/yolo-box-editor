@@ -4,6 +4,13 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.14.0] - 2026-10-02
+
+### Changed
+
+- Shortcuts now live directly in **Settings > Shortcuts** (scrollable) instead
+  of behind a "Show all shortcuts" button; the separate shortcuts window is gone.
+
 ## [2.13.0] - 2026-10-02
 
 ### Added

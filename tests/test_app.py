@@ -676,7 +676,7 @@ def test_index_serves_page():
     assert "id=\"toasts\"" in html
     assert "id=\"settingsModal\"" in html
     assert "id=\"settingsBtn\"" in html
-    assert "id=\"shortcutsModal\"" in html
+    assert "id=\"shortcutItems\"" in html
     assert "id=\"autoSaveSw\"" in html
     assert "id=\"filtersBtn\"" in html
     assert "id=\"filterModal\"" in html

@@ -1065,15 +1065,6 @@ function renderShortcuts() {
   wrap.appendChild(mouse);
 }
 
-function openShortcutsModal() {
-  renderShortcuts();
-  el('shortcutsModal').classList.remove('hidden');
-}
-
-function closeShortcutsModal() {
-  el('shortcutsModal').classList.add('hidden');
-}
-
 function populateClasses() {
   if (classes.length === 0) classes = ['class_0'];
   if (defaultClass >= classes.length) defaultClass = 0;
@@ -2585,11 +2576,6 @@ el('loadDataModalClose').addEventListener('click', closeLoadDataModal);
 el('loadDataModal').addEventListener('click', (e) => {
   if (e.target === el('loadDataModal')) closeLoadDataModal();
 });
-el('shortcutsModalBtn').addEventListener('click', openShortcutsModal);
-el('shortcutsModalClose').addEventListener('click', closeShortcutsModal);
-el('shortcutsModal').addEventListener('click', (e) => {
-  if (e.target === el('shortcutsModal')) closeShortcutsModal();
-});
 el('updateCheckBtn').addEventListener('click', () => {
   el('updateStatus').textContent = 'Checking…';
   refreshUpdateInfo(true);
@@ -2924,10 +2910,6 @@ document.addEventListener('keydown', (e) => {
     }
     if (!el('filterModal').classList.contains('hidden')) {
       closeFilterModal();
-      return;
-    }
-    if (!el('shortcutsModal').classList.contains('hidden')) {
-      closeShortcutsModal();
       return;
     }
     if (!el('changelogModal').classList.contains('hidden')) {
