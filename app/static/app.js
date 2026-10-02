@@ -45,7 +45,6 @@ let hookInFlight = new Set(); // hooks currently running (re-entrancy guard)
 let autoSave = false;        // save labels automatically after each edit
 let autoSaveTimer = null;    // debounce timer for auto-save
 let debugMode = false;       // --debug: log verbose messages to the browser console
-let resumeSplitTried = false; // guard: resumeLastImage switches split at most once
 let updateInfo = null;        // latest update-check result (see refreshUpdateInfo)
 const LAST_IMAGE_KEY = 'ybe_last_image'; // localStorage key: last image reached
 const VIEW_KEY = 'ybe_view';             // localStorage key: last split + filter per dataset
@@ -794,6 +793,7 @@ let tipChecked = false; // the daily tip is considered at most once per page loa
 function maybeShowTip(tips) {
   if (tipChecked) return;
   tipChecked = true;
+  if (settingsGet('ybe_tips_enabled') === '0') return;
   if (!Array.isArray(tips) || !tips.length) return;
 
   const today = new Date().toISOString().slice(0, 10);
@@ -1135,6 +1135,7 @@ function populateClasses() {
 
 async function loadConfig(startIdx = 0, opts = {}) {
   const cfg0 = await (await fetch('/api/config')).json();
+  console.log(`[ybe] yolo-box-editor v${cfg0.version || '?'}`);
   serverSettings = cfg0.settings || {};
   initSettings();
   debugMode = !!cfg0.debug;
@@ -1327,15 +1328,21 @@ function loadImage(i) {
   });
 }
 
-// remember the current image so the app can resume here on reload
+// Remember the current image so the app can resume here on reload. One entry
+// per split is kept, plus a global `last`, so switching back to a split returns
+// to the image you were on there.
 function rememberLastImage() {
   if (currentIndex < 0 || !images[currentIndex]) return;
+  const entry = images[currentIndex];
+  let mem = readLastImage();
+  if (!mem || mem.dataYaml !== currentDataYaml) {
+    mem = { dataYaml: currentDataYaml, bySplit: {}, last: null };
+  }
+  if (!mem.bySplit || typeof mem.bySplit !== 'object') mem.bySplit = {};
+  mem.bySplit[entry.split] = entry.name;
+  mem.last = { split: entry.split, name: entry.name };
   try {
-    localStorage.setItem(LAST_IMAGE_KEY, JSON.stringify({
-      dataYaml: currentDataYaml,
-      split: images[currentIndex].split,
-      name: images[currentIndex].name,
-    }));
+    localStorage.setItem(LAST_IMAGE_KEY, JSON.stringify(mem));
   } catch (e) { /* storage unavailable; just don't resume */ }
 }
 
@@ -1395,27 +1402,25 @@ function resolveImageAnchor(anchor) {
     : 0;
 }
 
+// Resume the image last reached: for the active split when one is set, else the
+// global last image. `bySplit` is the new per-split memory; the old single-split
+// shape (`{split, name}`) is still understood.
 async function resumeLastImage(cfg) {
   const mem = readLastImage();
   if (!mem || mem.dataYaml !== cfg.data_yaml || !images.length) {
     loadImage(0);
     return;
   }
-  // the remembered image lives in a split that isn't currently active: switch
-  // the filter first; the reload will then resume onto the image itself.
-  // (with a filter active the split is just its input, so don't force it)
-  if (!(cfg.active_filters || []).length && mem.split && mem.split !== cfg.active_split) {
-    if (cfg.splits.some((s) => s.name === mem.split)) {
-      // one attempt per page load: if the switch doesn't stick, give up instead
-      // of letting a repeated reload re-issue it forever.
-      if (resumeSplitTried) { loadImage(0); return; }
-      resumeSplitTried = true;
-      await setSplit(mem.split, true);
-      return;
-    }
+  const bySplit = mem.bySplit || (mem.split ? { [mem.split]: mem.name } : {});
+  const split = cfg.active_split || (mem.last && mem.last.split) || mem.split || null;
+  const name = cfg.active_split
+    ? bySplit[cfg.active_split]
+    : (mem.last ? mem.last.name : mem.name);
+  if (name) {
+    const idx = images.findIndex((im) => im.name === name && (!split || im.split === split));
+    if (idx >= 0) { loadImage(idx); return; }
   }
-  const idx = images.findIndex((im) => imageKey(im) === imageKey(mem));
-  loadImage(idx >= 0 ? idx : 0);
+  loadImage(0);
 }
 
 async function go(delta) {
@@ -1819,8 +1824,7 @@ function loadDataFromModal() {
   return loadDataset(el('loadDataYaml').value);
 }
 
-async function setSplit(split, resumeOk = false) {
-  const anchor = resumeOk ? null : captureImageAnchor(false);
+async function setSplit(split) {
   try {
     const res = await fetch('/api/split', {
       method: 'POST',
@@ -1830,7 +1834,10 @@ async function setSplit(split, resumeOk = false) {
     const data = await res.json();
     if (res.ok && data.ok) {
       dbg('split changed', { split: split || null });
-      await loadConfig(0, resumeOk ? { noResume: false } : { noResume: true, anchor });
+      // skip the view restore: the split just set is authoritative, otherwise a
+      // stale remembered split would immediately switch it back (e.g. choosing
+      // "All splits" after a specific one). Resume the per-split last image.
+      await loadConfig(0, { skipFilterRestore: true });
     } else {
       dbgWarn('split switch failed', { status: res.status, error: data.error });
       toast(data.error || 'Split switch failed', { type: 'error' });
@@ -2969,6 +2976,11 @@ el('autoSaveSw').addEventListener('change', (e) => {
   else clearTimeout(autoSaveTimer);
 });
 
+el('tipsSw').addEventListener('change', (e) => {
+  settingsSet('ybe_tips_enabled', e.target.checked ? '1' : '0');
+  if (!e.target.checked) closeTipModal();
+});
+
 el('addTagBtn').addEventListener('click', () => {
   if (el('tagInput').classList.contains('hidden')) openTagInput();
   else closeTagInput();
@@ -3320,6 +3332,7 @@ function initSettings() {
   el('autoSaveSw').checked = settingsGet('autoSave') === '1';
   autoSave = el('autoSaveSw').checked;
   boxesVisible = settingsGet(SHOW_BOXES_KEY) !== '0';
+  el('tipsSw').checked = settingsGet('ybe_tips_enabled') !== '0';
 }
 
 // With --debug these surface any error that would otherwise only show in the

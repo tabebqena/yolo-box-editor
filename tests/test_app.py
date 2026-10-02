@@ -703,6 +703,7 @@ def test_index_serves_page():
     assert "id=\"saveVisibleSw\"" in html
     assert "id=\"tipModal\"" in html
     assert "id=\"tipText\"" in html
+    assert "id=\"tipsSw\"" in html
 
 
 def test_api_config_defaults(clean_state):

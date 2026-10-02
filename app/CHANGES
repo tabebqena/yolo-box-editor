@@ -6,7 +6,8 @@
 - A daily tip dialog now suggests one random feature each day.
 - New built-in update_tags action (run after save by a shipped on_after_save hook) adds new tag names to tags.yaml on demand.
 - Per-dataset Tags folder setting; the tag bar warns when a tag is missing from tags.yaml.
-- Settings > View is now Settings > General; the README is a lighter quick start with docs/ for details.
+- Settings > View is now Settings > General, with a Show tip on start toggle; the README is a lighter quick start with docs/ for details.
+- Fixed: choosing All splits no longer snaps back to the previously selected split. The last image is now remembered per split.
 
 ## 3.3.0
 - UI settings (View/Layout, panel sizes, floating-window positions) are saved on the server too, so a new browser starts with your setup. A value you change in a browser still wins there.

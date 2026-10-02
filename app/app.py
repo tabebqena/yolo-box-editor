@@ -221,6 +221,17 @@ TIPS = [
     "Save (S) writes only when there are changes; Undo (Z) and Redo (Y) cover every edit.",
     "After an external tool edits the current image, use app_refresh_image to reload it in place.",
     "New tag names reach tags.yaml on the next save, via the built-in update_tags action.",
+    "Paste the path to your data.yaml in Settings → Dataset, or use the Recent… dropdown.",
+    "Click a box on the image to select it; its row in the Boxes list becomes editable.",
+    "Type a number in the counter and press Enter to jump straight to that image.",
+    "The split dropdown switches between train / val / test, or shows all of them together.",
+    "Your last image is remembered per split, so switching back to a split returns you to it.",
+    "Read-only mode is a safe way to look around: it never writes labels or tags.",
+    "Every shortcut can be changed in shortcuts.txt — no code editing needed.",
+    "Settings → Updates checks GitHub and tells you when a newer version is available.",
+    "The ⚙ button opens Settings; Esc closes any dialog.",
+    "Your UI settings are saved on the server too, so a new browser starts with your layout.",
+    "Hooks run on events like on_after_save; see docs/actions-and-hooks.md for examples.",
 ]
 
 MAX_RECENT = 10

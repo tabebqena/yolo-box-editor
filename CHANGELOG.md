@@ -20,9 +20,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- The Settings **View** tab is now **General**.
+- The Settings **View** tab is now **General**, with a new **Show tip on start**
+  toggle.
+- The last image is remembered **per split**, so switching back to a split
+  resumes the image you were on there.
+- The browser console logs the running version on start.
 - The README is a lightweight quick start; the detailed reference moved to
   `docs/`.
+
+### Fixed
+
+- Choosing **All splits** no longer snaps back to the previously selected split.
 
 ## [3.3.0] - 2026-10-02
 
