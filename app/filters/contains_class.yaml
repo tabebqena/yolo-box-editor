@@ -1,0 +1,14 @@
+# Keep only the images whose label contains the chosen class.
+#
+# The `class_name` argument uses `options: {DATASET_CLASS_NAMES}`, a dynamic
+# token the app expands into the loaded dataset's class names, so the UI shows a
+# dropdown and only valid classes can be picked. Without a dataset the options
+# fall back to the dataset's `class_0` default.
+name: Contains class
+description: Keep only images whose label contains the chosen class.
+arguments:
+  - name: class_name
+    required: true
+    options: {DATASET_CLASS_NAMES}
+steps:
+  - python {APP_SCRIPT_DIR}/class_filter.py {DATA_YAML_PATH} {SPLIT} {INPUT_PIPE} {OUTPUT_PIPE} --class {CLASS_NAME}

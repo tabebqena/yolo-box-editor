@@ -6,6 +6,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [5.0.0] - 2026-10-02
 
+### Added
+
+- `options` supports the dynamic token `{DATASET_CLASS_NAMES}`, expanded to the
+  loaded dataset's class names, so an argument can be a class dropdown instead of
+  free text; the app rejects a value outside `options`.
+- Shipped **Contains class** and **Does not contain class** filters
+  (`app/filters/contains_class.yaml`, `app/filters/not_contains_class.yaml`)
+  backed by `app/scripts/class_filter.py`.
+
 ### Changed
 
 - **Filters are now defined by YAML** (breaking): one `filters/*.yaml` file per

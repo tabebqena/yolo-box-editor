@@ -1826,6 +1826,87 @@ def test_normalize_filter_chain_fills_args_and_checks_required(clean_state):
     assert "is required" in error
 
 
+def test_load_filters_parses_class_names_token(clean_state):
+    body = (
+        "name: ByClass\n"
+        "arguments:\n"
+        "  - name: class_name\n"
+        "    options: {DATASET_CLASS_NAMES}\n"
+        "steps:\n"
+        "  - echo {CLASS_NAME}\n"
+    )
+    write_filter(clean_state, "ByClass.yaml", body)
+    arg = ybe.load_filters()[0]["ByClass"]["arguments"][0]
+    assert arg["options"] == [ybe.FILTER_CLASS_NAMES_TOKEN]
+
+
+def test_resolve_filter_options_expands_class_names():
+    token = ybe.FILTER_CLASS_NAMES_TOKEN
+    assert ybe.resolve_filter_options([token], ["fire", "smoke"]) == ["fire", "smoke"]
+    assert ybe.resolve_filter_options(["a", token], ["a", "b"]) == ["a", "b"]
+    assert ybe.resolve_filter_options(None, ["x"]) is None
+
+
+def test_normalize_filter_chain_rejects_value_outside_options(clean_state):
+    write_filter(clean_state, "ByClass.yaml",
+                 filter_yaml("echo hi", name="ByClass",
+                             arguments=[{"name": "c", "options": "[alpha, beta]"}]))
+    ybe.STATE["classes"] = ["alpha", "beta"]
+    _, error = ybe._normalize_filter_chain(
+        [{"name": "ByClass", "arguments": {"c": "gamma"}}])
+    assert "must be one of" in error
+    chain, error = ybe._normalize_filter_chain(
+        [{"name": "ByClass", "arguments": {"c": "beta"}}])
+    assert error is None and chain[0]["arguments"]["c"] == "beta"
+
+
+def test_shipped_class_filters_use_class_token(monkeypatch):
+    monkeypatch.setattr(ybe, "FILTERS_DIR", str(Path(ybe.BASE_DIR) / "filters"))
+    monkeypatch.setattr(ybe, "USER_FILTERS_DIR", str(Path(ybe.BASE_DIR) / "nope"))
+    filters, errors = ybe.load_filters()
+    assert errors == []
+    for name in ("Contains class", "Does not contain class"):
+        arg = filters[name]["arguments"][0]
+        assert arg["name"] == "class_name"
+        assert arg["required"] is True
+        assert arg["options"] == [ybe.FILTER_CLASS_NAMES_TOKEN]
+
+
+def test_class_filter_script_contains_and_not_contains(clean_state, tmp_path, monkeypatch):
+    root = make_dataset(tmp_path, splits=("train",), images=("a", "b", "c"))
+    labels = root / "labels" / "train"
+    labels.mkdir(parents=True, exist_ok=True)
+    (labels / "a.txt").write_text("0 0.5 0.5 0.1 0.1\n", encoding="utf-8")
+    (labels / "b.txt").write_text("1 0.5 0.5 0.1 0.1\n", encoding="utf-8")
+    load_into_state(root)
+    ybe.STATE["classes"] = ["fire", "smoke"]
+    monkeypatch.setattr(ybe, "USER_SCRIPT_DIR", str(Path(ybe.BASE_DIR) / "scripts"))
+
+    def class_step(extra):
+        return (f'"{sys.executable}" {{USER_SCRIPT_DIR}}/class_filter.py '
+                f'{{DATA_YAML_PATH}} {{SPLIT}} {{INPUT_PIPE}} {{OUTPUT_PIPE}} {extra}')
+
+    write_filter(clean_state, "Contains.yaml",
+                 filter_yaml(class_step("--class {CLASS_NAME}"),
+                             name="Contains",
+                             arguments=[{"name": "class_name", "required": True,
+                                         "options": ybe.FILTER_CLASS_NAMES_TOKEN}]))
+    write_filter(clean_state, "NotContains.yaml",
+                 filter_yaml(class_step("--class {CLASS_NAME} --invert"),
+                             name="NotContains",
+                             arguments=[{"name": "class_name", "required": True,
+                                         "options": ybe.FILTER_CLASS_NAMES_TOKEN}]))
+    chain, error = ybe._normalize_filter_chain(
+        [{"name": "Contains", "arguments": {"class_name": "fire"}}])
+    assert error is None
+    result = ybe.run_filter_chain(chain, "train")
+    assert result["ok"] and [e["name"] for e in result["images"]] == ["a.jpg"]
+
+    result = ybe.run_filter_chain(
+        [{"name": "NotContains", "arguments": {"class_name": "fire"}}], "train")
+    assert result["ok"] and [e["name"] for e in result["images"]] == ["b.jpg", "c.jpg"]
+
+
 def test_run_filter_substitutes_placeholders_and_args(clean_state):
     log = clean_state / "args.txt"
     write_script(clean_state, "log.py",

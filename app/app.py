@@ -1243,6 +1243,25 @@ FILTER_RESERVED_PLACEHOLDERS = {
 }
 # A filter argument name; its in-place placeholder is the upper-cased name.
 _FILTER_ARG_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# Dynamic option token: expands to the loaded dataset's class names.
+FILTER_CLASS_NAMES_TOKEN = "{DATASET_CLASS_NAMES}"
+
+
+def resolve_filter_options(options, classes):
+    """Expand dynamic option tokens (e.g. `{DATASET_CLASS_NAMES}`).
+
+    Non-token options are kept as-is; a token expands in place (deduplicated).
+    Used both to fill the UI dropdown and to validate a submitted value.
+    """
+    if not options:
+        return options
+    resolved = []
+    for opt in options:
+        values = classes if opt == FILTER_CLASS_NAMES_TOKEN else [opt]
+        for value in values:
+            if value and value not in resolved:
+                resolved.append(value)
+    return resolved
 
 
 def _set_filter_arg_field(arg, key, value):
@@ -1568,8 +1587,14 @@ def _normalize_filter_chain(items):
             return None, f"unknown filter: {name}"
         effective = effective_filter_arguments(flt, item.get("arguments"))
         for arg in flt["arguments"]:
-            if arg["required"] and not effective.get(arg["name"], "").strip():
+            value = effective.get(arg["name"], "")
+            if arg["required"] and not value.strip():
                 return None, f'Filter "{name}": argument "{arg["name"]}" is required'
+            options = resolve_filter_options(arg.get("options"), read_classes())
+            if options and value and value not in options:
+                return None, (
+                    f'Filter "{name}": argument "{arg["name"]}" must be one of: '
+                    f'{", ".join(options)}')
         chain.append({"name": name, "arguments": effective})
     return chain, None
 
@@ -2084,10 +2109,17 @@ def api_config():
     actions = load_actions()
     hooks, hook_errors = load_hooks()
     filters, filter_errors = load_filters()
+    classes = read_classes()
     filter_catalog = sorted(
         (
-            {"name": f["name"], "description": f["description"],
-             "arguments": f["arguments"]}
+            {
+                "name": f["name"],
+                "description": f["description"],
+                "arguments": [
+                    {**arg, "options": resolve_filter_options(arg.get("options"), classes)}
+                    for arg in f["arguments"]
+                ],
+            }
             for f in filters.values()
         ),
         key=lambda f: f["name"],
@@ -2096,7 +2128,7 @@ def api_config():
         {
             "data_yaml": STATE["data_yaml"],
             "dataset_path": STATE["dataset_path"],
-            "classes": read_classes(),
+            "classes": classes,
             "tags": read_tags_yaml(),
             "images": _current_images(),
             "active_split": STATE["active_split"],

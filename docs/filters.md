@@ -33,6 +33,11 @@ steps:                      # one shell command per entry, run in order
 - `name` wins the filter name; without it the file name (minus `.yaml`) is used.
 - `active: false` is an app-global off switch: the filter does not appear in the
   UI and cannot be selected (a saved chain that used it drops that step).
+- An argument with `options` is shown as a dropdown and the app rejects a value
+  that is not one of them. Besides literal lists, the token
+  `{DATASET_CLASS_NAMES}` expands to the loaded dataset's class names, e.g.
+  `options: {DATASET_CLASS_NAMES}` — so a class filter can never be given a
+  typo'd class. Other dynamic tokens may be added later.
 - A filter with no `steps` (e.g. a comments-only template you copied) is
   ignored.
 - An argument name must be letters, digits and `_` (not starting with a digit)
@@ -92,3 +97,17 @@ restored when you reopen the app — even after a server restart.
 `app/filters/example.yaml` is a working example (`Keep every N-th (example)`)
 backed by `app/scripts/example_filter.py`; copy it to a new `<Name>.yaml` in
 `<home>/filters/` to start your own.
+
+## Shipped filters
+
+- **Keep every N-th (example)** — `app/filters/example.yaml`; keeps one image
+  out of every N, optionally reversed.
+- **Contains class** — `app/filters/contains_class.yaml`; keeps only the images
+  whose label contains the chosen class. The class is picked from a dropdown
+  built from the dataset's `names` (`options: {DATASET_CLASS_NAMES}`).
+- **Does not contain class** — `app/filters/not_contains_class.yaml`; the
+  inverse.
+
+Both class filters use `app/scripts/class_filter.py`, which maps the class name
+to its id via `data.yaml` and checks each image's `labels/.../*.txt` file (an
+image with no label file contains no class).
