@@ -2833,6 +2833,21 @@ def test_api_extension_disabled_toggles_hook(clean_state, tmp_path):
     assert {d["name"]: d["enabled"] for d in cfg["hook_defs"]}["on_after_save"] is False
 
 
+def test_api_extension_delete_clears_disabled_flag(clean_state, tmp_path):
+    write_action(tmp_path, "Remove.yaml", "steps:\n  - echo hi\n")
+    client = ybe.app.test_client()
+    root = make_dataset(tmp_path)
+    load_dataset(client, root)
+    client.post("/api/extensions/disabled", json={
+        "kind": "action", "name": "Remove", "disabled": True,
+    })
+    resp = client.post("/api/extensions/delete",
+                       json={"kind": "action", "name": "Remove"})
+    assert resp.status_code == 200
+    views = json.loads(Path(ybe.VIEW_FILE).read_text(encoding="utf-8"))
+    assert views[str(root / "data.yaml")]["disabled"]["actions"] == []
+
+
 def test_api_action_run_refuses_disabled_action(clean_state, tmp_path):
     write_action(tmp_path, "Remove.yaml", "steps:\n  - echo hi\n")
     client = ybe.app.test_client()

@@ -3088,6 +3088,9 @@ def api_extension_delete():
         os.remove(found["path"])
     except OSError as exc:
         return jsonify({"ok": False, "error": f"could not delete the file: {exc}"}), 500
+    if found["kind"] in DISABLED_KIND_KEYS:
+        # do not keep a name disabled for a file the user just removed
+        _set_extension_disabled(found["kind"], found["name"], False)
 
     cfg = api_config().get_json()
     cfg["ok"] = True
