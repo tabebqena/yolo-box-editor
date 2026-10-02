@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 6.1.0
+- Fixed: the app no longer becomes laggy after you view many images. Each image load now releases the previous decoded image first, so memory does not keep growing the longer you browse.
+
 ## 6.0.0
 - Create actions, hooks and filters from the web UI (Settings > Actions / Hooks / Filters): fill in the form and the app writes valid YAML for you, so indentation, `:` and `-` mistakes are impossible.
 - Click a placeholder button to insert tokens like {IMAGE_PATH} or {INPUT_PIPE} into a command, so you do not have to memorise their spelling.

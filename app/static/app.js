@@ -2178,6 +2178,7 @@ function loadImage(i) {
       imageTags = (data && data.tags) || [];
       undoStack = []; // history is per image
       redoStack = [];
+      imageEl.removeAttribute('src');
       imageEl.src = '/api/image' + q + '&_=' + Date.now();
       rememberLastImage();
       renderTagBar();
@@ -3972,6 +3973,7 @@ const APP_SHORTCUT_HANDLERS = {
   app_refresh_image: (e) => {
     e.preventDefault();
     if (currentIndex < 0) { dbg('refresh image skipped (no image)'); return; }
+    imageEl.removeAttribute('src');
     imageEl.src = '/api/image' + keyQuery(images[currentIndex]) + '&_=' + Date.now();
     dbg('refresh image', { index: currentIndex, src: imageEl.src });
   },

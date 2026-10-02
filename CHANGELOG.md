@@ -4,6 +4,14 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.1.0] - 2026-10-02
+
+### Fixed
+
+- The app no longer slows down after browsing many images. Each cache-busted
+  image load now releases the previous decoded frame first, instead of retaining
+  one decoded bitmap per viewed image until the tab is closed.
+
 ## [6.0.0] - 2026-10-02
 
 ### Added
