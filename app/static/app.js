@@ -343,7 +343,7 @@ function notifyChangelog(cfg) {
   if (seen === version) return;
   try { localStorage.setItem(CHANGELOG_SEEN_KEY, version); } catch (e) { /* ignore */ }
   dbg('changelog', version, changes);
-  showChangelog(version, changes);
+  queueAutoModal('changelog', () => showChangelog(version, changes));
 }
 
 function showChangelog(version, changes) {
@@ -363,6 +363,35 @@ function showChangelog(version, changes) {
 
 function closeChangelog() {
   el('changelogModal').classList.add('hidden');
+  releaseAutoModal('changelog');
+}
+
+// Ambient modals (dataset prompt, changelog, tip) are all triggered from
+// loadConfig and would otherwise stack on a fresh install. Queue them so only
+// one is visible at a time; each close releases the next.
+let autoModalCurrent = null;
+const autoModalQueue = [];
+
+function queueAutoModal(id, show) {
+  if (autoModalCurrent === id || autoModalQueue.some((m) => m.id === id)) return;
+  autoModalQueue.push({ id, show });
+  pumpAutoModals();
+}
+
+function pumpAutoModals() {
+  if (autoModalCurrent) return;
+  const next = autoModalQueue.shift();
+  if (!next) return;
+  autoModalCurrent = next.id;
+  next.show();
+}
+
+function releaseAutoModal(id) {
+  const qi = autoModalQueue.findIndex((m) => m.id === id);
+  if (qi !== -1) autoModalQueue.splice(qi, 1);
+  if (autoModalCurrent !== id) return;
+  autoModalCurrent = null;
+  pumpAutoModals();
 }
 
 // interaction state
@@ -815,12 +844,15 @@ function maybeShowTip(tips) {
     localStorage.setItem(TIPS_SEEN_KEY, JSON.stringify(seen));
   } catch (e) { /* ignore */ }
 
-  el('tipText').textContent = tips[idx];
-  el('tipModal').classList.remove('hidden');
+  queueAutoModal('tip', () => {
+    el('tipText').textContent = tips[idx];
+    el('tipModal').classList.remove('hidden');
+  });
 }
 
 function closeTipModal() {
   el('tipModal').classList.add('hidden');
+  releaseAutoModal('tip');
 }
 
 function selectSettingsTab(name) {
@@ -848,14 +880,17 @@ function closeSettingsModal() {
 }
 
 function openLoadDataModal() {
-  el('loadDataModal').classList.remove('hidden');
-  const input = el('loadDataYaml');
-  input.focus();
-  input.select();
+  queueAutoModal('loadData', () => {
+    el('loadDataModal').classList.remove('hidden');
+    const input = el('loadDataYaml');
+    input.focus();
+    input.select();
+  });
 }
 
 function closeLoadDataModal() {
   el('loadDataModal').classList.add('hidden');
+  releaseAutoModal('loadData');
 }
 
 function populateSplitSelect() {

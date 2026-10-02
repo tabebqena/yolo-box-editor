@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 3.4.2
+- Fixed: on a fresh install the Load a dataset, What's new and Tip of the day dialogs no longer appear at the same time; they now show one after another.
+
 ## 3.4.1
 - Fixed: the installer now reliably creates the ybe alias even when a stale ybe symlink or directory is already in the launcher folder.
 

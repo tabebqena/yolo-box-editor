@@ -4,6 +4,14 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.4.2] - 2026-10-02
+
+### Fixed
+
+- On a fresh install the **Load a dataset**, **What's new** and **Tip of the
+  day** dialogs no longer appear at the same time. They are queued and shown one
+  after another (dataset prompt first, then changelog, then tip).
+
 ## [3.4.1] - 2026-10-02
 
 ### Fixed
