@@ -1053,38 +1053,38 @@ def test_read_tags_yaml_empty_without_dataset(clean_state, tmp_path):
     assert ybe.read_tags_yaml() == []
 
 
-def test_read_tags_yaml_parses_block_and_inline(clean_state, tmp_path):
+def test_read_tags_yaml_parses_plain_list(clean_state, tmp_path):
     (tmp_path / "data.yaml").write_text(f"nc: 1\nnames: [fire]\n", encoding="utf-8")
     ybe.STATE["data_yaml"] = str(tmp_path / "data.yaml")
     assert ybe.read_tags_yaml() == []
-    (tmp_path / "tags.yaml").write_text("tags:\n  - fire\n  - smoke\n", encoding="utf-8")
-    assert ybe.read_tags_yaml() == ["fire", "smoke"]
-    (tmp_path / "tags.yaml").write_text("tags: [a, b] # inline\n", encoding="utf-8")
-    assert ybe.read_tags_yaml() == ["a", "b"]
-
-
-def test_read_tags_yaml_parses_plain_list(clean_state, tmp_path):
-    (tmp_path / "data.yaml").write_text("nc: 1\nnames: [fire]\n", encoding="utf-8")
-    ybe.STATE["data_yaml"] = str(tmp_path / "data.yaml")
     (tmp_path / "tags.yaml").write_text("- fire\n- smoke\n", encoding="utf-8")
     assert ybe.read_tags_yaml() == ["fire", "smoke"]
 
 
-def test_read_tags_yaml_merges_plain_list_and_key(clean_state, tmp_path):
+def test_read_tags_yaml_ignores_nested_tags_key(clean_state, tmp_path):
     (tmp_path / "data.yaml").write_text("nc: 1\nnames: [fire]\n", encoding="utf-8")
     ybe.STATE["data_yaml"] = str(tmp_path / "data.yaml")
     (tmp_path / "tags.yaml").write_text(
-        "- fire\n- smoke\n- other\n\ntags:\n  - smoke\n  - new\n",
-        encoding="utf-8",
+        "- fire\n- smoke\n\ntags:\n  - ignored\n", encoding="utf-8",
     )
-    assert ybe.read_tags_yaml() == ["fire", "smoke", "other", "new"]
+    assert ybe.read_tags_yaml() == ["fire", "smoke"]
+    (tmp_path / "tags.yaml").write_text("tags:\n  - fire\n", encoding="utf-8")
+    assert ybe.read_tags_yaml() == []
 
 
-def test_save_tags_yaml_appends_key_when_missing(clean_state, tmp_path):
+def test_read_tags_yaml_strips_repeated_markers(clean_state, tmp_path):
+    (tmp_path / "data.yaml").write_text("nc: 1\nnames: [fire]\n", encoding="utf-8")
+    ybe.STATE["data_yaml"] = str(tmp_path / "data.yaml")
+    (tmp_path / "tags.yaml").write_text("- - fire\n- smoke\n", encoding="utf-8")
+    assert ybe.read_tags_yaml() == ["fire", "smoke"]
+
+
+def test_save_tags_yaml_writes_plain_list_when_missing(clean_state, tmp_path):
     (tmp_path / "data.yaml").write_text("nc: 1\nnames: [fire]\n", encoding="utf-8")
     ybe.STATE["data_yaml"] = str(tmp_path / "data.yaml")
     path = ybe.save_tags_yaml(["fire", "smoke"])
     assert path == str(tmp_path / "tags.yaml")
+    assert (tmp_path / "tags.yaml").read_text() == "- fire\n- smoke\n"
     assert ybe.read_tags_yaml() == ["fire", "smoke"]
 
 

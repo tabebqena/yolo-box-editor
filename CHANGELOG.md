@@ -8,10 +8,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- The tag bar now shows **all** tags when `tags.yaml` is written as a plain
-  top-level list of names instead of under a `tags:` key. Both shapes are read
-  (and merged if a file has both); saving rewrites the canonical `tags:` form,
-  so the plain list is not left behind as a second, stale list.
+- The tag bar now reads `tags.yaml` as a plain list — one tag per line, each
+  prefixed by `- ` (the format written by `dataset_autotag.py`) — so every tag
+  is shown instead of only those under a nested `tags:` key. A nested `tags:`
+  key is ignored, and saving rewrites the file as a plain list.
 
 ## [3.5.0] - 2026-10-02
 

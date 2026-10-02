@@ -1634,22 +1634,28 @@ def _is_toplevel_list_item(line):
 def _toplevel_list_names(lines):
     """Names from a bare, top-level YAML list (`- name` at column 0).
 
-    `tags.yaml` is occasionally written as just a list of names instead of a
-    `tags:` key; accept both and merge them. Only column-0 items count, so a
-    nested list under another key (e.g. `names:`) is never mistaken for tags.
+    `tags.yaml` is a plain list, one tag per line, each prefixed by ``- ``.
+    Repeated leading markers are stripped too, matching `dataset_autotag.py`,
+    so a file corrupted by an earlier buggy write is read back cleanly.
     """
     names = []
     for raw in lines:
         if not _is_toplevel_list_item(raw):
             continue
-        name = _strip_comment(raw.strip())[1:].strip().strip("'\"")
+        name = _strip_comment(raw.strip())
+        while name.startswith("-"):
+            name = name[1:].strip()
+        name = name.strip("'\"")
         if name:
             names.append(name)
     return names
 
 
 def read_tags_yaml():
-    """Read the available-tags list from the dataset's tags.yaml ([] if absent)."""
+    """Read the available-tags list from the dataset's tags.yaml ([] if absent).
+
+    The list is a bare YAML list; a nested `tags:` key is ignored.
+    """
     path = tags_yaml_path()
     if not path:
         return []
@@ -1658,17 +1664,21 @@ def read_tags_yaml():
             lines = f.readlines()
     except OSError:
         return []
-    names = _toplevel_list_names(lines)
-    value = _extract_yaml_block(lines, "tags")
-    names += _parse_yaml_names_value(value or "")
-    return _normalize_tags(names)
+    return _normalize_tags(_toplevel_list_names(lines))
 
 
 def save_tags_yaml(tags):
-    """Write `tags` to the dataset's tags.yaml, keeping any non-tags content.
+    """Write `tags` to the dataset's tags.yaml as a plain list, one per row.
 
-    Rewrites only the top-level `tags:` block (or appends one); other keys are
-    preserved. Returns the written path, or None when no dataset is loaded.
+    The canonical shape is a bare top-level list, one tag per line, each
+    prefixed by ``- ``:
+
+        - fire
+        - smoke
+
+    Any other content is preserved: an old `tags:` key (with its block) is
+    replaced in place, and a pre-existing bare list is rewritten. Returns the
+    written path, or None when no dataset is loaded.
     """
     path = tags_yaml_path()
     if not path:
@@ -1680,9 +1690,7 @@ def save_tags_yaml(tags):
     except OSError:
         lines = []
 
-    # A tags.yaml written as a bare top-level list (rather than under `tags:`)
-    # is normalised into the canonical `tags:` block below; drop those items so
-    # they are not left behind as a second, stale list.
+    # Drop a pre-existing bare list; it is rewritten below.
     lines = [ln for ln in lines if not _is_toplevel_list_item(ln)]
 
     out = []
@@ -1691,9 +1699,8 @@ def save_tags_yaml(tags):
     while i < len(lines):
         line = lines[i]
         if not replaced and _strip_comment(line.strip()).startswith("tags:"):
-            out.append("tags:\n")
             for t in tags:
-                out.append(f"  - {t}\n")
+                out.append(f"- {t}\n")
             i += 1
             # skip the old tag block (list items only; stop at anything else)
             while i < len(lines) and _strip_comment(lines[i].strip()).startswith("-"):
@@ -1706,9 +1713,8 @@ def save_tags_yaml(tags):
     if not replaced:
         if out and out[-1].strip():
             out.append("\n")
-        out.append("tags:\n")
         for t in tags:
-            out.append(f"  - {t}\n")
+            out.append(f"- {t}\n")
 
     text = "".join(out)
     if not text.endswith("\n"):

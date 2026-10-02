@@ -9,17 +9,9 @@ widget in **Settings → Layout**.
 ## Where tags live
 
 - **`tags.yaml`** lives next to `data.yaml` and holds the dataset's available
-  tags. It is **required** — it is the list of tags the bar can offer. Two
-  shapes are accepted:
-
-  ```yaml
-  tags:
-    - fire
-    - smoke
-    - dangerous
-  ```
-
-  or a plain list of names (the `tags:` key is optional):
+  tags. It is **required** — it is the list of tags the bar can offer. It is a
+  plain list, one tag per line, each prefixed by `- ` (the format written by
+  `dataset_autotag.py`):
 
   ```yaml
   - fire
@@ -27,9 +19,8 @@ widget in **Settings → Layout**.
   - dangerous
   ```
 
-  If a file somehow has both, the two are merged (duplicates removed). On the
-  next save the file is rewritten in the canonical `tags:` form, so a plain
-  list is never left behind as a second, stale list.
+  A nested `tags:` key is **not** used and is ignored; saving rewrites the file
+  as a plain list, so an old `tags:` block is cleaned up.
 
 - **Per-image tags** live in a `tags/` folder beside `images/` and `labels/`.
   By default the folder is derived the same way as labels

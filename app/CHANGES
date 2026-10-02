@@ -3,7 +3,7 @@
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
 ## 3.6.0
-- Fixed: a tags.yaml written as a plain list of names (no `tags:` key) is now read correctly, so the tag bar shows every tag instead of only the ones under `tags:`. Saving normalises the file into the canonical `tags:` form.
+- Fixed: tags.yaml is now read as a plain list (`- tag` per line, as written by dataset_autotag.py), so the tag bar shows every tag. A nested `tags:` key is ignored and saving rewrites the file as a plain list.
 
 ## 3.5.0
 - Settings > Shortcuts now has an Edit view: click a binding and press the new key combination, then Save. Changes are written to your own shortcuts.txt (the shipped one is left alone), and a reset button restores the default.
