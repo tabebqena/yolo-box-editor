@@ -798,6 +798,29 @@ body.panel-left #dockSide {
 .filter-arg-input { width: 100%; }
 .filter-panel-actions { justify-content: flex-end; }
 
+/* Settings > Filters sub-tabs (segmented control) */
+.filters-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #1d1e26;
+  align-self: flex-start;
+}
+.filters-tab {
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--muted);
+  padding: 5px 12px;
+  font-size: 12px;
+}
+.filters-tab:hover { color: var(--text); background: #2c2f3a; }
+.filters-tab.active { color: #0d1117; background: var(--accent); }
+.filters-subpanel { display: none; flex-direction: column; gap: 10px; }
+.filters-subpanel.active { display: flex; }
+
 /* settings modal */
 .settings-tabs {
   display: flex;

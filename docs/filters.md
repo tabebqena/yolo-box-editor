@@ -1,11 +1,12 @@
 # Filters
 
 A **filter** narrows the loaded image list to the images its script returns.
-**Filters are chainable**: open **Settings** (⚙) and use the **Filters** tab,
-which stacks up to 8 selectors. Pick a filter in each selector and they run
-**top to bottom** — each one receives the previous one's result, applies its own
-logic, and passes its result on. The last filter's output is exactly what the
-app shows (count, Prev/Next, the counter jump and resume all follow it).
+**Filters are chainable**: open **Settings** (⚙) and use the **Filters** tab. It
+has three sub-tabs — **Active chain**, **Create** and **Library**. The **Active
+chain** sub-tab stacks up to **8** selectors. Pick a filter in each selector and
+they run **top to bottom** — each one receives the previous one's result, applies
+its own logic, and passes its result on. The last filter's output is exactly what
+the app shows (count, Prev/Next, the counter jump and resume all follow it).
 `No filter` clears the whole chain.
 
 Each filter is defined by **one YAML file** in a `filters/` folder. Shipped
@@ -14,12 +15,13 @@ after the shipped ones and win on a name clash.
 
 ## Create a filter in the web UI
 
-**Settings → Filters** has a **Create a filter** section below the chain. Give the
-filter a name, an optional description, any arguments (name / required / default /
-comma-separated options) and its **Steps**. Each command row has **Insert
-placeholder** buttons (`{INPUT_PIPE}`, `{OUTPUT_PIPE}`, `{SPLIT}`, every
-argument's `{NAME}`, …), so you never type a token from memory. Your filters are
-listed under **Existing** and can be deleted there; shipped ones cannot.
+**Settings → Filters → Create** has the **Create a filter** form (below the chain,
+in its own sub-tab). Give the filter a name, an optional description, any
+arguments (name / required / default / comma-separated options) and its **Steps**.
+Each command row has **Insert placeholder** buttons (`{INPUT_PIPE}`,
+`{OUTPUT_PIPE}`, `{SPLIT}`, every argument's `{NAME}`, …), so you never type a
+token from memory. Your filters are listed in the **Library** sub-tab under
+**Existing** and can be deleted there; shipped ones cannot.
 
 Every filter file carries an `api_version` (currently `1`). A missing or older
 version is shown as **outdated** and can be opened in a raw YAML editor with its

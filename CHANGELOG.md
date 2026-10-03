@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.6.0] - 2026-10-03
+
+### Changed
+
+- **Settings → Filters** is split into three sub-tabs — **Active chain**,
+  **Create** and **Library** — shown as a segmented control, instead of one long
+  scrolling panel. The chain sub-tab states that up to **8** filters run top to
+  bottom; the Create form and the existing-filters list now each get their own
+  sub-tab.
+
 ## [6.5.0] - 2026-10-03
 
 ### Added

@@ -878,6 +878,20 @@ function selectSettingsTab(name) {
   });
 }
 
+// The Filters tab has its own segmented sub-tabs (Active chain / Create /
+// Library). Kept separate from `selectSettingsTab` so the main tabs are
+// untouched.
+function selectFiltersTab(name) {
+  const panel = document.querySelector('.settings-panel[data-panel="filters"]');
+  if (!panel) return;
+  panel.querySelectorAll('.filters-tab').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.fsub === name);
+  });
+  panel.querySelectorAll('.filters-subpanel').forEach((sub) => {
+    sub.classList.toggle('active', sub.dataset.fsub === name);
+  });
+}
+
 function openSettingsModal() {
   el('settingsModal').classList.remove('hidden');
   el('shortcutEditBtn').disabled = readonly;
@@ -1438,7 +1452,11 @@ function renderFilterBuilder() {
   root.appendChild(b.palette);
   root.appendChild(extFormButtons(
     'Create filter', () => saveFilterForm(b, desc.input, active.input), renderFilterBuilder));
-  root.appendChild(renderDefList('filter', filterDefs));
+  const defsRoot = el('filterDefs');
+  if (defsRoot) {
+    defsRoot.innerHTML = '';
+    defsRoot.appendChild(renderDefList('filter', filterDefs));
+  }
 }
 
 async function postExtension(url, body) {
@@ -3755,6 +3773,9 @@ el('settingsModal').addEventListener('click', (e) => {
 });
 document.querySelectorAll('.settings-tab').forEach((tab) => {
   tab.addEventListener('click', () => selectSettingsTab(tab.dataset.tab));
+});
+document.querySelectorAll('.filters-tab').forEach((tab) => {
+  tab.addEventListener('click', () => selectFiltersTab(tab.dataset.fsub));
 });
 el('shortcutEditBtn').addEventListener('click', () => setShortcutEditMode(true));
 el('shortcutCancelBtn').addEventListener('click', () => setShortcutEditMode(false));

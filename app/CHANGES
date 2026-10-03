@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 6.6.0
+- Settings > Filters is now split into three sub-tabs — Active chain, Create and Library — instead of one long page. The Active chain sub-tab notes that up to 8 filters chain top to bottom.
+
 ## 6.5.0
 - The last image you were on is now remembered across browsers: open the app in another browser and it resumes where you left off (per dataset and split).
 - Your app state now lives in one file, config.json, in the user folder. The old .recent_data_yamls.json, .view_state.json and .settings.json are merged into it automatically on first start and then removed.

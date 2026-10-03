@@ -839,6 +839,11 @@ def test_index_serves_page():
     assert "id=\"autoSaveSw\"" in html
     assert "id=\"filterPanelBody\"" in html
     assert "id=\"filterPanelApply\"" in html
+    assert "class=\"filters-tabs\"" in html
+    assert "data-fsub=\"chain\"" in html
+    assert "data-fsub=\"create\"" in html
+    assert "data-fsub=\"library\"" in html
+    assert "id=\"filterDefs\"" in html
     assert "id=\"tagFloat\"" in html
     assert "id=\"boxFloat\"" in html
     assert "id=\"navFloat\"" in html

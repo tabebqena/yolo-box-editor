@@ -342,13 +342,28 @@
         </section>
 
         <section class="settings-panel" data-panel="filters">
-          <div id="filterPanelBody" class="filter-panel-body"></div>
-          <div class="settings-actions filter-panel-actions">
-            <button id="filterPanelClear" title="Remove every filter">Clear</button>
-            <button id="filterPanelApply" class="primary" title="Run the selected filters top to bottom">Apply</button>
+          <div class="filters-tabs" role="tablist">
+            <button class="filters-tab active" type="button" role="tab" data-fsub="chain">Active chain</button>
+            <button class="filters-tab" type="button" role="tab" data-fsub="create">Create</button>
+            <button class="filters-tab" type="button" role="tab" data-fsub="library">Library</button>
           </div>
-          <div class="settings-sep"></div>
-          <div id="filterBuilder" class="ext-builder"></div>
+
+          <div class="filters-subpanel active" data-fsub="chain">
+            <p class="hint">Filters run top to bottom; up to 8 can be chained.</p>
+            <div id="filterPanelBody" class="filter-panel-body"></div>
+            <div class="settings-actions filter-panel-actions">
+              <button id="filterPanelClear" title="Remove every filter">Clear</button>
+              <button id="filterPanelApply" class="primary" title="Run the selected filters top to bottom">Apply</button>
+            </div>
+          </div>
+
+          <div class="filters-subpanel" data-fsub="create">
+            <div id="filterBuilder" class="ext-builder"></div>
+          </div>
+
+          <div class="filters-subpanel" data-fsub="library">
+            <div id="filterDefs" class="ext-builder"></div>
+          </div>
         </section>
 
         <section class="settings-panel" data-panel="actions">
