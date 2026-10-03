@@ -2,6 +2,10 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 6.7.0
+- The filter chain now has a "+ Add filter" button and an "x" on each row to remove one (up to 8 filters can be chained).
+- Applying a filter chain shows a spinner on Apply and closes Settings when it finishes.
+
 ## 6.6.0
 - Settings > Filters is now split into three sub-tabs — Active chain, Create and Library — instead of one long page. The Active chain sub-tab notes that up to 8 filters chain top to bottom.
 

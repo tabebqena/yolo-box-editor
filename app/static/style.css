@@ -785,6 +785,16 @@ body.panel-left #dockSide {
   border-radius: 6px;
   background: var(--panel);
 }
+.filter-chain-head { display: flex; align-items: center; gap: 6px; }
+.filter-chain-head .filter-chain-select { flex: 1; min-width: 0; }
+.filter-chain-remove {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  line-height: 1;
+  font-size: 15px;
+  color: var(--muted);
+}
+.filter-chain-remove:hover:not(:disabled) { color: var(--text); background: #3b3f4d; }
 .filter-chain-desc {
   margin: 0;
   color: var(--muted);
@@ -796,6 +806,7 @@ body.panel-left #dockSide {
 .filter-arg { display: flex; flex-direction: column; gap: 3px; }
 .filter-arg-label { font-size: 12px; color: var(--text); }
 .filter-arg-input { width: 100%; }
+.filter-add-btn { align-self: flex-start; }
 .filter-panel-actions { justify-content: flex-end; }
 
 /* Settings > Filters sub-tabs (segmented control) */
@@ -820,6 +831,24 @@ body.panel-left #dockSide {
 .filters-tab.active { color: #0d1117; background: var(--accent); }
 .filters-subpanel { display: none; flex-direction: column; gap: 10px; }
 .filters-subpanel.active { display: flex; }
+
+/* inline button spinner (settings > Filters: Apply) */
+button.is-loading { position: relative; color: transparent; pointer-events: none; }
+button.is-loading:disabled { opacity: 1; }
+button.is-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ybe-spin 0.7s linear infinite;
+}
+@keyframes ybe-spin { to { transform: rotate(360deg); } }
 
 /* settings modal */
 .settings-tabs {

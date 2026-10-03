@@ -965,7 +965,18 @@ function buildFilterBlock(i) {
   });
   const active = activeFilters[i];
   sel.value = active && filterDef(active.name) ? active.name : '';
-  block.appendChild(sel);
+
+  const head = document.createElement('div');
+  head.className = 'filter-chain-head';
+  head.appendChild(sel);
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'filter-chain-remove';
+  remove.textContent = '\u00d7';
+  remove.title = 'Remove this filter from the chain';
+  remove.addEventListener('click', () => removeFilterBlock(block));
+  head.appendChild(remove);
+  block.appendChild(head);
 
   const detail = document.createElement('div');
   detail.className = 'filter-chain-detail';
@@ -1027,22 +1038,77 @@ function buildFilterBlock(i) {
   return block;
 }
 
+// Keep the first block reading "No filter" and the rest "(none)" after adds and
+// removes, so the empty slot is obvious.
+function relabelFilterChain() {
+  const body = el('filterPanelBody');
+  if (!body) return;
+  body.querySelectorAll('.filter-chain-item').forEach((block, i) => {
+    const sel = block.querySelector('.filter-chain-select');
+    if (sel && sel.options.length) {
+      sel.options[0].textContent = i === 0 ? 'No filter' : '(none)';
+    }
+  });
+}
+
+// Add is allowed until FILTER_CHAIN_MAX; remove is blocked on the last block, so
+// there is always one slot to build in.
+function updateFilterChainControls() {
+  const body = el('filterPanelBody');
+  if (!body) return;
+  const blocks = body.querySelectorAll('.filter-chain-item');
+  const add = el('filterAddBtn');
+  if (add) {
+    const full = blocks.length >= FILTER_CHAIN_MAX;
+    add.disabled = full;
+    add.title = full
+      ? `Up to ${FILTER_CHAIN_MAX} filters can be chained`
+      : 'Add a filter to the chain';
+  }
+  blocks.forEach((b) => {
+    const rm = b.querySelector('.filter-chain-remove');
+    if (rm) rm.disabled = blocks.length <= 1;
+  });
+}
+
+function addFilterBlock() {
+  const body = el('filterPanelBody');
+  if (!body || !filters.length) return;
+  const blocks = body.querySelectorAll('.filter-chain-item');
+  if (blocks.length >= FILTER_CHAIN_MAX) return;
+  body.appendChild(buildFilterBlock(blocks.length));
+  relabelFilterChain();
+  updateFilterChainControls();
+}
+
+function removeFilterBlock(block) {
+  const body = el('filterPanelBody');
+  if (!body || !block) return;
+  if (body.querySelectorAll('.filter-chain-item').length <= 1) return;
+  block.remove();
+  relabelFilterChain();
+  updateFilterChainControls();
+}
+
 function populateFilterPanel() {
   const body = el('filterPanelBody');
   if (!body) return;
   body.innerHTML = '';
+  const add = el('filterAddBtn');
   if (!filters.length) {
     const empty = document.createElement('div');
     empty.className = 'filter-empty';
     empty.textContent = 'No filters found in filters/.';
     body.appendChild(empty);
+    if (add) add.disabled = true;
     return;
   }
-  const count = Math.min(
-    Math.max(filters.length, activeFilters.length), FILTER_CHAIN_MAX);
+  const count = Math.min(Math.max(activeFilters.length, 1), FILTER_CHAIN_MAX);
   for (let i = 0; i < count; i++) {
     body.appendChild(buildFilterBlock(i));
   }
+  relabelFilterChain();
+  updateFilterChainControls();
 }
 
 function selectedFilterChain() {
@@ -2736,8 +2802,21 @@ async function setTagsDir() {
   }
 }
 
+// Busy state for the chain apply/clear: show a spinner on Apply and block both
+// buttons until the request + config reload finish.
+function setFilterApplying(on) {
+  const apply = el('filterPanelApply');
+  const clear = el('filterPanelClear');
+  if (apply) {
+    apply.classList.toggle('is-loading', on);
+    apply.disabled = on;
+  }
+  if (clear) clear.disabled = on;
+}
+
 async function applyFilterChain(names) {
   const anchor = captureImageAnchor(false);
+  setFilterApplying(true);
   try {
     const res = await fetch('/api/filter', {
       method: 'POST',
@@ -2749,6 +2828,7 @@ async function applyFilterChain(names) {
       dbg('filters changed', { filters: names || [],
         images: (data.images || []).length, filter_error: data.filter_error });
       await loadConfig(0, { noResume: true, skipFilterRestore: true, anchor });
+      closeSettingsModal();
     } else {
       dbgWarn('filter failed', { status: res.status, error: data.error });
       toast(data.error || 'Filter failed', { type: 'error' });
@@ -2758,6 +2838,8 @@ async function applyFilterChain(names) {
     dbgWarn('filter error', err);
     toast('Error: ' + err.message, { type: 'error' });
     populateFilterPanel();
+  } finally {
+    setFilterApplying(false);
   }
 }
 
@@ -3836,6 +3918,7 @@ el('recentSelect').addEventListener('change', () => {
 el('splitSelect').addEventListener('change', () => setSplit(el('splitSelect').value));
 el('filterPanelClear').addEventListener('click', () => applyFilterChain([]));
 el('filterPanelApply').addEventListener('click', () => applyFilterChain(selectedFilterChain()));
+el('filterAddBtn').addEventListener('click', addFilterBlock);
 const counterInput = el('counter');
 counterInput.addEventListener('focus', () => counterInput.select());
 counterInput.addEventListener('keydown', (e) => {

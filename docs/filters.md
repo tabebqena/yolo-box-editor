@@ -3,11 +3,13 @@
 A **filter** narrows the loaded image list to the images its script returns.
 **Filters are chainable**: open **Settings** (⚙) and use the **Filters** tab. It
 has three sub-tabs — **Active chain**, **Create** and **Library**. The **Active
-chain** sub-tab stacks up to **8** selectors. Pick a filter in each selector and
-they run **top to bottom** — each one receives the previous one's result, applies
-its own logic, and passes its result on. The last filter's output is exactly what
-the app shows (count, Prev/Next, the counter jump and resume all follow it).
-`No filter` clears the whole chain.
+chain** sub-tab stacks up to **8** selectors; use **+ Add filter** to add a row
+and the **×** on a row to remove it (the last row stays). Pick a filter in each
+selector and they run **top to bottom** — each one receives the previous one's
+result, applies its own logic, and passes its result on. The last filter's output
+is exactly what the app shows (count, Prev/Next, the counter jump and resume all
+follow it). **Apply** runs the chain (a spinner shows while it works) and closes
+Settings when it finishes; `No filter` clears the whole chain.
 
 Each filter is defined by **one YAML file** in a `filters/` folder. Shipped
 filters live in `app/filters/`; your filters live in `<home>/filters/`, are read

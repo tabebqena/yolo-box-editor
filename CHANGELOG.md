@@ -4,6 +4,19 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.7.0] - 2026-10-03
+
+### Added
+
+- **Add / remove rows in the filter chain** (Settings → Filters → Active chain):
+  a **+ Add filter** button appends a row (up to the 8-filter limit) and each row
+  has a **×** to remove it (the last row stays, so there is always a slot).
+
+### Changed
+
+- **Applying a filter chain shows a spinner** on the Apply button and **closes
+  the Settings dialog** when the chain has been applied. Clear behaves the same.
+
 ## [6.6.0] - 2026-10-03
 
 ### Changed
