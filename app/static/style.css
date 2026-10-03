@@ -1154,6 +1154,89 @@ button.is-loading::after {
   gap: 8px;
 }
 .ext-builder .settings-group-title { margin-top: 6px; }
+
+/* create action / hook / filter: a small editor (header + sections + footer) */
+.ext-editor {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.ext-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #1d1e26;
+  border-bottom: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+}
+.ext-editor-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(76, 201, 240, 0.18);
+}
+.ext-editor-title { font-weight: 600; font-size: 13px; }
+.ext-editor-badge {
+  margin-left: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.ext-editor-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+.ext-editor-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 12px;
+  background: #1d1e26;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 10px 10px;
+}
+.ext-editor-foot .ext-form-actions { margin: 0; }
+.ext-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.ext-section-head { display: flex; align-items: baseline; gap: 8px; }
+.ext-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+.ext-section-hint { font-size: 11px; color: var(--muted); opacity: 0.8; }
+.ext-section-body { display: flex; flex-direction: column; gap: 6px; }
+
+/* command fields read as code */
+.ext-cmd-input,
+.ext-arg-name,
+.ext-arg-default,
+.ext-arg-options,
+.ext-ref-select {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.ext-cmd-input { background: #1a1b21; }
 .ext-field {
   display: flex;
   align-items: center;

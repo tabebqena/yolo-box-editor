@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 6.9.0
+- Creating an action, hook or filter now looks like an editor: a titled header, grouped sections (Details, Steps, After success, Arguments) and a sticky Create / Clear footer. Command and argument fields are shown in monospace.
+
 ## 6.8.0
 - Settings > Actions and Hooks now have Create / Existing sub-tabs, matching the Filters tab.
 - The Settings window now sizes to the content of the active tab (capped at 620px) instead of filling the screen.

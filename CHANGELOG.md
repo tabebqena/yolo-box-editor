@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.9.0] - 2026-10-03
+
+### Changed
+
+- **The Create action / hook / filter forms now look like a small editor**: a
+  titled header with a file badge (e.g. `action.yaml`), grouped **Details** /
+  **Arguments** / **Steps** / **After success** sections, monospace command and
+  argument fields, and a **sticky footer** with the Create / Clear buttons so
+  they stay reachable in a long form.
+
 ## [6.8.0] - 2026-10-03
 
 ### Changed
