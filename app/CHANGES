@@ -2,6 +2,10 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 6.5.0
+- The last image you were on is now remembered across browsers: open the app in another browser and it resumes where you left off (per dataset and split).
+- Your app state now lives in one file, config.json, in the user folder. The old .recent_data_yamls.json, .view_state.json and .settings.json are merged into it automatically on first start and then removed.
+
 ## 6.4.0
 - Disable a hook or action for the current dataset only, without deleting its file: use the "Enabled for this dataset" checkbox in Settings > Actions / Hooks. A disabled action's button disappears and a disabled hook does not fire; re-check it to turn it back on. The setting is remembered per dataset and never changes the extension file.
 

@@ -4,6 +4,27 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.5.0] - 2026-10-03
+
+### Added
+
+- **The last image is remembered across browsers.** The browser still keeps its
+  fast local copy, but every change is now mirrored to the backend under
+  `settings.ybe_last_image`, so opening the app in a different browser resumes at
+  the same image (per dataset and split). The update/seen-update and
+  tip-of-the-day memories are mirrored the same way.
+- **One user config file.** `.recent_data_yamls.json`, `.view_state.json` and
+  `.settings.json` are merged into a single `config.json` in the user folder
+  (`{"recent": [...], "views": {...}, "settings": {...}}`, written atomically).
+  It sits in `YBX_HOME`, outside `app/`, so app updates never touch it.
+
+### Changed
+
+- Existing installs migrate automatically on first start: the three legacy files
+  are read, written into `config.json` and then removed. An unreadable
+  `config.json` is left in place rather than overwritten, so it can be fixed by
+  hand.
+
 ## [6.4.0] - 2026-10-03
 
 ### Added

@@ -8,8 +8,7 @@ The app is split into a relocatable **code folder** and your **user folder**:
 <root>/
 ├── .venv/                    virtual environment (created by the installer)
 ├── actions/ hooks/ filters/ scripts/ shortcuts.txt   your files
-├── .recent_data_yamls.json .view_state.json          your app state
-├── .settings.json                                    UI settings (cross-browser)
+├── config.json               your app state (recent datasets, views, settings)
 └── app/                      the shipped app (replaced on upgrade)
     ├── app.py static/ templates/ requirements.txt VERSION
     └── actions/ hooks/ filters/ scripts/ shortcuts.txt   built-ins
@@ -22,18 +21,23 @@ behave the same with no flags. Your files are read after the shipped ones and
 win on a name clash. The app creates the folders when they are missing and logs
 `[ybe] user dir: …` (override with `--home`).
 
-### Settings are cross-browser
+### State is cross-browser
 
-Your UI settings (General and Layout preferences, panel sizes and
-floating-window positions) are saved both in the browser and in `.settings.json`
-in the user folder. A browser you have not used before starts from the saved
-settings; a value you change in a given browser is remembered there and wins
-over the saved one. This makes a fresh browser inherit your setup without
-overwriting choices you already made elsewhere.
+A single `config.json` in the user folder holds all per-user state:
 
-The active split, filter chain and tags folder are remembered **per dataset** in
-`.view_state.json`, so restarting the server reopens the dataset in the same
-view.
+- `recent` — the recently opened `data.yaml` paths;
+- `views` — per-dataset split, filter chain, tags folder and disabled
+  extensions;
+- `settings` — General/Layout preferences, panel sizes, floating-window
+  positions and the last image reached.
+
+Your UI settings are also written to the browser; a browser you have not used
+before starts from the saved `config.json` values, while a value you change in a
+given browser is remembered there and wins over the saved one. The last image is
+remembered **per dataset and per split**, so any browser resumes where you left
+off, and restarting the server reopens the dataset in the same view. The old
+`.recent_data_yamls.json`, `.view_state.json` and `.settings.json` files are
+merged into `config.json` automatically on first start and then removed.
 
 ## data.yaml format
 

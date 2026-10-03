@@ -42,6 +42,7 @@ def test_configure_home_repoints_user_dirs(clean_state, tmp_path):
     assert ybe.YBX_HOME == str(target)
     assert ybe.USER_ACTIONS_DIR == str(target / "actions")
     assert ybe.USER_SCRIPT_DIR == str(target / "scripts")
+    assert ybe.CONFIG_FILE == str(target / "config.json")
     assert ybe.RECENT_FILE == str(target / ".recent_data_yamls.json")
     assert ybe.SETTINGS_FILE == str(target / ".settings.json")
 
@@ -83,6 +84,7 @@ def clean_state(tmp_path, monkeypatch):
     test's own files are loaded.
     """
     monkeypatch.setattr(ybe, "YBX_HOME", str(tmp_path))
+    monkeypatch.setattr(ybe, "CONFIG_FILE", str(tmp_path / "config.json"))
     monkeypatch.setattr(ybe, "RECENT_FILE", str(tmp_path / "recent.json"))
     monkeypatch.setattr(ybe, "VIEW_FILE", str(tmp_path / "view.json"))
     monkeypatch.setattr(ybe, "SETTINGS_FILE", str(tmp_path / "settings.json"))
@@ -170,6 +172,22 @@ def load_into_state(root):
     ybe.STATE["dataset_path"] = str(root)
     ybe.STATE["splits"] = ybe.scan_splits()
     ybe.STATE["images"] = ybe.scan_images()
+
+
+def read_config():
+    """The unified config dict (missing/invalid file -> empty shape)."""
+    try:
+        data = json.loads(Path(ybe.CONFIG_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"recent": [], "views": {}, "settings": {}}
+    return data
+
+
+def write_config(**sections):
+    """Write sections (recent/views/settings) into the unified config file."""
+    cfg = {"recent": [], "views": {}, "settings": {}}
+    cfg.update(sections)
+    Path(ybe.CONFIG_FILE).write_text(json.dumps(cfg), encoding="utf-8")
 
 
 # Copies the input pipe to the output pipe unchanged (the identity filter).
@@ -702,8 +720,7 @@ def test_api_shortcuts_rejects_invalid_value(clean_state):
     assert resp.status_code == 400
 
 
-def test_recent_cap_and_order(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "RECENT_FILE", str(tmp_path / "r.json"))
+def test_recent_cap_and_order(clean_state):
     assert ybe._load_recent() == []
     for i in range(12):
         ybe._push_recent(f"/d/{i}.yaml")
@@ -866,8 +883,9 @@ def test_api_config_includes_tips(clean_state):
 
 
 def test_api_config_includes_settings(clean_state):
-    Path(ybe.SETTINGS_FILE).write_text(
-        json.dumps({"autoSave": "1", "ybe_panel_side": "left"}), encoding="utf-8"
+    Path(ybe.CONFIG_FILE).write_text(
+        json.dumps({"settings": {"autoSave": "1", "ybe_panel_side": "left"}}),
+        encoding="utf-8",
     )
     cfg = ybe.app.test_client().get("/api/config").get_json()
     assert cfg["settings"] == {"autoSave": "1", "ybe_panel_side": "left"}
@@ -901,6 +919,63 @@ def test_api_settings_rejects_non_object(clean_state):
     resp = ybe.app.test_client().post("/api/settings", json={"settings": ["nope"]})
     assert resp.status_code == 400
     assert resp.get_json()["ok"] is False
+
+
+# --------------------------------------------------------------------------- #
+# unified config file (recent + views + settings in one place)
+# --------------------------------------------------------------------------- #
+def test_config_file_holds_recent_views_and_settings(clean_state, tmp_path):
+    root = make_dataset(tmp_path)
+    ybe._push_recent(str(root / "data.yaml"))
+    load_into_state(root)
+    ybe._save_view(str(root / "data.yaml"), "train", [{"name": "OnlyA"}])
+    ybe._update_settings({"autoSave": "1"})
+
+    cfg = read_config()
+    assert cfg["recent"] == [str(root / "data.yaml")]
+    assert cfg["views"][str(root / "data.yaml")]["split"] == "train"
+    assert cfg["settings"] == {"autoSave": "1"}
+    # one file, and the legacy per-purpose files are not created
+    assert Path(ybe.CONFIG_FILE).is_file()
+    assert not Path(ybe.RECENT_FILE).exists()
+    assert not Path(ybe.VIEW_FILE).exists()
+    assert not Path(ybe.SETTINGS_FILE).exists()
+
+
+def test_legacy_files_migrate_into_config(clean_state):
+    Path(ybe.RECENT_FILE).write_text(json.dumps(["/d/a.yaml"]), encoding="utf-8")
+    Path(ybe.VIEW_FILE).write_text(
+        json.dumps({"/d/a.yaml": {"split": "train"}}), encoding="utf-8"
+    )
+    Path(ybe.SETTINGS_FILE).write_text(json.dumps({"autoSave": "1"}), encoding="utf-8")
+
+    assert ybe._load_recent() == ["/d/a.yaml"]
+    assert ybe._load_views()["/d/a.yaml"]["split"] == "train"
+    assert ybe._load_settings() == {"autoSave": "1"}
+    assert read_config()["views"]["/d/a.yaml"]["split"] == "train"
+    # the old files are removed once their contents are in config.json
+    assert not Path(ybe.RECENT_FILE).exists()
+    assert not Path(ybe.VIEW_FILE).exists()
+    assert not Path(ybe.SETTINGS_FILE).exists()
+
+
+def test_corrupt_config_is_not_overwritten(clean_state):
+    Path(ybe.CONFIG_FILE).write_text("{ not json", encoding="utf-8")
+    assert ybe._load_recent() == []
+    assert Path(ybe.CONFIG_FILE).read_text(encoding="utf-8") == "{ not json"
+
+
+def test_settings_mirror_last_image_cross_browser(clean_state):
+    last = json.dumps({
+        "dataYaml": "/d/data.yaml",
+        "bySplit": {"train": "0000016.jpg"},
+        "last": {"split": "train", "name": "0000016.jpg"},
+    })
+    client = ybe.app.test_client()
+    client.post("/api/settings", json={"settings": {"ybe_last_image": last}})
+    # a fresh browser gets it back from /api/config
+    cfg = client.get("/api/config").get_json()
+    assert cfg["settings"]["ybe_last_image"] == last
 
 
 def test_api_config_reports_debug_flag(clean_state):
@@ -2344,7 +2419,7 @@ def test_restore_view_accepts_legacy_single_filter(clean_state, tmp_path):
     ybe._save_view(str(root / "data.yaml"), "train", [])
     views = ybe._load_views()
     views[str(root / "data.yaml")] = {"split": "train", "filter": "OnlyA"}
-    Path(ybe.VIEW_FILE).write_text(json.dumps(views), encoding="utf-8")
+    write_config(views=views)
     ybe._restore_view(str(root / "data.yaml"))
     assert ybe.STATE["active_filters"] == [{"name": "OnlyA", "arguments": {}}]
 
@@ -2357,7 +2432,7 @@ def test_restore_view_accepts_legacy_name_list(clean_state, tmp_path):
     ybe._save_view(str(root / "data.yaml"), "train", [])
     views = ybe._load_views()
     views[str(root / "data.yaml")] = {"split": "train", "filters": ["OnlyA"]}
-    Path(ybe.VIEW_FILE).write_text(json.dumps(views), encoding="utf-8")
+    write_config(views=views)
     ybe._restore_view(str(root / "data.yaml"))
     assert ybe.STATE["active_filters"] == [{"name": "OnlyA", "arguments": {}}]
 
@@ -2812,7 +2887,7 @@ def test_api_extension_disabled_toggles_action_per_dataset(clean_state, tmp_path
     assert cfg["ok"] is True
     assert "Remove" not in cfg["actions"]
     assert {d["name"]: d["enabled"] for d in cfg["action_defs"]}["Remove"] is False
-    views = json.loads(Path(ybe.VIEW_FILE).read_text(encoding="utf-8"))
+    views = read_config()["views"]
     assert views[str(root / "data.yaml")]["disabled"]["actions"] == ["Remove"]
 
     cfg = client.post("/api/extensions/disabled", json={
@@ -2844,7 +2919,7 @@ def test_api_extension_delete_clears_disabled_flag(clean_state, tmp_path):
     resp = client.post("/api/extensions/delete",
                        json={"kind": "action", "name": "Remove"})
     assert resp.status_code == 200
-    views = json.loads(Path(ybe.VIEW_FILE).read_text(encoding="utf-8"))
+    views = read_config()["views"]
     assert views[str(root / "data.yaml")]["disabled"]["actions"] == []
 
 
@@ -2916,7 +2991,7 @@ def test_save_view_preserves_disabled_extensions(clean_state, tmp_path):
         "kind": "action", "name": "Remove", "disabled": True,
     })
     ybe._save_view(str(root / "data.yaml"), "train", [])
-    views = json.loads(Path(ybe.VIEW_FILE).read_text(encoding="utf-8"))
+    views = read_config()["views"]
     assert views[str(root / "data.yaml")]["disabled"]["actions"] == ["Remove"]
 
 

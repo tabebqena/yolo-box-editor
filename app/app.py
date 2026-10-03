@@ -75,10 +75,18 @@ USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
 USER_FILTERS_DIR = os.path.join(YBX_HOME, "filters")
 USER_SCRIPT_DIR = os.path.join(YBX_HOME, "scripts")
 USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
+# One JSON file holds all per-user config: recent datasets, per-dataset views
+# (split/filter/tags/disabled + last image) and cross-browser UI settings. It
+# sits in YBX_HOME, outside `app/`, so app updates never touch it.
+CONFIG_FILE = os.path.join(YBX_HOME, "config.json")
+# The update-check cache is a throwaway background result, so it stays its own
+# file; `_load_update_cache` / `check_for_update` own it.
+UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")
+# Legacy per-purpose files, read once to migrate into CONFIG_FILE and then
+# removed. Kept as module constants so tests can redirect them.
 RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
 VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")  # active split/filter per dataset
 SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")  # cross-browser UI prefs
-UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")  # cached update result
 
 # Update check: compare the shipped VERSION with the newest GitHub one. A check
 # is skipped while the cache is fresh (< UPDATE_CHECK_INTERVAL) and the running
@@ -101,13 +109,14 @@ def configure_home(path):
     """Point the user folders at `path` (the `--home` override)."""
     global YBX_HOME, USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR
     global USER_SCRIPT_DIR, USER_SHORTCUTS_FILE, RECENT_FILE, VIEW_FILE
-    global SETTINGS_FILE, UPDATE_CHECK_FILE
+    global SETTINGS_FILE, UPDATE_CHECK_FILE, CONFIG_FILE
     YBX_HOME = os.path.abspath(os.path.expanduser(path))
     USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
     USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
     USER_FILTERS_DIR = os.path.join(YBX_HOME, "filters")
     USER_SCRIPT_DIR = os.path.join(YBX_HOME, "scripts")
     USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
+    CONFIG_FILE = os.path.join(YBX_HOME, "config.json")
     RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
     VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")
     SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")
@@ -460,61 +469,154 @@ def is_image(name):
     return os.path.splitext(name)[1].lower() in IMAGE_EXTS
 
 
+# --------------------------------------------------------------------------- #
+# user config (one JSON file: recent datasets + per-dataset views + UI settings)
+# --------------------------------------------------------------------------- #
+# RLock: each accessor reads-modifies-writes the whole file, and a routed call
+# (e.g. `_set_extension_disabled` -> `_disabled_extensions`) may re-enter.
+_CONFIG_LOCK = threading.RLock()
+
+
+def _read_json_file(path):
+    """Parse a JSON file; None when it is missing or invalid."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _default_config():
+    return {"recent": [], "views": {}, "settings": {}}
+
+
+def _normalize_config(data):
+    """Coerce a loaded config into the known shape (never raises)."""
+    cfg = _default_config()
+    if not isinstance(data, dict):
+        return cfg
+    recent = data.get("recent")
+    if isinstance(recent, list):
+        cfg["recent"] = [p for p in recent if isinstance(p, str)][:MAX_RECENT]
+    views = data.get("views")
+    if isinstance(views, dict):
+        cfg["views"] = {k: v for k, v in views.items() if isinstance(v, dict)}
+    settings = data.get("settings")
+    if isinstance(settings, dict):
+        cfg["settings"] = dict(settings)
+    return cfg
+
+
+def _migrate_legacy_config():
+    """Build a config from the old per-purpose files (read once)."""
+    cfg = _default_config()
+    recent = _read_json_file(RECENT_FILE)
+    if isinstance(recent, list):
+        cfg["recent"] = [p for p in recent if isinstance(p, str)][:MAX_RECENT]
+    views = _read_json_file(VIEW_FILE)
+    if isinstance(views, dict):
+        cfg["views"] = {k: v for k, v in views.items() if isinstance(v, dict)}
+    settings = _read_json_file(SETTINGS_FILE)
+    if isinstance(settings, dict):
+        cfg["settings"] = dict(settings)
+    return cfg
+
+
+def _remove_legacy_files():
+    """Delete the old files once their contents live in CONFIG_FILE."""
+    for path in (RECENT_FILE, VIEW_FILE, SETTINGS_FILE):
+        if path and path != CONFIG_FILE:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
+def _write_config(cfg):
+    """Write the config atomically (temp file + rename); never raises."""
+    try:
+        os.makedirs(os.path.dirname(CONFIG_FILE) or ".", exist_ok=True)
+        tmp = CONFIG_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+            f.write("\n")
+        os.replace(tmp, CONFIG_FILE)
+    except OSError:
+        pass
+
+
+def _load_config_unlocked():
+    """Read config.json, migrating the legacy files on first use.
+
+    A corrupt config.json yields an empty config but is left on disk so it can
+    still be fixed by hand.
+    """
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        cfg = _migrate_legacy_config()
+        _write_config(cfg)
+        _remove_legacy_files()
+        return cfg
+    except (OSError, ValueError):
+        return _default_config()
+    return _normalize_config(data)
+
+
+def _load_config():
+    with _CONFIG_LOCK:
+        return _load_config_unlocked()
+
+
+def _update_config(mutate):
+    """Read-modify-write the config under the lock; returns the new config."""
+    with _CONFIG_LOCK:
+        cfg = _load_config_unlocked()
+        mutate(cfg)
+        _write_config(cfg)
+        return cfg
+
+
 def _load_recent():
     """Read the last opened data.yaml paths (newest first)."""
-    try:
-        with open(RECENT_FILE, encoding="utf-8") as f:
-            recents = json.load(f)
-        return [p for p in recents if isinstance(p, str)][:MAX_RECENT]
-    except (OSError, ValueError):
-        return []
+    return _load_config()["recent"]
 
 
 def _push_recent(path):
     """Record an opened data.yaml, newest first, capped at MAX_RECENT."""
-    recents = [p for p in _load_recent() if p != path]
-    recents.insert(0, path)
-    recents = recents[:MAX_RECENT]
-    try:
-        with open(RECENT_FILE, "w", encoding="utf-8") as f:
-            json.dump(recents, f, indent=2)
-            f.write("\n")
-    except OSError:
-        pass
-    return recents
+    def mutate(cfg):
+        recents = [p for p in cfg["recent"] if p != path]
+        recents.insert(0, path)
+        cfg["recent"] = recents[:MAX_RECENT]
+
+    return _update_config(mutate)["recent"]
 
 
 def _load_views():
-    """Read the saved per-dataset view ({data_yaml: {split, filter}})."""
-    try:
-        with open(VIEW_FILE, encoding="utf-8") as f:
-            views = json.load(f)
-        return views if isinstance(views, dict) else {}
-    except (OSError, ValueError):
-        return {}
+    """The saved per-dataset views ({data_yaml: {...}})."""
+    return _load_config()["views"]
 
 
 def _save_view(data_yaml, split, active_filters):
     """Remember a dataset's split/filter chain and tags folder so a restart reopens it.
 
-    Other per-dataset view keys (the disabled action/hook lists) are preserved.
+    Other per-dataset view keys (the disabled action/hook lists, the last image)
+    are preserved.
     """
     if not data_yaml:
         return
-    views = _load_views()
-    entry = views.get(data_yaml)
-    if not isinstance(entry, dict):
-        entry = {}
-    entry["split"] = split
-    entry["filters"] = list(active_filters or [])
-    entry["tags_dir"] = STATE.get("tags_dir")
-    views[data_yaml] = entry
-    try:
-        with open(VIEW_FILE, "w", encoding="utf-8") as f:
-            json.dump(views, f, indent=2)
-            f.write("\n")
-    except OSError:
-        pass
+
+    def mutate(cfg):
+        entry = cfg["views"].get(data_yaml)
+        if not isinstance(entry, dict):
+            entry = {}
+        entry["split"] = split
+        entry["filters"] = list(active_filters or [])
+        entry["tags_dir"] = STATE.get("tags_dir")
+        cfg["views"][data_yaml] = entry
+
+    _update_config(mutate)
 
 
 # A dataset's disabled extensions live in its view entry under the "disabled"
@@ -551,27 +653,24 @@ def _set_extension_disabled(kind, name, disabled):
     if not data_yaml:
         return None
     key = DISABLED_KIND_KEYS[kind]
-    views = _load_views()
-    entry = views.get(data_yaml)
-    if not isinstance(entry, dict):
-        entry = {}
-    stored = entry.get("disabled")
-    stored = stored if isinstance(stored, dict) else {}
-    names = [n for n in (stored.get(key) or []) if isinstance(n, str)]
-    if disabled:
-        if name not in names:
-            names.append(name)
-    else:
-        names = [n for n in names if n != name]
-    stored[key] = sorted(names)
-    entry["disabled"] = stored
-    views[data_yaml] = entry
-    try:
-        with open(VIEW_FILE, "w", encoding="utf-8") as f:
-            json.dump(views, f, indent=2)
-            f.write("\n")
-    except OSError:
-        pass
+
+    def mutate(cfg):
+        entry = cfg["views"].get(data_yaml)
+        if not isinstance(entry, dict):
+            entry = {}
+        stored = entry.get("disabled")
+        stored = stored if isinstance(stored, dict) else {}
+        names = [n for n in (stored.get(key) or []) if isinstance(n, str)]
+        if disabled:
+            if name not in names:
+                names.append(name)
+        else:
+            names = [n for n in names if n != name]
+        stored[key] = sorted(names)
+        entry["disabled"] = stored
+        cfg["views"][data_yaml] = entry
+
+    _update_config(mutate)
     return _disabled_extensions()
 
 
@@ -586,35 +685,27 @@ def _restore_tags_dir(data_yaml):
 
 def _load_settings():
     """Read the cross-browser UI settings (a flat `{key: value}` map)."""
-    try:
-        with open(SETTINGS_FILE, encoding="utf-8") as f:
-            settings = json.load(f)
-        return settings if isinstance(settings, dict) else {}
-    except (OSError, ValueError):
-        return {}
+    return _load_config()["settings"]
 
 
 def _update_settings(changes):
-    """Merge `{key: value}` into the settings file; a null value deletes the key.
+    """Merge `{key: value}` into the settings section; a null value deletes the key.
 
     The browser sends only the keys the user just changed, so a partial merge
     keeps every other browser's settings intact.
     """
     if not isinstance(changes, dict):
         return _load_settings()
-    settings = _load_settings()
-    for key, value in changes.items():
-        if value is None:
-            settings.pop(key, None)
-        else:
-            settings[key] = value
-    try:
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
-            f.write("\n")
-    except OSError:
-        pass
-    return settings
+
+    def mutate(cfg):
+        settings = cfg["settings"]
+        for key, value in changes.items():
+            if value is None:
+                settings.pop(key, None)
+            else:
+                settings[key] = value
+
+    return _update_config(mutate)["settings"]
 
 
 def _restore_view(data_yaml):

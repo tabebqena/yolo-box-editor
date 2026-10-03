@@ -313,10 +313,9 @@ function notifyUpdateDaily() {
   const version = updateInfo.latest_version || '';
   const today = new Date().toISOString().slice(0, 10);
   const key = `${version}@${today}`;
-  let seen = null;
-  try { seen = localStorage.getItem(UPDATE_NOTIFIED_KEY); } catch (e) { /* ignore */ }
+  const seen = settingsGet(UPDATE_NOTIFIED_KEY);
   if (seen === key) return;
-  try { localStorage.setItem(UPDATE_NOTIFIED_KEY, key); } catch (e) { /* ignore */ }
+  settingsSet(UPDATE_NOTIFIED_KEY, key);
   dbg('update notice', updateInfo);
   toast(
     `A new version of YOLO Box Editor is available: ${updateInfo.latest_version} `
@@ -354,10 +353,9 @@ function notifyChangelog(cfg) {
   const version = (cfg && cfg.version) || '';
   const changes = (cfg && Array.isArray(cfg.changelog)) ? cfg.changelog : [];
   if (!version || !changes.length) return;
-  let seen = null;
-  try { seen = localStorage.getItem(CHANGELOG_SEEN_KEY); } catch (e) { /* ignore */ }
+  const seen = settingsGet(CHANGELOG_SEEN_KEY);
   if (seen === version) return;
-  try { localStorage.setItem(CHANGELOG_SEEN_KEY, version); } catch (e) { /* ignore */ }
+  settingsSet(CHANGELOG_SEEN_KEY, version);
   dbg('changelog', version, changes);
   queueAutoModal('changelog', () => showChangelog(version, changes));
 }
@@ -835,8 +833,9 @@ let loadDataAutoOpened = false;
 let tipChecked = false; // the daily tip is considered at most once per page load
 
 // Show one random, not-yet-seen tip at most once per day. The tip list ships in
-// the backend (config.tips); this browser remembers the date and which indices
-// it has seen, and resets the seen list once every tip has appeared.
+// the backend (config.tips); the browser + backend remember the date and which
+// indices have been seen (so it carries across browsers), and reset the seen
+// list once every tip has appeared.
 function maybeShowTip(tips) {
   if (tipChecked) return;
   tipChecked = true;
@@ -844,12 +843,11 @@ function maybeShowTip(tips) {
   if (!Array.isArray(tips) || !tips.length) return;
 
   const today = new Date().toISOString().slice(0, 10);
-  let last = null;
-  try { last = localStorage.getItem(TIP_LAST_KEY); } catch (e) { /* ignore */ }
+  const last = settingsGet(TIP_LAST_KEY);
   if (last === today) return;
 
   let seen = [];
-  try { seen = JSON.parse(localStorage.getItem(TIPS_SEEN_KEY) || '[]'); } catch (e) { seen = []; }
+  try { seen = JSON.parse(settingsGet(TIPS_SEEN_KEY) || '[]'); } catch (e) { seen = []; }
   if (!Array.isArray(seen)) seen = [];
 
   let pool = tips.map((_, i) => i).filter((i) => !seen.includes(i));
@@ -857,10 +855,8 @@ function maybeShowTip(tips) {
   const idx = pool[Math.floor(Math.random() * pool.length)];
   seen.push(idx);
 
-  try {
-    localStorage.setItem(TIP_LAST_KEY, today);
-    localStorage.setItem(TIPS_SEEN_KEY, JSON.stringify(seen));
-  } catch (e) { /* ignore */ }
+  settingsSet(TIP_LAST_KEY, today);
+  settingsSet(TIPS_SEEN_KEY, JSON.stringify(seen));
 
   queueAutoModal('tip', () => {
     el('tipText').textContent = tips[idx];
@@ -2219,7 +2215,8 @@ function loadImage(i) {
 
 // Remember the current image so the app can resume here on reload. One entry
 // per split is kept, plus a global `last`, so switching back to a split returns
-// to the image you were on there.
+// to the image you were on there. Written through `settingsSet`, so the backend
+// keeps a copy and a fresh browser resumes at the same image too.
 function rememberLastImage() {
   if (currentIndex < 0 || !images[currentIndex]) return;
   const entry = images[currentIndex];
@@ -2230,14 +2227,12 @@ function rememberLastImage() {
   if (!mem.bySplit || typeof mem.bySplit !== 'object') mem.bySplit = {};
   mem.bySplit[entry.split] = entry.name;
   mem.last = { split: entry.split, name: entry.name };
-  try {
-    localStorage.setItem(LAST_IMAGE_KEY, JSON.stringify(mem));
-  } catch (e) { /* storage unavailable; just don't resume */ }
+  settingsSet(LAST_IMAGE_KEY, JSON.stringify(mem));
 }
 
 function readLastImage() {
   try {
-    const raw = localStorage.getItem(LAST_IMAGE_KEY);
+    const raw = settingsGet(LAST_IMAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch (e) { return null; }
 }
