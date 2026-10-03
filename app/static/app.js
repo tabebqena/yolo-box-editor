@@ -878,17 +878,17 @@ function selectSettingsTab(name) {
   });
 }
 
-// The Filters tab has its own segmented sub-tabs (Active chain / Create /
-// Library). Kept separate from `selectSettingsTab` so the main tabs are
-// untouched.
-function selectFiltersTab(name) {
-  const panel = document.querySelector('.settings-panel[data-panel="filters"]');
-  if (!panel) return;
-  panel.querySelectorAll('.filters-tab').forEach((tab) => {
-    tab.classList.toggle('active', tab.dataset.fsub === name);
+// The Filters / Actions / Hooks tabs each have their own segmented sub-tabs
+// (e.g. Active chain / Create / Library). Kept separate from
+// `selectSettingsTab` so the main tabs are untouched; `scope` is the owning
+// `.settings-panel` so the same names in other panels never clash.
+function selectSubTab(name, scope) {
+  const root = scope || document;
+  root.querySelectorAll('.sub-tab').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.sub === name);
   });
-  panel.querySelectorAll('.filters-subpanel').forEach((sub) => {
-    sub.classList.toggle('active', sub.dataset.fsub === name);
+  root.querySelectorAll('.sub-panel').forEach((sub) => {
+    sub.classList.toggle('active', sub.dataset.sub === name);
   });
 }
 
@@ -1449,7 +1449,11 @@ function renderActionBuilder() {
   b.palette = makeCommandPalette(b);
   root.appendChild(b.palette);
   root.appendChild(extFormButtons('Create action', () => saveActionForm(b), renderActionBuilder));
-  root.appendChild(renderDefList('action', actionDefs));
+  const defsRoot = el('actionDefs');
+  if (defsRoot) {
+    defsRoot.innerHTML = '';
+    defsRoot.appendChild(renderDefList('action', actionDefs));
+  }
 }
 
 function renderHookBuilder() {
@@ -1480,7 +1484,11 @@ function renderHookBuilder() {
   b.palette = makeCommandPalette(b);
   root.appendChild(b.palette);
   root.appendChild(extFormButtons('Create hook', () => saveHookForm(b, ev, active.input), renderHookBuilder));
-  root.appendChild(renderDefList('hook', hookDefs));
+  const defsRoot = el('hookDefs');
+  if (defsRoot) {
+    defsRoot.innerHTML = '';
+    defsRoot.appendChild(renderDefList('hook', hookDefs));
+  }
 }
 
 function renderFilterBuilder() {
@@ -3856,8 +3864,10 @@ el('settingsModal').addEventListener('click', (e) => {
 document.querySelectorAll('.settings-tab').forEach((tab) => {
   tab.addEventListener('click', () => selectSettingsTab(tab.dataset.tab));
 });
-document.querySelectorAll('.filters-tab').forEach((tab) => {
-  tab.addEventListener('click', () => selectFiltersTab(tab.dataset.fsub));
+document.querySelectorAll('.sub-tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    selectSubTab(tab.dataset.sub, tab.closest('.settings-panel') || document);
+  });
 });
 el('shortcutEditBtn').addEventListener('click', () => setShortcutEditMode(true));
 el('shortcutCancelBtn').addEventListener('click', () => setShortcutEditMode(false));

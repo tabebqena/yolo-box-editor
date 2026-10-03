@@ -809,8 +809,8 @@ body.panel-left #dockSide {
 .filter-add-btn { align-self: flex-start; }
 .filter-panel-actions { justify-content: flex-end; }
 
-/* Settings > Filters sub-tabs (segmented control) */
-.filters-tabs {
+/* Settings sub-tabs (segmented control: Filters / Actions / Hooks) */
+.sub-tabs {
   display: flex;
   gap: 2px;
   padding: 3px;
@@ -819,7 +819,7 @@ body.panel-left #dockSide {
   background: #1d1e26;
   align-self: flex-start;
 }
-.filters-tab {
+.sub-tab {
   background: transparent;
   border: none;
   border-radius: 5px;
@@ -827,10 +827,10 @@ body.panel-left #dockSide {
   padding: 5px 12px;
   font-size: 12px;
 }
-.filters-tab:hover { color: var(--text); background: #2c2f3a; }
-.filters-tab.active { color: #0d1117; background: var(--accent); }
-.filters-subpanel { display: none; flex-direction: column; gap: 10px; }
-.filters-subpanel.active { display: flex; }
+.sub-tab:hover { color: var(--text); background: #2c2f3a; }
+.sub-tab.active { color: #0d1117; background: var(--accent); }
+.sub-panel { display: none; flex-direction: column; gap: 10px; }
+.sub-panel.active { display: flex; }
 
 /* inline button spinner (settings > Filters: Apply) */
 button.is-loading { position: relative; color: transparent; pointer-events: none; }
@@ -875,6 +875,14 @@ button.is-loading::after {
   display: flex;
   flex-direction: column;
 }
+/* Keep the settings dialog as short as the active tab needs: it hugs its
+   content (height: auto) and only a tall tab is capped + scrolled, instead of
+   always filling the viewport. */
+.settings-modal {
+  height: auto;
+  max-height: min(80vh, 620px);
+}
+.settings-modal .settings-modal-body { flex: 0 1 auto; min-height: 0; }
 .settings-panel { display: none; flex-direction: column; gap: 10px; }
 .settings-panel.active { display: flex; }
 .settings-group-title {

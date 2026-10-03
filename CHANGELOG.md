@@ -4,6 +4,17 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [6.8.0] - 2026-10-03
+
+### Changed
+
+- **Settings → Actions** and **Settings → Hooks** now use **Create** /
+  **Existing** sub-tabs, matching the Filters tab, instead of one long panel.
+  The sub-tab styling/behaviour is shared (`sub-tabs` / `sub-tab` / `sub-panel`).
+- **The Settings dialog sizes to the active tab** — it hugs its content and only
+  a tall tab is capped (`min(80vh, 620px)`) and scrolled, instead of filling the
+  screen.
+
 ## [6.7.0] - 2026-10-03
 
 ### Added

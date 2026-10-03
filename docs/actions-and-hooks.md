@@ -7,14 +7,16 @@ an app event instead of a button.
 ## Create actions and hooks in the web UI
 
 **Settings → Actions** and **Settings → Hooks** build the YAML for you, so you
-never have to get the indentation or the `:` / `-` right by hand:
+never have to get the indentation or the `:` / `-` right by hand. Each has two
+sub-tabs, **Create** and **Existing**:
 
-- Type a name (actions) or pick an event (hooks), then fill **Steps** and
-  **After success**. An entry can be a shell command, an `app_*` / `backend_*`
-  built-in, or another `action_<Name>` — choose the type from the dropdown.
+- On **Create**, type a name (actions) or pick an event (hooks), then fill
+  **Steps** and **After success**. An entry can be a shell command, an `app_*` /
+  `backend_*` built-in, or another `action_<Name>` — choose the type from the
+  dropdown.
 - **Insert placeholder** buttons drop a token such as `{IMAGE_PATH}` into the
   command at the cursor, so you do not have to remember the spelling.
-- Your files are listed under **Existing** and can be deleted there; shipped
+- On **Existing**, your files are listed and can be deleted there; shipped
   files are never deleted.
 - Each existing action/hook also has an **Enabled for this dataset** checkbox.
   Uncheck it to disable the extension for the loaded `data.yaml` only — the file

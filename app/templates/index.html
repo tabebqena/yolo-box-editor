@@ -342,13 +342,13 @@
         </section>
 
         <section class="settings-panel" data-panel="filters">
-          <div class="filters-tabs" role="tablist">
-            <button class="filters-tab active" type="button" role="tab" data-fsub="chain">Active chain</button>
-            <button class="filters-tab" type="button" role="tab" data-fsub="create">Create</button>
-            <button class="filters-tab" type="button" role="tab" data-fsub="library">Library</button>
+          <div class="sub-tabs" role="tablist">
+            <button class="sub-tab active" type="button" role="tab" data-sub="chain">Active chain</button>
+            <button class="sub-tab" type="button" role="tab" data-sub="create">Create</button>
+            <button class="sub-tab" type="button" role="tab" data-sub="library">Library</button>
           </div>
 
-          <div class="filters-subpanel active" data-fsub="chain">
+          <div class="sub-panel active" data-sub="chain">
             <p class="hint">Filters run top to bottom; up to 8 can be chained.</p>
             <div id="filterPanelBody" class="filter-panel-body"></div>
             <button id="filterAddBtn" type="button" class="filter-add-btn"
@@ -359,21 +359,39 @@
             </div>
           </div>
 
-          <div class="filters-subpanel" data-fsub="create">
+          <div class="sub-panel" data-sub="create">
             <div id="filterBuilder" class="ext-builder"></div>
           </div>
 
-          <div class="filters-subpanel" data-fsub="library">
+          <div class="sub-panel" data-sub="library">
             <div id="filterDefs" class="ext-builder"></div>
           </div>
         </section>
 
         <section class="settings-panel" data-panel="actions">
-          <div id="actionBuilder" class="ext-builder"></div>
+          <div class="sub-tabs" role="tablist">
+            <button class="sub-tab active" type="button" role="tab" data-sub="create">Create</button>
+            <button class="sub-tab" type="button" role="tab" data-sub="existing">Existing</button>
+          </div>
+          <div class="sub-panel active" data-sub="create">
+            <div id="actionBuilder" class="ext-builder"></div>
+          </div>
+          <div class="sub-panel" data-sub="existing">
+            <div id="actionDefs" class="ext-builder"></div>
+          </div>
         </section>
 
         <section class="settings-panel" data-panel="hooks">
-          <div id="hookBuilder" class="ext-builder"></div>
+          <div class="sub-tabs" role="tablist">
+            <button class="sub-tab active" type="button" role="tab" data-sub="create">Create</button>
+            <button class="sub-tab" type="button" role="tab" data-sub="existing">Existing</button>
+          </div>
+          <div class="sub-panel active" data-sub="create">
+            <div id="hookBuilder" class="ext-builder"></div>
+          </div>
+          <div class="sub-panel" data-sub="existing">
+            <div id="hookDefs" class="ext-builder"></div>
+          </div>
         </section>
 
         <section class="settings-panel" data-panel="shortcuts">
