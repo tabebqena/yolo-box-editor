@@ -94,6 +94,7 @@ from ybe.extensions import (
     resolve_filter_options,
 )
 from ybe.logging_setup import _SkipPresenceFilter, setup_logging
+from ybe.secret_key import load_or_create_secret_key
 from ybe.pipes import (
     _subprocess_env,
     build_command,
@@ -116,9 +117,10 @@ app = Flask(
     template_folder=os.path.join(config.BASE_DIR, "templates"),
     static_folder=os.path.join(config.BASE_DIR, "static"),
 )
-# Signs the login session cookie. Random per process: a restart (or the debug
-# reloader) invalidates existing sessions, which is fine for a single instance.
-# Tests never rely on a stable key.
+# Signs the login session cookie. This import-time value is an ephemeral
+# fallback (used by the test client); `main()` replaces it with the persistent
+# key from `config.SECRET_KEY_FILE`, so a real run keeps sessions across
+# restarts and app updates.
 app.secret_key = secrets.token_hex(32)
 
 
@@ -2377,6 +2379,8 @@ def main():
     if args.home:
         configure_home(args.home)
     ensure_user_dirs()
+
+    app.secret_key = load_or_create_secret_key()
 
     log = setup_logging(args.log_file, args.debug)
     log.info(

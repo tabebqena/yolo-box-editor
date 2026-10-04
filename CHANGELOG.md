@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.1.0] - 2026-10-04
+
+### Changed
+
+- **Sign-ins now survive a restart.** The Flask session-signing key is generated
+  once and stored in `.secret_key` in the user folder (`0600`) instead of being
+  random per process, so `ybe restart` / `ybe update` no longer sign everyone
+  out. The file lives outside `app/`, so an app update keeps it; delete it to
+  force a new key (which invalidates existing sessions).
+
 ## [7.0.0] - 2026-10-04
 
 ### Added

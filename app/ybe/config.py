@@ -60,6 +60,10 @@ SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")  # cross-browser UI pre
 # password hashes. Managed with --create-user / --list-users and seeded with
 # admin/admin on first run (ensure_default_admin).
 USERS_FILE = os.path.join(YBX_HOME, "users.json")
+# The Flask session-signing key, generated once and reused across restarts (and
+# app updates) so a signed-in browser stays signed in. Owner-only (0600) because
+# anyone who reads it can forge a session. Lives in YBX_HOME, outside `app/`.
+SECRET_KEY_FILE = os.path.join(YBX_HOME, ".secret_key")
 
 # Update check: compare the shipped VERSION with the newest GitHub one. A check
 # is skipped while the cache is fresh (< UPDATE_CHECK_INTERVAL) and the running
@@ -83,6 +87,7 @@ def configure_home(path):
     global YBX_HOME, USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR
     global USER_SCRIPT_DIR, USER_SHORTCUTS_FILE, RECENT_FILE, VIEW_FILE
     global SETTINGS_FILE, UPDATE_CHECK_FILE, CONFIG_FILE, USERS_FILE
+    global SECRET_KEY_FILE
     YBX_HOME = os.path.abspath(os.path.expanduser(path))
     USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
     USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
@@ -95,6 +100,7 @@ def configure_home(path):
     SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")
     UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")
     USERS_FILE = os.path.join(YBX_HOME, "users.json")
+    SECRET_KEY_FILE = os.path.join(YBX_HOME, ".secret_key")
 
 
 def ensure_user_dirs():

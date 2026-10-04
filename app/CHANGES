@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.1.0
+- Signing in now survives a restart. The session key is saved in `.secret_key` in your user folder (owner-only), so `ybe restart` and `ybe update` no longer sign you out. The file is kept across updates; delete it if you want to force everyone to sign in again.
+
 ## 7.0.0
 - The app now asks you to sign in. It ships with a ready-to-use account so `ybe start` works with no extra setup: username `admin`, password `admin`. Change the password from the side panel (the key button: Change password) after the first sign in.
 - Accounts live in `users.json` in your user folder, stored hashed (never as plain text) and owner-only. Admins can also manage them from the command line: `--create-user NAME` prompts for the password with no echo, and `--list-users` shows the names. The side panel also has Sign out.

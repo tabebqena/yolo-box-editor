@@ -45,6 +45,24 @@ def test_configure_home_repoints_user_dirs(clean_state, tmp_path):
     assert ybe.config.CONFIG_FILE == str(target / "config.json")
     assert ybe.config.RECENT_FILE == str(target / ".recent_data_yamls.json")
     assert ybe.config.SETTINGS_FILE == str(target / ".settings.json")
+    assert ybe.config.SECRET_KEY_FILE == str(target / ".secret_key")
+
+
+def test_secret_key_is_created_persisted_and_reused(clean_state):
+    key_path = Path(ybe.config.SECRET_KEY_FILE)
+    assert not key_path.exists()
+    first = ybe.load_or_create_secret_key()
+    assert first and key_path.exists()
+    assert oct(key_path.stat().st_mode & 0o777) == "0o600"
+    assert ybe.load_or_create_secret_key() == first
+
+
+def test_secret_key_replaces_an_empty_file(clean_state):
+    key_path = Path(ybe.config.SECRET_KEY_FILE)
+    key_path.write_text("\n", encoding="utf-8")
+    key = ybe.load_or_create_secret_key()
+    assert key
+    assert ybe.load_or_create_secret_key() == key
 
 
 # --------------------------------------------------------------------------- #
@@ -104,6 +122,7 @@ def clean_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe.config, "PIPE_DIR", str(tmp_path / "pipes"))
     monkeypatch.setattr(ybe.config, "FILTER_PIPES_DIR", str(tmp_path / "filter-pipes"))
     monkeypatch.setattr(ybe.config, "USERS_FILE", str(tmp_path / "users.json"))
+    monkeypatch.setattr(ybe.config, "SECRET_KEY_FILE", str(tmp_path / ".secret_key"))
     monkeypatch.setattr(ybe.state, "USERS", {})
     ybe.state.STATE.clear()
     ybe.state.STATE.update(DEFAULT_STATE)
