@@ -27,7 +27,6 @@ import getpass
 import json
 import os
 import secrets
-import subprocess
 import sys
 import threading
 import time
@@ -67,6 +66,15 @@ from ybe.parsing import (
 )
 
 from ybe import config, state
+from ybe.commands import (
+    BACKEND_ACTIONS,
+    _advance_execution,
+    _rescan_images,
+    _resolve_entry,
+    _run_command,
+    begin_execution,
+    finish_execution,
+)
 from ybe.config import configure_home, ensure_user_dirs
 from ybe.dataset import (
     _current_images,
@@ -140,6 +148,19 @@ from ybe.tags import (
     tags_yaml_path,
     write_image_tags,
 )
+from ybe.userconfig import (
+    DISABLED_KIND_KEYS,
+    _disabled_extensions,
+    _load_recent,
+    _load_settings,
+    _load_views,
+    _push_recent,
+    _restore_tags_dir,
+    _restore_view,
+    _save_view,
+    _set_extension_disabled,
+    _update_settings,
+)
 
 
 app = Flask(
@@ -152,274 +173,6 @@ app = Flask(
 # key from `config.SECRET_KEY_FILE`, so a real run keeps sessions across
 # restarts and app updates.
 app.secret_key = secrets.token_hex(32)
-
-
-# --------------------------------------------------------------------------- #
-# user config (one JSON file: recent datasets + per-dataset views + UI settings)
-# --------------------------------------------------------------------------- #
-# RLock: each accessor reads-modifies-writes the whole file, and a routed call
-# (e.g. `_set_extension_disabled` -> `_disabled_extensions`) may re-enter.
-_CONFIG_LOCK = threading.RLock()
-
-
-def _read_json_file(path):
-    """Parse a JSON file; None when it is missing or invalid."""
-    try:
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return None
-
-
-def _default_config():
-    return {"recent": [], "views": {}, "settings": {}}
-
-
-def _normalize_config(data):
-    """Coerce a loaded config into the known shape (never raises)."""
-    cfg = _default_config()
-    if not isinstance(data, dict):
-        return cfg
-    recent = data.get("recent")
-    if isinstance(recent, list):
-        cfg["recent"] = [p for p in recent if isinstance(p, str)][:config.MAX_RECENT]
-    views = data.get("views")
-    if isinstance(views, dict):
-        cfg["views"] = {k: v for k, v in views.items() if isinstance(v, dict)}
-    settings = data.get("settings")
-    if isinstance(settings, dict):
-        cfg["settings"] = dict(settings)
-    return cfg
-
-
-def _migrate_legacy_config():
-    """Build a config from the old per-purpose files (read once)."""
-    cfg = _default_config()
-    recent = _read_json_file(config.RECENT_FILE)
-    if isinstance(recent, list):
-        cfg["recent"] = [p for p in recent if isinstance(p, str)][:config.MAX_RECENT]
-    views = _read_json_file(config.VIEW_FILE)
-    if isinstance(views, dict):
-        cfg["views"] = {k: v for k, v in views.items() if isinstance(v, dict)}
-    settings = _read_json_file(config.SETTINGS_FILE)
-    if isinstance(settings, dict):
-        cfg["settings"] = dict(settings)
-    return cfg
-
-
-def _remove_legacy_files():
-    """Delete the old files once their contents live in config.CONFIG_FILE."""
-    for path in (config.RECENT_FILE, config.VIEW_FILE, config.SETTINGS_FILE):
-        if path and path != config.CONFIG_FILE:
-            try:
-                os.remove(path)
-            except OSError:
-                pass
-
-
-def _write_config(cfg):
-    """Write the config atomically (temp file + rename); never raises."""
-    try:
-        os.makedirs(os.path.dirname(config.CONFIG_FILE) or ".", exist_ok=True)
-        tmp = config.CONFIG_FILE + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, indent=2)
-            f.write("\n")
-        os.replace(tmp, config.CONFIG_FILE)
-    except OSError:
-        pass
-
-
-def _load_config_unlocked():
-    """Read config.json, migrating the legacy files on first use.
-
-    A corrupt config.json yields an empty config but is left on disk so it can
-    still be fixed by hand.
-    """
-    try:
-        with open(config.CONFIG_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        cfg = _migrate_legacy_config()
-        _write_config(cfg)
-        _remove_legacy_files()
-        return cfg
-    except (OSError, ValueError):
-        return _default_config()
-    return _normalize_config(data)
-
-
-def _load_config():
-    with _CONFIG_LOCK:
-        return _load_config_unlocked()
-
-
-def _update_config(mutate):
-    """Read-modify-write the config under the lock; returns the new config."""
-    with _CONFIG_LOCK:
-        cfg = _load_config_unlocked()
-        mutate(cfg)
-        _write_config(cfg)
-        return cfg
-
-
-def _load_recent():
-    """Read the last opened data.yaml paths (newest first)."""
-    return _load_config()["recent"]
-
-
-def _push_recent(path):
-    """Record an opened data.yaml, newest first, capped at config.MAX_RECENT."""
-    def mutate(cfg):
-        recents = [p for p in cfg["recent"] if p != path]
-        recents.insert(0, path)
-        cfg["recent"] = recents[:config.MAX_RECENT]
-
-    return _update_config(mutate)["recent"]
-
-
-def _load_views():
-    """The saved per-dataset views ({data_yaml: {...}})."""
-    return _load_config()["views"]
-
-
-def _save_view(data_yaml, split, active_filters):
-    """Remember a dataset's split/filter chain and tags folder so a restart reopens it.
-
-    Other per-dataset view keys (the disabled action/hook lists, the last image)
-    are preserved.
-    """
-    if not data_yaml:
-        return
-
-    def mutate(cfg):
-        entry = cfg["views"].get(data_yaml)
-        if not isinstance(entry, dict):
-            entry = {}
-        entry["split"] = split
-        entry["filters"] = list(active_filters or [])
-        entry["tags_dir"] = state.STATE.get("tags_dir")
-        cfg["views"][data_yaml] = entry
-
-    _update_config(mutate)
-
-
-# A dataset's disabled extensions live in its view entry under the "disabled"
-# key: {"actions": [names], "hooks": [names]}. This maps an extension `kind` to
-# its list key. The flag is a per-dataset view preference, so it never edits the
-# extension files themselves (a hook's own `active: false` is separate).
-DISABLED_KIND_KEYS = {"action": "actions", "hook": "hooks"}
-
-
-def _disabled_extensions():
-    """The current dataset's disabled action/hook names.
-
-    Returns `{"action": set, "hook": set}`; empty when no dataset is loaded or
-    nothing was disabled.
-    """
-    data_yaml = state.STATE.get("data_yaml")
-    view = _load_views().get(data_yaml) if data_yaml else None
-    disabled = view.get("disabled") if isinstance(view, dict) else None
-    disabled = disabled if isinstance(disabled, dict) else {}
-    return {
-        kind: {n for n in (disabled.get(key) or []) if isinstance(n, str)}
-        for kind, key in DISABLED_KIND_KEYS.items()
-    }
-
-
-def _set_extension_disabled(kind, name, disabled):
-    """Record or clear one disabled action/hook in the current dataset's view.
-
-    Returns the fresh disabled sets (see `_disabled_extensions`), or None when no
-    dataset is loaded. Read-only is not consulted: this is a view preference, not
-    a dataset write.
-    """
-    data_yaml = state.STATE.get("data_yaml")
-    if not data_yaml:
-        return None
-    key = DISABLED_KIND_KEYS[kind]
-
-    def mutate(cfg):
-        entry = cfg["views"].get(data_yaml)
-        if not isinstance(entry, dict):
-            entry = {}
-        stored = entry.get("disabled")
-        stored = stored if isinstance(stored, dict) else {}
-        names = [n for n in (stored.get(key) or []) if isinstance(n, str)]
-        if disabled:
-            if name not in names:
-                names.append(name)
-        else:
-            names = [n for n in names if n != name]
-        stored[key] = sorted(names)
-        entry["disabled"] = stored
-        cfg["views"][data_yaml] = entry
-
-    _update_config(mutate)
-    return _disabled_extensions()
-
-
-def _restore_tags_dir(data_yaml):
-    """Apply a dataset's remembered tags folder and re-derive the split paths."""
-    view = _load_views().get(data_yaml) if data_yaml else None
-    tags_dir = view.get("tags_dir") if isinstance(view, dict) else None
-    state.STATE["tags_dir"] = tags_dir if tags_dir and os.path.isdir(tags_dir) else None
-    if state.STATE["splits"]:
-        state.STATE["splits"] = scan_splits()
-
-
-def _load_settings():
-    """Read the cross-browser UI settings (a flat `{key: value}` map)."""
-    return _load_config()["settings"]
-
-
-def _update_settings(changes):
-    """Merge `{key: value}` into the settings section; a null value deletes the key.
-
-    The browser sends only the keys the user just changed, so a partial merge
-    keeps every other browser's settings intact.
-    """
-    if not isinstance(changes, dict):
-        return _load_settings()
-
-    def mutate(cfg):
-        settings = cfg["settings"]
-        for key, value in changes.items():
-            if value is None:
-                settings.pop(key, None)
-            else:
-                settings[key] = value
-
-    return _update_config(mutate)["settings"]
-
-
-def _restore_view(data_yaml):
-    """Re-apply a dataset's remembered split/filter, ignoring stale entries.
-
-    The `data.yaml` (and its filter scripts) may have changed since the view was
-    saved, so only names that still exist are applied.
-    """
-    view = _load_views().get(data_yaml)
-    if not isinstance(view, dict):
-        return
-    _restore_tags_dir(data_yaml)
-    split = view.get("split")
-    if split in {s["name"] for s in state.STATE["splits"]}:
-        state.STATE["active_split"] = split
-    # `filters` is the current shape ({name, arguments}); `filter` was a
-    # single-name (legacy) view and a list of names is the older chain shape.
-    raw = view.get("filters")
-    if not isinstance(raw, list):
-        raw = [view["filter"]] if view.get("filter") else []
-    known = load_filters()[0]
-    chain = []
-    for item in raw:
-        if isinstance(item, str):
-            item = {"name": item}
-        if isinstance(item, dict) and item.get("name") in known:
-            chain.append(item)
-    if chain:
-        apply_filters(chain)
 
 
 # --------------------------------------------------------------------------- #
@@ -600,156 +353,7 @@ def start_update_checker():
 
 
 # --------------------------------------------------------------------------- #
-# action executions: `steps` and `after_success` form one ordered queue of
-# server commands and server/frontend actions. The backend runs it until it
-# reaches a frontend (app_*) entry, which it hands to the UI by execution uid;
-# the client runs it and calls back to resume. The backend owns the whole run,
-# including its {PIPE_PATH} file.
-# --------------------------------------------------------------------------- #
-
-
-def _run_command(run, command):
-    """Run one shell command, accumulating output in `run`.
-
-    Returns "ok", "failed", "timeout" or "error"; `run["exit_code"]` holds the
-    failing command's code on "failed". Runs with cwd=config.YBX_HOME (logged), so
-    relative paths land in the user folder (`scripts/…` is yours); reach shipped
-    helpers with {APP_DIR}/scripts/… explicitly.
-    """
-    print(f"[ybe] command: cwd={config.YBX_HOME} cmd={command}", file=sys.stderr)
-    try:
-        proc = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=config.ACTION_TIMEOUT,
-            cwd=config.YBX_HOME,
-            env=_subprocess_env(),
-        )
-    except subprocess.TimeoutExpired:
-        run["stderr"].append(f"$ {command}\ntimed out")
-        return "timeout"
-    except OSError as exc:
-        run["stderr"].append(f"$ {command}\n{exc}")
-        return "error"
-    run["commands"].append(command)
-    if proc.stdout.strip():
-        run["stdout"].append(f"$ {command}\n{proc.stdout.rstrip()}")
-    if proc.stderr.strip():
-        run["stderr"].append(f"$ {command}\n{proc.stderr.rstrip()}")
-    if proc.returncode != 0:
-        run["exit_code"] = proc.returncode
-        return "failed"
-    return "ok"
-
-
-def _resolve_entry(entry, actions_by_name):
-    """Resolve one `steps` / `after_success` entry into a work-queue item.
-
-    Both lists share one syntax:
-      - an `app_*` app action          -> ("app", name)     run in the UI
-      - a `backend_*` built-in action  -> ("backend", name) run inline
-      - `action_<Name>` known action   -> ("action", dict)  run inline
-      - anything else                  -> ("cmd", entry)    shell command
-    An unknown `app_*`, `backend_*` or `action_*` name becomes a
-    ("bad", message) item.
-    """
-    if entry in config.APP_ACTIONS:
-        return ("app", entry)
-    if entry.startswith("app_"):
-        return ("bad", f"unknown app action: {entry}")
-    if entry in config.BACKEND_ACTION_NAMES:
-        return ("backend", entry)
-    if entry.startswith("backend_"):
-        return ("bad", f"unknown backend action: {entry}")
-    if entry.startswith(config.ACTION_REF_PREFIX):
-        name = entry[len(config.ACTION_REF_PREFIX):]
-        if name in actions_by_name:
-            return ("action", actions_by_name[name])
-        return ("bad", f"unknown action: {name}")
-    return ("cmd", entry)
-
-
-def _action_items(action):
-    """Expand an action into its ordered work-queue items (steps, then after_success).
-
-    An `action_<Name>` reference to an action disabled for this dataset does not
-    resolve, matching the toolbar (there is no way to run a disabled action).
-    """
-    disabled = _disabled_extensions()["action"]
-    actions_by_name = {
-        a["name"]: a for a in load_actions() if a["name"] not in disabled
-    }
-    entries = list(action.get("steps") or []) + list(action.get("after_success") or [])
-    return [_resolve_entry(entry, actions_by_name) for entry in entries]
-
-
-def _advance_execution(run):
-    """Process the queue until a frontend action is reached or the run ends.
-
-    Returns (status, detail):
-        ("client", name)  the named app action must run in the UI next
-        ("done", None)    the whole chain finished successfully
-        ("failed", None)  a command failed (see run["exit_code"])
-        ("timeout", None) a command timed out
-        ("error", msg)    an unknown action / bad after_success / cascade limit
-    """
-    while run["queue"]:
-        kind, value = run["queue"].pop(0)
-        if kind == "app":  # frontend action: pause for the client
-            return "client", value
-        if kind == "bad":
-            return "error", value
-        if kind == "action":
-            run["runs"] += 1
-            if run["runs"] > config.MAX_CASCADE_DEPTH:
-                return "error", f"action cascade exceeded {config.MAX_CASCADE_DEPTH} levels"
-            run["queue"][0:0] = _action_items(value)
-            continue
-        if kind == "backend":
-            error = BACKEND_ACTIONS[value]()
-            if error:
-                return "error", error
-            continue
-        status = _run_command(run, build_command(value, run["values"]))
-        if status != "ok":
-            return status, None
-    return "done", None
-
-
-def begin_execution(action, action_name, values, pipe_path):
-    """Start a run: queue the action's steps + after_success, then advance it.
-
-    Returns (run, status, detail) as `_advance_execution` does.
-    """
-    run = {
-        "action": action_name,
-        "values": values,
-        "pipe_path": pipe_path,
-        "cwd": config.YBX_HOME,
-        "queue": _action_items(action),
-        "stdout": [],
-        "stderr": [],
-        "commands": [],
-        "exit_code": 0,
-        "runs": 1,
-    }
-    status, detail = _advance_execution(run)
-    return run, status, detail
-
-
-def finish_execution(run):
-    """Delete the run's pipe file (unless --keep-pipe) and forget the run."""
-    uid = run.get("uid")
-    if uid:
-        state.EXECUTIONS.pop(uid, None)
-    if not state.STATE["keep_pipe"]:
-        remove_pipe(run.get("pipe_path"))
-
-
-# --------------------------------------------------------------------------- #
-# dataset resume + backend (server-side) action registry
+# dataset resume
 # --------------------------------------------------------------------------- #
 def _resume_last_dataset():
     """Activate the most recent still-existing data.yaml; None when there is none.
@@ -765,34 +369,6 @@ def _resume_last_dataset():
     state.STATE["splits"] = []
     state.STATE["images"] = []
     return None
-
-
-def _rescan_images():
-    """Re-scan the image folders and re-apply the active filter in place.
-
-    Used by `POST /api/images/rescan` (an explicit refresh) and by the
-    `backend_rescan_images` action entry. The flat list is rebuilt and a filter
-    that depends on the files (e.g. tags) is re-run; an active split that no
-    longer has any image is cleared.
-    """
-    state.STATE["images"] = scan_images()
-    if state.STATE["active_split"] and not any(
-        e["split"] == state.STATE["active_split"] for e in state.STATE["images"]
-    ):
-        state.STATE["active_split"] = None
-    # the flat list changed: an active filter chain must be re-evaluated
-    if state.STATE["active_filters"]:
-        error = apply_filters(state.STATE["active_filters"])
-        if error:
-            _clear_filter()
-            state.STATE["filter_error"] = error
-
-
-# Server-side built-in action callables (see config.BACKEND_ACTION_NAMES). Each returns
-# None on success or an error message that stops the run.
-BACKEND_ACTIONS = {
-    "backend_rescan_images": _rescan_images,
-}
 
 
 def _request_entry():
