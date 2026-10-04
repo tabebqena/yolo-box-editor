@@ -596,6 +596,7 @@ def api_action_run():
     values = {
         "IMAGE_PATH": os.path.join(split["images_dir"], entry["name"]),
         "LABEL_PATH": label_path(entry),
+        "TAGS_DIR": split["tags_dir"],
         "DATASET_PATH": state.STATE["dataset_path"] or "",
         "DATA_YAML_PATH": state.STATE["data_yaml"] or "",
         "IMAGE_INDEX": str(position or 0),

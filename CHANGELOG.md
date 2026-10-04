@@ -15,6 +15,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - **New filter placeholder `{TAGS_DIR}`** — the active split's tags folder, so a
   filter can honour a custom tags folder. The shipped tag filters use it;
   `app/scripts/tag_filter.py` backs them.
+- **New action placeholder `{TAGS_DIR}`** — the current image's split tags
+  folder, and `app/scripts/tag_image.py` gained `--tags-dir` so an action can
+  write tags to a custom tags folder too.
+
+### Fixed
+
+- **`app/scripts/tag_image.py` no longer mangles paths that merely contain the
+  substring `images`** (e.g. an `images_backup` folder). It now swaps only the
+  last whole `images` path segment, exactly like the app, and honours the
+  per-dataset custom tags folder.
 
 ## [7.8.0] - 2026-10-04
 

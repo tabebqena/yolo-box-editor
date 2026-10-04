@@ -8,6 +8,7 @@ The app's own support files (the actions/ folder / shortcuts.txt /
 constant to disposable paths under tmp_path, and STATE is reset per test.
 """
 
+import importlib.util
 import json
 import logging
 import os
@@ -2136,6 +2137,53 @@ def test_tag_filter_script_honors_custom_tags_dir(clean_state, tmp_path, monkeyp
     assert error is None
     result = ybe.run_filter_chain(chain, "train")
     assert result["ok"] and [e["name"] for e in result["images"]] == ["a.jpg"]
+
+
+def _load_shipped_script(name):
+    """Import a helper from app/scripts/ by path (not on sys.path)."""
+    path = Path(ybe.config.BASE_DIR) / "scripts" / name
+    spec = importlib.util.spec_from_file_location(name[:-3], path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_tag_image_swaps_only_the_images_segment(tmp_path):
+    mod = _load_shipped_script("tag_image.py")
+    image = tmp_path / "images_backup" / "dataset" / "images" / "train" / "a.jpg"
+    # a folder named `images_backup` must be left alone; only the `images` segment
+    # is swapped, matching the app's own rule.
+    assert mod.tag_file_path(str(image)) == str(
+        tmp_path / "images_backup" / "dataset" / "tags" / "train" / "a.txt")
+
+
+def test_tag_image_uses_custom_tags_dir(tmp_path):
+    mod = _load_shipped_script("tag_image.py")
+    image = tmp_path / "dataset" / "images" / "train" / "a.jpg"
+    custom = tmp_path / "mytags" / "train"
+    assert mod.tag_file_path(str(image), str(custom)) == str(custom / "a.txt")
+
+
+def test_api_action_run_exposes_tags_dir(clean_state, tmp_path, monkeypatch):
+    root = make_dataset(tmp_path, splits=("train",), images=("a",))
+    custom = tmp_path / "mytags"
+    (custom / "train").mkdir(parents=True)
+    write_action(
+        tmp_path,
+        "TagIt.yaml",
+        "steps:\n"
+        "  - {PYTHON} {APP_SCRIPT_DIR}/tag_image.py {IMAGE_PATH} fire --tags-dir {TAGS_DIR}\n",
+    )
+    monkeypatch.setattr(ybe.config, "APP_SCRIPT_DIR", str(Path(ybe.config.BASE_DIR) / "scripts"))
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    client.post("/api/tags-dir", json={"tags_dir": str(custom)})
+
+    payload = client.post(
+        "/api/actions/run", json={"action": "TagIt", "target": "train/a.jpg"}
+    ).get_json()
+    assert payload["ok"] is True
+    assert (custom / "train" / "a.txt").read_text(encoding="utf-8") == "fire\n"
 
 
 def test_run_filter_substitutes_placeholders_and_args(clean_state):

@@ -42,7 +42,17 @@ would do; this shows the Python form):
     from pathlib import Path
 
     image_path, tag = sys.argv[1], sys.argv[2]
-    tag_file = Path(str(image_path).replace("images", "tags")).with_suffix(".txt")
+    tags_dir = sys.argv[3] if len(sys.argv) > 3 else ""   # pass {TAGS_DIR}
+    if tags_dir:
+        tag_file = Path(tags_dir) / (Path(image_path).stem + ".txt")
+    else:
+        # swap the last whole `images` segment for `tags` (not a substring)
+        parts = image_path.replace("\\\\", "/").split("/")
+        for i in range(len(parts) - 1, -1, -1):
+            if parts[i] == "images":
+                parts[i] = "tags"
+                break
+        tag_file = Path("/".join(parts)).with_suffix(".txt")
     tag_file.parent.mkdir(parents=True, exist_ok=True)
     tags = tag_file.read_text(encoding="utf-8").split() if tag_file.exists() else []
     if tag not in tags:

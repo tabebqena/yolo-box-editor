@@ -4,6 +4,7 @@
 
 ## 7.9.0
 - Two new built-in filters: Has tag and Does not have tag. Pick the tag from a dropdown filled from your tags.yaml (options: {DATASET_TAG_NAMES}); filters honour a custom tags folder via {TAGS_DIR}.
+- Fixed: the tag_image.py helper no longer mangles paths that merely contain "images" (e.g. images_backup) and can write to a custom tags folder; actions get a {TAGS_DIR} placeholder.
 
 ## 7.8.0
 - Running an action or hook no longer pops up a result window or a success toast. A successful run is logged to the browser console; a failure shows a toast with the reason.

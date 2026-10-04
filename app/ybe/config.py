@@ -215,6 +215,7 @@ EXTENSION_API_VERSION = 1
 ACTION_PLACEHOLDERS = (
     ("IMAGE_PATH", "path of the current image"),
     ("LABEL_PATH", "path of the current image's label file (may not exist yet)"),
+    ("TAGS_DIR", "tags folder for the current image's split (honours a custom tags dir)"),
     ("DATASET_PATH", "root path of the loaded dataset"),
     ("DATA_YAML_PATH", "path of the loaded data.yaml"),
     ("IMAGE_INDEX", "1-based position of the current image in the list"),
