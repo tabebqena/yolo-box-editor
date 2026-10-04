@@ -50,7 +50,7 @@ function makeCommandPalette(builder) {
   root.appendChild(btns);
   root.refresh = () => {
     btns.innerHTML = '';
-    const list = builder.getPlaceholders() || [];
+    const list = builder.getPlaceholders(builder) || [];
     if (!list.length) {
       btns.appendChild(mk('span', 'hint', 'no placeholders'));
       return;
@@ -318,131 +318,159 @@ function extSection(title, hint) {
   return { sec, body };
 }
 
-function renderActionBuilder() {
-  const root = el('actionBuilder');
-  if (!root) return;
-  root.innerHTML = '';
-  const ed = extEditor('New action', 'action.yaml');
-  root.appendChild(ed.editor);
-  const b = newBuilder('action', ed.body, () => placeholders.action || []);
+// The three create forms (Settings > Actions / Hooks / Filters) differ only in
+// a few fields and options; each is described by a spec and built by the shared
+// renderExtensionBuilder below.
+const EXTENSION_SPECS = {
+  action: {
+    kind: 'action',
+    rootId: 'actionBuilder',
+    defsRootId: 'actionDefs',
+    title: 'New action',
+    badge: 'action.yaml',
+    saveLabel: 'Create action',
+    getPlaceholders: () => placeholders.action || [],
+    details: {
+      hint: 'the button label is the name',
+      fields: [{ type: 'text', key: 'name', label: 'Name', hint: 'e.g. Remove box' }],
+    },
+    steps: { allowRefs: true, addLabel: '+ Add step',
+      hint: 'run in order · stop on the first failure' },
+    afterSuccess: { allowRefs: true, addLabel: '+ Add after-success',
+      hint: 'optional · runs after all steps' },
+    defs: () => actionDefs,
+    save: (b) => saveActionForm(b),
+  },
+  hook: {
+    kind: 'hook',
+    rootId: 'hookBuilder',
+    defsRootId: 'hookDefs',
+    title: 'New hook',
+    badge: 'on_<event>.yaml',
+    saveLabel: 'Create hook',
+    getPlaceholders: () => placeholders.action || [],
+    details: {
+      hint: 'when the hook fires',
+      fields: [
+        { type: 'select', key: 'event', label: 'Event',
+          options: () => hookEvents.map((e) => ({ value: e, text: 'on_' + e })) },
+        { type: 'checkbox', key: 'active',
+          label: 'Active (uncheck to disable without deleting)', checked: true },
+      ],
+    },
+    steps: { allowRefs: true, addLabel: '+ Add step' },
+    afterSuccess: { allowRefs: true, addLabel: '+ Add after-success', hint: 'optional' },
+    defs: () => hookDefs,
+    save: (b, f) => saveHookForm(b, f.event, f.active),
+  },
+  filter: {
+    kind: 'filter',
+    rootId: 'filterBuilder',
+    defsRootId: 'filterDefs',
+    title: 'New filter',
+    badge: 'filter.yaml',
+    saveLabel: 'Create filter',
+    getPlaceholders: (b) => {
+      const list = (placeholders.filter || []).slice();
+      (b.args ? b.args.args() : []).forEach((a) => {
+        const token = '{' + a.name.toUpperCase() + '}';
+        if (!list.some((p) => p.token === token)) {
+          list.push({ token, description: 'argument ' + a.name });
+        }
+      });
+      return list;
+    },
+    details: {
+      hint: 'name shown in the Filters tab',
+      fields: [
+        { type: 'text', key: 'name', label: 'Name', hint: 'e.g. Keep every N-th' },
+        { type: 'text', key: 'description', label: 'Description', hint: 'shown in the Filters tab' },
+        { type: 'checkbox', key: 'active', label: 'Active', checked: true },
+      ],
+    },
+    args: true,
+    steps: { allowRefs: false, addLabel: '+ Add step',
+      placeholder: 'shell command using {INPUT_PIPE} / {OUTPUT_PIPE}…',
+      hint: 'read {INPUT_PIPE}, write {OUTPUT_PIPE}' },
+    defs: () => filterDefs,
+    save: (b, f) => saveFilterForm(b, f.description, f.active),
+  },
+};
 
-  const details = extSection('Details', 'the button label is the name');
-  const name = extTextField('Name', 'e.g. Remove box');
-  b.nameInput = name.input;
-  details.body.appendChild(name.row);
-  ed.body.appendChild(details.sec);
-
-  const steps = extSection('Steps', 'run in order · stop on the first failure');
-  b.steps = makeEntryList(b, { allowRefs: true, addLabel: '+ Add step' });
-  steps.body.appendChild(b.steps);
-  b.steps.addRow(null);
-  ed.body.appendChild(steps.sec);
-
-  const after = extSection('After success', 'optional · runs after all steps');
-  b.after = makeEntryList(b, { allowRefs: true, addLabel: '+ Add after-success' });
-  after.body.appendChild(b.after);
-  ed.body.appendChild(after.sec);
-
-  b.palette = makeCommandPalette(b);
-  ed.body.appendChild(b.palette);
-  ed.foot.appendChild(extFormButtons('Create action', () => saveActionForm(b), renderActionBuilder));
-  const defsRoot = el('actionDefs');
-  if (defsRoot) {
-    defsRoot.innerHTML = '';
-    defsRoot.appendChild(renderDefList('action', actionDefs));
+function extFieldFor(field) {
+  if (field.type === 'select') {
+    const row = mk('label', 'ext-field');
+    row.appendChild(mk('span', 'ext-field-label', field.label));
+    const select = mk('select', 'ext-field-input');
+    (field.options ? field.options() : []).forEach((o) => select.appendChild(option(o.value, o.text)));
+    row.appendChild(select);
+    return { row, input: select };
   }
+  if (field.type === 'checkbox') return extCheckbox(field.label, field.checked);
+  return extTextField(field.label, field.hint);
 }
 
-function renderHookBuilder() {
-  const root = el('hookBuilder');
+function renderExtensionBuilder(spec) {
+  const root = el(spec.rootId);
   if (!root) return;
   root.innerHTML = '';
-  const ed = extEditor('New hook', 'on_<event>.yaml');
+  const ed = extEditor(spec.title, spec.badge);
   root.appendChild(ed.editor);
-  const b = newBuilder('hook', ed.body, () => placeholders.action || []);
+  const b = newBuilder(spec.kind, ed.body, spec.getPlaceholders);
 
-  const details = extSection('Details', 'when the hook fires');
-  const evRow = mk('label', 'ext-field');
-  evRow.appendChild(mk('span', 'ext-field-label', 'Event'));
-  const ev = mk('select', 'ext-field-input');
-  hookEvents.forEach((e) => ev.appendChild(option(e, 'on_' + e)));
-  evRow.appendChild(ev);
-  details.body.appendChild(evRow);
-  const active = extCheckbox('Active (uncheck to disable without deleting)', true);
-  details.body.appendChild(active.row);
-  ed.body.appendChild(details.sec);
-
-  const steps = extSection('Steps');
-  b.steps = makeEntryList(b, { allowRefs: true, addLabel: '+ Add step' });
-  steps.body.appendChild(b.steps);
-  b.steps.addRow(null);
-  ed.body.appendChild(steps.sec);
-
-  const after = extSection('After success', 'optional');
-  b.after = makeEntryList(b, { allowRefs: true, addLabel: '+ Add after-success' });
-  after.body.appendChild(b.after);
-  ed.body.appendChild(after.sec);
-
-  b.palette = makeCommandPalette(b);
-  ed.body.appendChild(b.palette);
-  ed.foot.appendChild(extFormButtons('Create hook', () => saveHookForm(b, ev, active.input), renderHookBuilder));
-  const defsRoot = el('hookDefs');
-  if (defsRoot) {
-    defsRoot.innerHTML = '';
-    defsRoot.appendChild(renderDefList('hook', hookDefs));
-  }
-}
-
-function renderFilterBuilder() {
-  const root = el('filterBuilder');
-  if (!root) return;
-  root.innerHTML = '';
-  const ed = extEditor('New filter', 'filter.yaml');
-  root.appendChild(ed.editor);
-  const b = newBuilder('filter', ed.body, () => {
-    const list = (placeholders.filter || []).slice();
-    (b.args ? b.args.args() : []).forEach((a) => {
-      const token = '{' + a.name.toUpperCase() + '}';
-      if (!list.some((p) => p.token === token)) list.push({ token, description: 'argument ' + a.name });
-    });
-    return list;
+  const details = extSection('Details', spec.details.hint);
+  const fields = {};
+  spec.details.fields.forEach((f) => {
+    const field = extFieldFor(f);
+    details.body.appendChild(field.row);
+    fields[f.key] = field.input;
   });
-
-  const details = extSection('Details', 'name shown in the Filters tab');
-  const name = extTextField('Name', 'e.g. Keep every N-th');
-  b.nameInput = name.input;
-  details.body.appendChild(name.row);
-  const desc = extTextField('Description', 'shown in the Filters tab');
-  details.body.appendChild(desc.row);
-  const active = extCheckbox('Active', true);
-  details.body.appendChild(active.row);
+  if (fields.name) b.nameInput = fields.name;
   ed.body.appendChild(details.sec);
 
-  const args = extSection('Arguments', 'optional · become {NAME} placeholders');
-  b.args = makeArgList(b);
-  args.body.appendChild(b.args);
-  ed.body.appendChild(args.sec);
+  if (spec.args) {
+    const args = extSection('Arguments', 'optional · become {NAME} placeholders');
+    b.args = makeArgList(b);
+    args.body.appendChild(b.args);
+    ed.body.appendChild(args.sec);
+  }
 
-  const steps = extSection('Steps', 'read {INPUT_PIPE}, write {OUTPUT_PIPE}');
+  const steps = extSection('Steps', spec.steps.hint);
   b.steps = makeEntryList(b, {
-    allowRefs: false,
-    addLabel: '+ Add step',
-    placeholder: 'shell command using {INPUT_PIPE} / {OUTPUT_PIPE}…',
+    allowRefs: spec.steps.allowRefs,
+    addLabel: spec.steps.addLabel,
+    placeholder: spec.steps.placeholder,
   });
   steps.body.appendChild(b.steps);
   b.steps.addRow(null);
   ed.body.appendChild(steps.sec);
+
+  if (spec.afterSuccess) {
+    const after = extSection('After success', spec.afterSuccess.hint);
+    b.after = makeEntryList(b, {
+      allowRefs: spec.afterSuccess.allowRefs,
+      addLabel: spec.afterSuccess.addLabel,
+    });
+    after.body.appendChild(b.after);
+    ed.body.appendChild(after.sec);
+  }
 
   b.palette = makeCommandPalette(b);
   ed.body.appendChild(b.palette);
   ed.foot.appendChild(extFormButtons(
-    'Create filter', () => saveFilterForm(b, desc.input, active.input), renderFilterBuilder));
-  const defsRoot = el('filterDefs');
+    spec.saveLabel, () => spec.save(b, fields), () => renderExtensionBuilder(spec)));
+
+  const defsRoot = el(spec.defsRootId);
   if (defsRoot) {
     defsRoot.innerHTML = '';
-    defsRoot.appendChild(renderDefList('filter', filterDefs));
+    defsRoot.appendChild(renderDefList(spec.kind, spec.defs()));
   }
 }
+
+// Kept as named entry points: the Settings tabs and other modules call these.
+function renderActionBuilder() { renderExtensionBuilder(EXTENSION_SPECS.action); }
+function renderHookBuilder() { renderExtensionBuilder(EXTENSION_SPECS.hook); }
+function renderFilterBuilder() { renderExtensionBuilder(EXTENSION_SPECS.filter); }
 
 async function postExtension(url, body) {
   let { res, data } = await apiPost(url, body);

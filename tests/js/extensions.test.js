@@ -92,6 +92,29 @@ test('renderFilterBuilder shows argument and step fields', () => {
   assert.ok(app.$('filterBuilder').querySelector('.ext-cmd-input'));
 });
 
+test('each create form wires its save button to its endpoint', async () => {
+  const calls = [];
+  app.fetchMock.on((u) => u.startsWith('/api/'), (url) => {
+    calls.push(url);
+    return { body: { ok: true, app_actions: [], backend_actions: [], hook_events: [],
+      placeholders: { action: [], filter: [] }, action_defs: [], hook_defs: [], filter_defs: [] } };
+  });
+  app.api.applyExtensionConfig(CFG);
+
+  const clickSave = async (rootId, nameValue) => {
+    const root = app.$(rootId);
+    const first = root.querySelector('.ext-field-input');
+    if (nameValue !== undefined && first) first.value = nameValue;
+    root.querySelector('.ext-editor-foot .primary').click();
+    await app.flush();
+  };
+
+  await clickSave('actionBuilder', 'A');
+  await clickSave('hookBuilder');        // first field is the event select
+  await clickSave('filterBuilder', 'F');
+  assert.deepEqual(calls, ['/api/actions/save', '/api/hooks/save', '/api/filters/save']);
+});
+
 test('renderDefList exposes YAML / Delete for user files', () => {
   const defs = [
     { name: 'u', source: 'user', status: 'current', api_version: 2 },
