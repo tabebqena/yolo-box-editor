@@ -7,11 +7,15 @@ secret key, then it runs the Flask app) and the implementation lives in the
 plain `app/ybe/` package — `server.py` holds the Flask app object and all
 routes, the rest are the reusable pieces (`config`, `state`, `parsing`, `auth`,
 `dataset`, `extensions`, …). The UI is plain `app/templates/index.html` +
-`app/static/app.js` (~4400 lines; small reusable DOM/modal helpers live at the
-top) + `app/static/style.css` with **no build step** for the app itself. No
+`app/static/style.css` + classic-script modules under `app/static/js/` (`core`,
+`canvas`, `navigation`, `extensions`, `shortcuts`, `images`, `editing`,
+`appearance`, `events`), finished by the `app/static/app.js` entry point; small
+reusable DOM/modal helpers live in `js/core.js`. **No build step**, and the
+modules share one global scope, so the load order in `index.html` and
+`tests/js/helpers/app.js` must stay in sync. No
 database. The `data.yaml` reader is hand-rolled — no PyYAML at
 runtime. User files live in `YBX_HOME` (below). `ybx.sh` copies `app/`
-wholesale, so `app/ybe/` ships automatically.
+wholesale, so `app/ybe/` and `app/static/js/` ship automatically.
 
 ## Commands
 - Run: `python app/app.py --data /path/to/data.yaml` (optional `--readonly` to
@@ -82,6 +86,15 @@ wholesale, so `app/ybe/` ships automatically.
   - `secret_key.py` — the persistent, owner-only session-signing key.
   There is deliberately no `SCRIPTS_DIR` symbol: scripts are reached relatively
   (`scripts/…`, since cwd is the home) or as `{APP_DIR}/scripts/…`.
+- Frontend: `app/static/app.js` is the entry point only (login/account,
+  `startApp`, `boot`, final event wiring). Everything else lives in
+  `app/static/js/` as classic scripts loaded by `index.html` in dependency
+  order: `core`, `canvas`, `navigation`, `extensions`, `shortcuts`, `images`,
+  `editing`, `appearance`, `events`. They share one global lexical scope, so
+  top-level `let`/`const`/functions are visible across files and the order in
+  `index.html` and `tests/js/helpers/app.js` must match. `js/events.js` owns
+  `ESCAPE_CLOSERS` (it references the overlay closers defined in earlier
+  modules). `js/core.js` holds the shared DOM/modal helpers and mutable state.
 - `YBX_HOME` resolution: `--home <dir>` > `$YBX_HOME` > the parent of `app.py`.
   A clone and an install therefore behave the same; the folders are created at
   startup and the path is logged (`[ybe] user dir: …`).
@@ -94,7 +107,7 @@ wholesale, so `app/ybe/` ships automatically.
     `active: false` skips it.
   - Filters:
     - Contract: `python <filter.py> <data.yaml> <split> <in_pipe> <out_pipe>`; input holds the active split's absolute paths, output feeds the next filter (`run_filter_chain`). Runs with `cwd=YBX_HOME`.
-    - UI: Filters button opens a modal with up to 8 stacked selects, run top-to-bottom (`app/static/app.js`).
+    - UI: Filters button opens a modal with up to 8 stacked selects, run top-to-bottom (`app/static/js/`).
     - Scratch pipe dir is deleted after each run; `--keep-filter-pipes` keeps it (CLI).
   - `scripts/*.py` — helpers named by action `steps`; the app never scans them.
     Reach them explicitly with `{USER_SCRIPT_DIR}/…` (yours) or
@@ -141,11 +154,13 @@ wholesale, so `app/ybe/` ships automatically.
 
 ## Cross-file invariants
 - Built-in actions are the `app_*` set in `APP_ACTIONS` (`app/ybe/config.py`) and
-  are implemented in `app/static/app.js`. Adding/renaming one requires editing
-  both. Server-side actions are named in `BACKEND_ACTION_NAMES` (only
+  are implemented across the frontend modules (`app/static/js/`; the
+  `app_*` handler map is `APP_SHORTCUT_HANDLERS` in `js/events.js`).
+  Adding/renaming one requires editing both the catalog and the frontend.
+  Server-side actions are named in `BACKEND_ACTION_NAMES` (only
   `backend_rescan_images`).
 - Hook events are `HOOK_EVENTS` (`app/ybe/config.py`), fired via
-  `runHook('on_...')` in `app/static/app.js`, and documented in
+  `runHook('on_...')` in `app/static/js/editing.js`, and documented in
   `app/hooks/example.yaml` plus `docs/actions-and-hooks.md` — keep all in sync.
 - The extension YAML format is versioned by `EXTENSION_API_VERSION`
   (`app/ybe/config.py`); bump it when the action/hook/filter file format changes.
@@ -165,12 +180,14 @@ wholesale, so `app/ybe/` ships automatically.
   `.settings.json`, `.view_state.json` or `users.json`.
 - `tests/js/*.test.js` is the frontend suite; add a file there (it is picked up
   automatically). `tests/js/helpers/app.js` loads `app/templates/index.html`
-  into jsdom, stubs `fetch`/canvas/`requestAnimationFrame`/`confirm`, runs
-  `app.js` in the window's vm context (without its trailing `boot();`) and
-  injects `window.__ybe` (state get/set + the callable API). jsdom has no
-  layout, so canvas drawing/layout is asserted through state and DOM, not
-  pixels. Keep new helper functions at the top of `app.js` (they are exposed on
-  `window` and covered in `tests/js/helpers.test.js`).
+  into jsdom, stubs `fetch`/canvas/`requestAnimationFrame`/`confirm`, runs the
+  `app/static/js/*.js` modules plus the `app.js` entry point — concatenated in
+  the same order as `index.html` — in the window's vm context (without the
+  trailing `boot();`), and injects `window.__ybe` (state get/set + the callable
+  API). jsdom has no layout, so canvas drawing/layout is asserted through state
+  and DOM, not pixels. Keep new reusable helper functions in
+  `app/static/js/core.js` (they are exposed on `window` and covered in
+  `tests/js/helpers.test.js`).
 
 ## Repo conventions & boundaries
 

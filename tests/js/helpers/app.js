@@ -18,6 +18,13 @@ const ROOT = path.resolve(__dirname, '..', '..', '..');
 const INDEX_HTML = path.join(ROOT, 'app', 'templates', 'index.html');
 const APP_JS = path.join(ROOT, 'app', 'static', 'app.js');
 
+// Load order must match app/templates/index.html: the classic-script modules
+// share one global lexical environment, then app.js (the entry point) runs.
+const MODULE_FILES = [
+  'core.js', 'canvas.js', 'navigation.js', 'extensions.js', 'shortcuts.js',
+  'images.js', 'editing.js', 'appearance.js', 'events.js',
+].map((f) => path.join(ROOT, 'app', 'static', 'js', f));
+
 // Top-level `let` declarations in app.js that tests may need to set directly.
 // (`const` objects such as dockState are mutated through the returned
 // reference instead, because reassigning a const would throw.)
@@ -162,7 +169,9 @@ function loadHtml() {
 }
 
 function loadAppSource() {
-  const src = fs.readFileSync(APP_JS, 'utf8');
+  const parts = MODULE_FILES.map((f) => fs.readFileSync(f, 'utf8'));
+  parts.push(fs.readFileSync(APP_JS, 'utf8'));
+  const src = parts.join('\n');
   // Remove the trailing `boot();` so tests decide when startup runs.
   return src.replace(/\nboot\(\);\s*$/, '\n');
 }
