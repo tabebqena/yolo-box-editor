@@ -793,17 +793,14 @@ function updateSidePanelState() {
 
 /**
  * Re-render the side-panel list only when its length changed, else update it.
- * @param {false} [panelMode] - `false` skips the update during an in-progress
- *   interaction (drawing or dragging a box); the panel is synced on mouse-up.
- *   Omitted does a full update.
+ * Called from the full `draw()`, i.e. after an interaction finishes.
  */
-function syncSidePanel(panelMode) {
+function syncSidePanel() {
   const list = el('boxList');
   if (!list) return;
   if (list.children.length !== boxes.length) {
     renderSidePanel();
     return;
   }
-  if (panelMode === false) return;
   updateSidePanelState();
 }

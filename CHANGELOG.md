@@ -4,6 +4,15 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.13.0] - 2026-10-05
+
+### Changed
+
+- **Dragging or drawing a box no longer redraws every other box.** The image and
+  the untouched boxes are cached on an offscreen layer and blitted each frame,
+  with only the active box repainted. This keeps the pointer fluid on images
+  with hundreds of boxes; there are no behaviour changes.
+
 ## [7.12.0] - 2026-10-05
 
 ### Changed

@@ -112,6 +112,18 @@ test('renderSidePanel builds a row per box and updateSidePanelState syncs it', (
   assert.equal(rows[1].classList.contains('selected'), true);
 });
 
+test('drawFast reuses the cached base layer and repaints only the dragged box', () => {
+  const count = (name) => app.context2d.calls.filter(([n]) => n === name).length;
+  ready({ boxes: [box(), box(), box()], selected: 1, imgW: 300, imgH: 150 });
+  app.set({ mode: 'moving', boxDetailsVisible: false });
+  app.api.draw(); // drag start: layer holds every box except the dragged one
+  assert.equal(count('strokeRect'), 3); // 2 cached boxes + the dragged one
+  app.context2d.calls.length = 0;
+  app.api.drawFast(); // a mouse move
+  assert.equal(count('clearRect'), 1); // layer reused; only the main canvas cleared
+  assert.equal(count('strokeRect'), 1); // only the dragged box is repainted
+});
+
 test('changing a row class edits the box and pushes an undo step', () => {
   ready({ selected: 0 });
   app.api.renderSidePanel();

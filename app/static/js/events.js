@@ -108,7 +108,7 @@ function onWindowMouseMove(e) {
   const p = canvasPos(e);
   if (mode === 'drawing' && start) {
     mouse = clampToImage(p);
-    draw(false); // no box changed, so the side panel needs no update
+    drawFast(); // no box changed: cached layer + the in-progress rectangle
   } else {
     mouse = p;
     if (mode === 'moving' && origBox) {

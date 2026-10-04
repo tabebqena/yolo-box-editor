@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.13.0
+- Dragging or drawing a box no longer redraws every other box: the image and untouched boxes are cached and only the active box is repainted, so the pointer stays fluid on images with hundreds of boxes.
+
 ## 7.12.0
 - Dragging a box no longer updates the side panel on every mouse move; the box row syncs once when you release the mouse. Dragging stays responsive on images with many boxes.
 

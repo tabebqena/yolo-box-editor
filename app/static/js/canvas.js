@@ -10,6 +10,15 @@ let origBox = null;    // normalized snapshot at drag start
 // active resize-handle name (nw, n, …) during a resize
 let handle = null;
 
+// Offscreen layer holding the image and every box except the one being
+// dragged, so a per-mousemove redraw can blit it and repaint only the active
+// box instead of re-stroking all boxes (the cost that made drags lag on images
+// with many boxes). Built lazily and re-sized with the main canvas.
+let baseCanvas = null;
+let baseCtx = null;
+let baseExclude = -1;   // box index left out of the layer (-1 = none)
+let baseReady = false;  // layer matches the current scene
+
 // The decoded frame currently on screen, preferred over `imageEl`. It is a
 // `createImageBitmap` result, closed and replaced on every image so the browser
 // frees the previous bitmap's native memory immediately. An <img> instead keeps
@@ -201,56 +210,48 @@ function handlePoints(r) {
 }
 
 /**
- * Redraw the canvas: image, boxes, handles and in-progress interactions.
- * @param {false} [panelMode] - Forwarded to `syncSidePanel`: omitted syncs the
- *   whole side panel, `false` skips it during an in-progress interaction
- *   (drawing a box, or dragging one); the panel is synced on mouse-up.
+ * Redraw the canvas: image, boxes, handles and in-progress interactions, then
+ * sync the side panel. This is the full path, used whenever the scene changed
+ * (new image, selection, box edit, toggle…).
  */
-function draw(panelMode) {
+function draw() {
+  paintScene(true);
+  syncSidePanel();
+}
+
+/**
+ * Hot path for an in-progress drag or draw: blit the cached base layer and
+ * repaint only the active box (or the in-progress rectangle). Unlike `draw()`
+ * it never rebuilds the layer and never touches the side panel — a full
+ * `draw()` runs once on mouse-up.
+ */
+function drawFast() {
+  paintScene(false);
+}
+
+/**
+ * Compose one frame from the cached base layer plus the active/in-progress
+ * element.
+ * @param {boolean} forceBase - Rebuild the base layer even if it looks valid.
+ */
+function paintScene(forceBase) {
+  const interacting = mode === 'moving' || mode === 'resizing';
+  // while dragging, the layer must not contain the box being dragged
+  const exclude = interacting ? selected : -1;
+  ensureBase(exclude, forceBase);
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (currentBitmap) {
-    ctx.drawImage(currentBitmap, 0, 0);
-  } else if (imgW && imgH && imageEl.complete && imageEl.naturalWidth) {
-    ctx.drawImage(imageEl, 0, 0);
+  ctx.drawImage(baseCanvas, 0, 0);
+
+  if (interacting && selected >= 0 && boxes[selected]) {
+    paintBox(ctx, boxes[selected], selected);
   }
 
   // a coordinate input highlight only survives while that input keeps focus
   const f = document.activeElement;
   if (editingPoint && (!f || f.dataset.name !== editingPoint.name)) editingPoint = null;
-
-  if (boxesVisible) {
-    boxes.forEach((b, idx) => {
-      const r = toPx(b);
-      const active = idx === selected;
-      // fixed boxes: muted dashed outline, no resize handles (they ignore
-      // dragging but can still be clicked / selected)
-      const fixed = !!b.fixed;
-      ctx.strokeStyle = fixed ? '#8a93a6' : active ? '#ffd166' : '#2ecc71';
-      ctx.lineWidth = active && !fixed ? 3 : 2;
-      if (fixed) ctx.setLineDash([7, 4]);
-      ctx.strokeRect(r.x, r.y, r.w, r.h);
-      ctx.setLineDash([]);
-
-      if (boxDetailsVisible) {
-        const label = `${b.class}: ${classes[b.class] || 'class ' + b.class}`;
-        ctx.font = '14px system-ui, sans-serif';
-        const tw = ctx.measureText(label).width;
-        const ly = Math.max(0, r.y - 18);
-        ctx.fillStyle = fixed
-          ? 'rgba(138,147,166,0.9)'
-          : active ? 'rgba(255,209,102,0.92)' : 'rgba(46,204,113,0.85)';
-        ctx.fillRect(r.x, ly, tw + 8, 18);
-        ctx.fillStyle = '#111';
-        ctx.fillText(label, r.x + 4, ly + 13);
-
-        if (!readonly) {
-          drawDeleteButton(r);
-          drawClassButton(r);
-        }
-        if (active && !readonly && !fixed) drawHandles(r);
-      }
-      if (editingPoint && editingPoint.i === idx) drawPointGuide(r, editingPoint.name);
-    });
+  if (boxesVisible && editingPoint && boxes[editingPoint.i]) {
+    drawPointGuide(ctx, toPx(boxes[editingPoint.i]), editingPoint.name);
   }
 
   if (mode === 'drawing' && start && mouse) {
@@ -261,21 +262,100 @@ function draw(panelMode) {
     ctx.strokeRect(r.x, r.y, r.w, r.h);
     ctx.setLineDash([]);
   }
+}
 
-  syncSidePanel(panelMode);
+/**
+ * Make sure the base layer is the right size and holds the current scene with
+ * `exclude` left out. Rebuilds only when forced, invalidated, or the excluded
+ * box changed.
+ * @param {number} exclude - Box index to leave out (-1 for all of them).
+ * @param {boolean} force - Rebuild even when the layer looks current.
+ */
+function ensureBase(exclude, force) {
+  if (!baseCanvas) {
+    baseCanvas = document.createElement('canvas');
+    baseCtx = baseCanvas.getContext('2d');
+  }
+  if (baseCanvas.width !== canvas.width || baseCanvas.height !== canvas.height) {
+    baseCanvas.width = canvas.width;
+    baseCanvas.height = canvas.height;
+    force = true; // resizing a canvas clears it
+  }
+  if (force || !baseReady || baseExclude !== exclude) {
+    renderBase(exclude);
+    baseExclude = exclude;
+    baseReady = true;
+  }
+}
+
+/**
+ * Draw the image and every box (except `exclude`) into the base layer.
+ * @param {number} exclude - Box index to skip (-1 for none).
+ */
+function renderBase(exclude) {
+  baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
+  if (currentBitmap) {
+    baseCtx.drawImage(currentBitmap, 0, 0);
+  } else if (imgW && imgH && imageEl.complete && imageEl.naturalWidth) {
+    baseCtx.drawImage(imageEl, 0, 0);
+  }
+  if (!boxesVisible) return;
+  boxes.forEach((b, idx) => {
+    if (idx === exclude) return;
+    paintBox(baseCtx, b, idx);
+  });
+}
+
+/**
+ * Draw one box (outline, and optionally its label/buttons/handles).
+ * @param {CanvasRenderingContext2D} g - Target context (main or base layer).
+ * @param {{class:number,cx:number,cy:number,w:number,h:number,fixed?:boolean}} b
+ * @param {number} idx - Box index, compared with `selected` for the active look.
+ */
+function paintBox(g, b, idx) {
+  const r = toPx(b);
+  const active = idx === selected;
+  const fixed = !!b.fixed;
+  // fixed boxes: muted dashed outline, no resize handles (they ignore dragging
+  // but can still be clicked / selected)
+  g.strokeStyle = fixed ? '#8a93a6' : active ? '#ffd166' : '#2ecc71';
+  g.lineWidth = active && !fixed ? 3 : 2;
+  if (fixed) g.setLineDash([7, 4]);
+  g.strokeRect(r.x, r.y, r.w, r.h);
+  g.setLineDash([]);
+
+  if (boxDetailsVisible) {
+    const label = `${b.class}: ${classes[b.class] || 'class ' + b.class}`;
+    g.font = '14px system-ui, sans-serif';
+    const tw = g.measureText(label).width;
+    const ly = Math.max(0, r.y - 18);
+    g.fillStyle = fixed
+      ? 'rgba(138,147,166,0.9)'
+      : active ? 'rgba(255,209,102,0.92)' : 'rgba(46,204,113,0.85)';
+    g.fillRect(r.x, ly, tw + 8, 18);
+    g.fillStyle = '#111';
+    g.fillText(label, r.x + 4, ly + 13);
+
+    if (!readonly) {
+      drawDeleteButton(g, r);
+      drawClassButton(g, r);
+    }
+    if (active && !readonly && !fixed) drawHandles(g, r);
+  }
 }
 
 /**
  * Draw the resize handles for a pixel rect.
+ * @param {CanvasRenderingContext2D} g - Target context.
  * @param {{x:number,y:number,w:number,h:number}} r
  */
-function drawHandles(r) {
-  ctx.fillStyle = '#fff';
-  ctx.strokeStyle = '#111';
-  ctx.lineWidth = 1;
+function drawHandles(g, r) {
+  g.fillStyle = '#fff';
+  g.strokeStyle = '#111';
+  g.lineWidth = 1;
   for (const p of handlePoints(r)) {
-    ctx.fillRect(p.x - HANDLE_SIZE / 2, p.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
-    ctx.strokeRect(p.x - HANDLE_SIZE / 2, p.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
+    g.fillRect(p.x - HANDLE_SIZE / 2, p.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
+    g.strokeRect(p.x - HANDLE_SIZE / 2, p.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
   }
 }
 
@@ -283,22 +363,23 @@ function drawHandles(r) {
  * Highlight the coordinate currently edited in the side panel, so the user
  * sees which value (cx / cy / w / h) the focused input controls. cx/cy show
  * only the box center point in colour; w/h also mark the box edges they span.
+ * @param {CanvasRenderingContext2D} g - Target context.
  * @param {{x:number,y:number,w:number,h:number}} r
  * @param {string} name - Coordinate name (cx, cy, w or h).
  */
-function drawPointGuide(r, name) {
+function drawPointGuide(g, r, name) {
   const midX = r.x + r.w / 2;
   const midY = r.y + r.h / 2;
-  ctx.save();
-  ctx.strokeStyle = '#ff9f1c';
-  ctx.fillStyle = '#ff9f1c';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([6, 4]);
+  g.save();
+  g.strokeStyle = '#ff9f1c';
+  g.fillStyle = '#ff9f1c';
+  g.lineWidth = 2;
+  g.setLineDash([6, 4]);
   const dashLine = (x1, y1, x2, y2) => {
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
+    g.beginPath();
+    g.moveTo(x1, y1);
+    g.lineTo(x2, y2);
+    g.stroke();
   };
   if (name === 'w') {
     dashLine(r.x, midY - r.h / 2 - 10, r.x, midY + r.h / 2 + 10);
@@ -307,11 +388,11 @@ function drawPointGuide(r, name) {
     dashLine(midX - r.w / 2 - 10, r.y, midX + r.w / 2 + 10, r.y);
     dashLine(midX - r.w / 2 - 10, r.y + r.h, midX + r.w / 2 + 10, r.y + r.h);
   }
-  ctx.setLineDash([]);
-  ctx.beginPath();
-  ctx.arc(midX, midY, name === 'cx' || name === 'cy' ? 6 : 5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  g.setLineDash([]);
+  g.beginPath();
+  g.arc(midX, midY, name === 'cx' || name === 'cy' ? 6 : 5, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
 }
 
 /**
@@ -334,46 +415,48 @@ function classBtnRect(r) {
 
 /**
  * Draw the class-cycle button in the top-left of a box.
+ * @param {CanvasRenderingContext2D} g - Target context.
  * @param {{x:number,y:number,w:number,h:number}} r
  */
-function drawClassButton(r) {
+function drawClassButton(g, r) {
   const d = classBtnRect(r);
-  ctx.fillStyle = 'rgba(76, 201, 240, 0.9)';
-  ctx.fillRect(d.x, d.y, d.w, d.h);
-  ctx.strokeStyle = '#111';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(d.x, d.y, d.w, d.h);
-  ctx.fillStyle = '#111';
-  ctx.font = 'bold 13px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('/', d.x + d.w / 2, d.y + d.h / 2 + 1);
-  ctx.textAlign = 'start';
-  ctx.textBaseline = 'alphabetic';
+  g.fillStyle = 'rgba(76, 201, 240, 0.9)';
+  g.fillRect(d.x, d.y, d.w, d.h);
+  g.strokeStyle = '#111';
+  g.lineWidth = 1;
+  g.strokeRect(d.x, d.y, d.w, d.h);
+  g.fillStyle = '#111';
+  g.font = 'bold 13px system-ui, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('/', d.x + d.w / 2, d.y + d.h / 2 + 1);
+  g.textAlign = 'start';
+  g.textBaseline = 'alphabetic';
 }
 
 /**
  * Draw the delete button in the top-right of a box.
+ * @param {CanvasRenderingContext2D} g - Target context.
  * @param {{x:number,y:number,w:number,h:number}} r
  */
-function drawDeleteButton(r) {
+function drawDeleteButton(g, r) {
   const d = deleteBtnRect(r);
-  ctx.fillStyle = 'rgba(231, 76, 60, 0.9)';
-  ctx.fillRect(d.x, d.y, d.w, d.h);
-  ctx.strokeStyle = '#111';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(d.x, d.y, d.w, d.h);
+  g.fillStyle = 'rgba(231, 76, 60, 0.9)';
+  g.fillRect(d.x, d.y, d.w, d.h);
+  g.strokeStyle = '#111';
+  g.lineWidth = 1;
+  g.strokeRect(d.x, d.y, d.w, d.h);
   const cx = d.x + d.w / 2;
   const cy = d.y + d.h / 2;
   const inset = 4;
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(cx - inset, cy - inset);
-  ctx.lineTo(cx + inset, cy + inset);
-  ctx.moveTo(cx + inset, cy - inset);
-  ctx.lineTo(cx - inset, cy + inset);
-  ctx.stroke();
+  g.strokeStyle = '#fff';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(cx - inset, cy - inset);
+  g.lineTo(cx + inset, cy + inset);
+  g.moveTo(cx + inset, cy - inset);
+  g.lineTo(cx - inset, cy + inset);
+  g.stroke();
 }
 
 /**
@@ -509,7 +592,7 @@ function moveBox(p) {
   const cy = Math.max(origBox.h / 2, Math.min(1 - origBox.h / 2, origBox.cy + dy));
   boxes[selected] = { ...origBox, cx, cy };
   moved = true;
-  draw(false); // the side panel is synced once, on mouse-up
+  drawFast(); // cached layer + this box only; full draw() runs on mouse-up
 }
 
 /**
@@ -551,7 +634,7 @@ function resizeBox(p) {
     h: clamp01(h / imgH),
   };
   moved = true;
-  draw(false); // the side panel is synced once, on mouse-up
+  drawFast(); // cached layer + this box only; full draw() runs on mouse-up
 }
 
 // ------------------------------------------------------------------------- //
