@@ -4,15 +4,38 @@
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
+/**
+ * Look up a single element by id.
+ * @param {string} id
+ * @returns {HTMLElement|null}
+ */
 const el = (id) => document.getElementById(id);
+/**
+ * Query the first element matching a CSS selector.
+ * @param {string} sel
+ * @param {ParentNode} [root=document]
+ * @returns {Element|null}
+ */
 const qs = (sel, root = document) => root.querySelector(sel);
+/**
+ * Query all matching elements as an array.
+ * @param {string} sel
+ * @param {ParentNode} [root=document]
+ * @returns {Element[]}
+ */
 const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
 // ------------------------------------------------------------------------- //
 // reusable DOM helpers (used everywhere; keep them small and side-effect free)
 // ------------------------------------------------------------------------- //
 
-// Build an element in one call: `mk('button', 'primary', 'Save')`.
+/**
+ * Build an element in one call: `mk('button', 'primary', 'Save')`.
+ * @param {string} tag - Tag name.
+ * @param {string} [cls] - Class attribute.
+ * @param {string} [text] - textContent.
+ * @returns {HTMLElement}
+ */
 function mk(tag, cls, text) {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
@@ -20,7 +43,12 @@ function mk(tag, cls, text) {
   return node;
 }
 
-// Build an <option>; `text` defaults to the value when omitted.
+/**
+ * Build an <option>; `text` defaults to the value when omitted.
+ * @param {string} value
+ * @param {string} [text]
+ * @returns {HTMLOptionElement}
+ */
 function option(value, text) {
   const o = document.createElement('option');
   o.value = value;
@@ -28,16 +56,40 @@ function option(value, text) {
   return o;
 }
 
-// Toggle the shared `hidden` class on a node or element id.
+/**
+ * Toggle the shared `hidden` class on a node or element id.
+ * @param {string|HTMLElement} node
+ * @param {boolean} hidden
+ */
 function setHidden(node, hidden) {
   const n = typeof node === 'string' ? el(node) : node;
   if (n) n.classList.toggle('hidden', !!hidden);
 }
+/**
+ * Show the element with the given id.
+ * @param {string} id
+ */
 function showEl(id) { setHidden(id, false); }
+/**
+ * Hide the element with the given id.
+ * @param {string} id
+ */
 function hideEl(id) { setHidden(id, true); }
+/**
+ * Whether the element with the given id is missing or hidden.
+ * @param {string} id
+ * @returns {boolean}
+ */
 function isHidden(id) { const n = el(id); return !n || n.classList.contains('hidden'); }
 
-// addEventListener by id or node, ignoring missing elements.
+/**
+ * addEventListener by id or node, ignoring missing elements.
+ * @param {string|HTMLElement} id
+ * @param {string} event
+ * @param {EventListener} handler
+ * @param {(boolean|AddEventListenerOptions)} [opts]
+ * @returns {HTMLElement|null}
+ */
 function onEl(id, event, handler, opts) {
   const n = typeof id === 'string' ? el(id) : id;
   if (n) n.addEventListener(event, handler, opts);
@@ -47,11 +99,23 @@ function onEl(id, event, handler, opts) {
 // ------------------------------------------------------------------------- //
 // modals: one open/close/backdrop implementation for every overlay
 // ------------------------------------------------------------------------- //
+/**
+ * Open (show) a modal by id.
+ * @param {string} id
+ */
 function openModal(id) { showEl(id); }
+/**
+ * Close (hide) a modal by id.
+ * @param {string} id
+ */
 function closeModal(id) { hideEl(id); }
 
-// Clicking the dimmed backdrop (the modal wrapper itself, outside its inner
-// box) closes the modal.
+/**
+ * Close the modal when its dimmed backdrop (the wrapper itself, outside the
+ * inner box) is clicked.
+ * @param {string} id - Wrapper element id.
+ * @param {Function} close - Called on a backdrop click.
+ */
 function bindModalBackdrop(id, close) {
   onEl(id, 'click', (e) => { if (e.target === el(id)) close(); });
 }
@@ -74,22 +138,31 @@ window.fetch = async (...args) => {
   return res;
 };
 
+// Resize handle hit-box size, in px.
 const HANDLE_SIZE = 8;
+// Delete button hit-box size, in px.
 const DEL_BTN = 16;
 const AUTO_SAVE_DELAY = 400; // ms to coalesce rapid edits into one auto-save
 
+// All image paths in the dataset.
 let images = [];
+// Split names loaded from data.yaml.
 let splits = [];
 let filters = [];               // [{name, description, arguments}] (active only)
+// Class names from data.yaml.
 let classes = [];
+// Index into `images` of the current image, or -1.
 let currentIndex = -1;
+// Name of the active split (e.g. 'train'), or null.
 let activeSplit = null;
 let activeFilters = [];         // active filter chain, run top to bottom
 let boxes = [];        // normalized: {class, cx, cy, w, h, fixed?}
                        // `fixed` is transient (never saved / reloaded): it is
                        // dropped when the image changes and is not written to labels
+// Index of the selected box, or -1.
 let selected = -1;
 let lastSelected = 0; // most recent selected index; Shift resumes here after Esc
+// Default class index used when drawing a new box.
 let defaultClass = 0;
 let justDrawn = false; // whether the selected box was just created (Esc can drop it)
 let editingPoint = null; // {i, name} -> coordinate input focused in the side panel (cx/cy/w/h)
@@ -109,17 +182,25 @@ let hookEvents = []; // known hook events
 let extensionApiVersion = 1; // extension YAML format version the UI writes
 let placeholders = { action: [], filter: [] }; // click-to-insert catalogs
 let actionDefs = []; // [{name, steps, after_success, source, status, api_version}]
+// Loaded hook definitions (Settings > Hooks).
 let hookDefs = [];
+// Loaded filter definitions (Settings > Filters).
 let filterDefs = [];
 let yamlEditor = null; // the file currently open in the raw YAML editor
 let undoStack = [];   // snapshots of `boxes` before each edit (fresh per image)
+// Snapshots replayed by the redo action, mirroring `undoStack`.
 let redoStack = [];
 let moved = false;    // whether the current drag actually changed anything yet
 let dragUndoPushed = false; // whether the current move/resize drag pushed its undo snapshot
+// Natural width of the current image, in px.
 let imgW = 0;
+// Natural height of the current image, in px.
 let imgH = 0;
+// Whether unsaved label changes exist.
 let dirty = false;
+// --readonly: block all writes.
 let readonly = false;
+// Whether a dataset has been loaded successfully.
 let datasetLoaded = false;
 let availableTags = [];     // dataset-wide list from tags.yaml (toggle order for Alt+n)
 let imageTags = [];         // current image's tags
@@ -156,11 +237,17 @@ const CLIENT_ID = (() => {
   return id;
 })();
 
-// Verbose logging, enabled by `python app.py --debug` (exposed via /api/config).
-// Writes to the browser console so the whole client flow can be traced.
+/**
+ * Verbose logging, enabled by `--debug`; writes to the browser console.
+ * @param {...*} args
+ */
 function dbg(...args) {
   if (debugMode) console.log('[ybe]', ...args);
 }
+/**
+ * Verbose warning logging, enabled by `--debug`.
+ * @param {...*} args
+ */
 function dbgWarn(...args) {
   if (debugMode) console.warn('[ybe]', ...args);
 }
@@ -176,6 +263,11 @@ let serverSettings = {};      // {key: value} last seen from /api/config
 let settingsSaveTimer = null; // debounce for batched POST /api/settings
 let pendingSettings = {};     // changes waiting to be flushed
 
+/**
+ * Read a setting: localStorage first, then the server mirror.
+ * @param {string} key
+ * @returns {string|null}
+ */
 function settingsGet(key) {
   let local = null;
   try { local = localStorage.getItem(key); } catch (e) { /* storage unavailable */ }
@@ -187,6 +279,11 @@ function settingsGet(key) {
   return null;
 }
 
+/**
+ * Write a setting to localStorage and the server, debouncing the POST.
+ * @param {string} key
+ * @param {string|null} value
+ */
 function settingsSet(key, value) {
   const str = value === null || value === undefined ? null : String(value);
   try {
@@ -200,6 +297,9 @@ function settingsSet(key, value) {
   settingsSaveTimer = setTimeout(flushSettings, 150);
 }
 
+/**
+ * Send any pending settings changes in one POST.
+ */
 function flushSettings() {
   settingsSaveTimer = null;
   if (!Object.keys(pendingSettings).length) return;
@@ -218,6 +318,9 @@ const NOTIF_LOG_MAX = 50;  // keep this many error/warning messages for the bell
 let notifLog = [];         // [{type, msg, at}] newest first
 let notifUnread = 0;       // sticky messages seen while the bell panel is closed
 
+/**
+ * Refresh the unread count badge on the notification bell.
+ */
 function updateNotifBadge() {
   const badge = el('notifBadge');
   if (!badge) return;
@@ -225,6 +328,9 @@ function updateNotifBadge() {
   badge.classList.toggle('hidden', notifUnread <= 0);
 }
 
+/**
+ * Rebuild the bell panel list from `notifLog`.
+ */
 function renderNotifPanel() {
   const list = el('notifList');
   if (!list) return;
@@ -240,6 +346,10 @@ function renderNotifPanel() {
   });
 }
 
+/**
+ * Open or close the bell panel.
+ * @param {boolean} [show] - Force open/closed; toggles when omitted.
+ */
 function toggleNotifPanel(show) {
   const panel = el('notifPanel');
   if (!panel) return;
@@ -253,8 +363,13 @@ function toggleNotifPanel(show) {
   }
 }
 
-// type: info | success | warning | error. Errors/warnings are sticky by default:
-// they stay until dismissed and are recorded in the bell history.
+/**
+ * Show a toast; errors/warnings are sticky by default and recorded in the bell
+ * history. Type is info | success | warning | error.
+ * @param {string} msg
+ * @param {Object} [opts] - type, sticky, log, timeout, action, onClose.
+ * @returns {{node: HTMLElement, dismiss: Function}|null}
+ */
 function toast(msg, opts = {}) {
   const container = el('toasts');
   const text = String(msg == null ? '' : msg);
@@ -314,6 +429,9 @@ function toast(msg, opts = {}) {
 // ------------------------------------------------------------------------- //
 // update check (see /api/update-check; cached server-side, checked weekly)
 // ------------------------------------------------------------------------- //
+/**
+ * Paint the current update-check result into the Settings view.
+ */
 function renderUpdateStatus() {
   const status = el('updateStatus');
   if (!status) return;
@@ -337,6 +455,11 @@ function renderUpdateStatus() {
   }
 }
 
+/**
+ * Fetch the latest update-check result and refresh the UI.
+ * @param {boolean} [force] - Bypass the server cache.
+ * @returns {Promise<void>}
+ */
 async function refreshUpdateInfo(force = false) {
   try {
     const data = force
@@ -350,7 +473,9 @@ async function refreshUpdateInfo(force = false) {
   notifyUpdateDaily();
 }
 
-// One sticky notice per day (and per version) with a details button.
+/**
+ * Show one sticky update notice per version per day, with a details button.
+ */
 function notifyUpdateDaily() {
   if (!updateInfo || !updateInfo.update_available) return;
   const version = updateInfo.latest_version || '';
@@ -372,6 +497,9 @@ function notifyUpdateDaily() {
   );
 }
 
+/**
+ * Open the update instructions modal.
+ */
 function openUpdateModal() {
   const summary = el('updateModalSummary');
   if (summary) {
@@ -385,6 +513,9 @@ function openUpdateModal() {
   openModal('updateModal');
 }
 
+/**
+ * Close the update instructions modal.
+ */
 function closeUpdateModal() {
   closeModal('updateModal');
 }
@@ -392,6 +523,10 @@ function closeUpdateModal() {
 // ------------------------------------------------------------------------- //
 // changelog: show app/CHANGES for the installed version once per version
 // ------------------------------------------------------------------------- //
+/**
+ * Show the changelog once per installed version.
+ * @param {Object} cfg - /api/config payload with `version` and `changelog`.
+ */
 function notifyChangelog(cfg) {
   const version = (cfg && cfg.version) || '';
   const changes = (cfg && Array.isArray(cfg.changelog)) ? cfg.changelog : [];
@@ -403,6 +538,11 @@ function notifyChangelog(cfg) {
   queueAutoModal('changelog', () => showChangelog(version, changes));
 }
 
+/**
+ * Populate and open the changelog modal.
+ * @param {string} version
+ * @param {string[]} changes
+ */
 function showChangelog(version, changes) {
   const title = el('changelogTitle');
   if (title) title.textContent = `What's new in ${version}`;
@@ -414,6 +554,9 @@ function showChangelog(version, changes) {
   openModal('changelogModal');
 }
 
+/**
+ * Close the changelog modal and release the ambient-modal queue.
+ */
 function closeChangelog() {
   closeModal('changelogModal');
   releaseAutoModal('changelog');
@@ -425,12 +568,20 @@ function closeChangelog() {
 let autoModalCurrent = null;
 const autoModalQueue = [];
 
+/**
+ * Queue an ambient modal until no other one is open.
+ * @param {string} id
+ * @param {Function} show
+ */
 function queueAutoModal(id, show) {
   if (autoModalCurrent === id || autoModalQueue.some((m) => m.id === id)) return;
   autoModalQueue.push({ id, show });
   pumpAutoModals();
 }
 
+/**
+ * Show the next queued ambient modal if none is open.
+ */
 function pumpAutoModals() {
   if (autoModalCurrent) return;
   const next = autoModalQueue.shift();
@@ -439,6 +590,10 @@ function pumpAutoModals() {
   next.show();
 }
 
+/**
+ * Mark an ambient modal closed and show the next queued one.
+ * @param {string} id
+ */
 function releaseAutoModal(id) {
   const qi = autoModalQueue.findIndex((m) => m.id === id);
   if (qi !== -1) autoModalQueue.splice(qi, 1);

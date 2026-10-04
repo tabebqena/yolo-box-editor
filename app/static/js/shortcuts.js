@@ -1,6 +1,11 @@
 // app/static/js/shortcuts.js — action buttons, shortcut modal/editing, presence
 'use strict';
 
+/**
+ * Fill the recent-datasets dropdown and hide it when the list is empty.
+ * @param {string[]} paths - Recently opened data.yaml paths.
+ * @returns {void}
+ */
 function populateRecent(paths) {
   const sel = el('recentSelect');
   sel.innerHTML = '';
@@ -12,11 +17,16 @@ function populateRecent(paths) {
   sel.value = '';
 }
 
+// Max action buttons shown before the overflow (…) button appears.
 const ACTIONS_VISIBLE = 3;
+// Whether the overflowed action buttons are currently revealed.
 let actionsExpanded = false;
 
-// Show only the first ACTIONS_VISIBLE action buttons; reveal the rest when the
-// expand button (…) is toggled.
+/**
+ * Show only the first ACTIONS_VISIBLE action buttons; reveal the rest when the
+ * expand button (…) is toggled.
+ * @returns {void}
+ */
 function applyActionOverflow() {
   const box = el('actionBtns');
   const expand = el('actionsExpandBtn');
@@ -31,6 +41,11 @@ function applyActionOverflow() {
   expand.title = actionsExpanded ? 'Show fewer actions' : 'Show all actions';
 }
 
+/**
+ * Rebuild the action buttons for the given action names.
+ * @param {string[]} names - Action names to render.
+ * @returns {void}
+ */
 function populateActions(names) {
   const box = el('actionBtns');
   box.innerHTML = '';
@@ -46,6 +61,11 @@ function populateActions(names) {
   applyActionOverflow();
 }
 
+/**
+ * Enable or disable every action button.
+ * @param {boolean} disabled - Whether the buttons should be disabled.
+ * @returns {void}
+ */
 function setActionButtonsDisabled(disabled) {
   el('actionBtns').querySelectorAll('button').forEach((b) => { b.disabled = disabled; });
 }
@@ -53,10 +73,21 @@ function setActionButtonsDisabled(disabled) {
 // ------------------------------------------------------------------------- //
 // shortcuts (modal)
 // ------------------------------------------------------------------------- //
+/**
+ * Build a <kbd> element for a shortcut key label.
+ * @param {string} text - Key label to display.
+ * @returns {HTMLElement} The created element.
+ */
 function shortcutKbd(text) {
   return mk('kbd', null, text);
 }
 
+/**
+ * Build a modal row pairing a label with its shortcut keys.
+ * @param {string} label - Human-readable action label.
+ * @param {string|string[]} keys - One or more key labels.
+ * @returns {HTMLElement} The created row.
+ */
 function menuRow(label, keys) {
   const row = mk('div', 'menu-row');
   const keyBox = mk('span', 'menu-keys');
@@ -65,10 +96,16 @@ function menuRow(label, keys) {
   return row;
 }
 
+// Preferred display order for the built-in app shortcuts.
 const APP_SHORTCUT_ORDER = ['app_prev', 'app_next', 'app_del', 'app_drop', 'app_undo', 'app_redo', 'app_save', 'app_ch_box', 'app_sel_box', 'app_sel_points', 'app_escape', 'app_show_hide', 'app_fix_box', 'app_force_draw', 'app_refresh_images_list', 'app_reload_images_list', 'app_refresh_image'];
 
+// Last shortcut-error message shown, so config reloads don't re-toast it.
 let shownShortcutErrors = '';
 
+/**
+ * Show a sticky toast listing the visible shortcut, hook and filter errors.
+ * @returns {void}
+ */
 function renderShortcutErrors() {
   const dismissed = JSON.parse(sessionStorage.getItem('dismissedShortcutErrors') || '[]');
   // messages are self-describing ("'shortcuts.txt': ..." / "'hooks/x.yaml': ...")
@@ -95,10 +132,18 @@ function renderShortcutErrors() {
 // machines are counted too.
 // --------------------------------------------------------------------------- //
 const PRESENCE_INTERVAL = 5000; // ms between presence pings
+// Interval id for the presence ping loop.
 let presenceTimer = null;
+// Set once the user dismisses the presence warning for this overlap.
 let presenceDismissed = false;
+// Handle of the currently shown presence warning toast, if any.
 let presenceToast = null;
 
+/**
+ * Show or hide the concurrent-client warning based on the client count.
+ * @param {number} count - Number of connected clients.
+ * @returns {void}
+ */
 function renderPresenceWarning(count) {
   if (count <= 1) {
     // overlap is over: hide the toast, and warn again on a later overlap
@@ -117,6 +162,11 @@ function renderPresenceWarning(count) {
     });
 }
 
+/**
+ * Send a presence ping, optionally signalling that this client is leaving.
+ * @param {boolean} [bye=false] - True to mark the client as gone.
+ * @returns {Promise<void>}
+ */
 async function pingPresence(bye = false) {
   try {
     const { data } = await apiPost('/api/presence', { cid: CLIENT_ID, bye }, { keepalive: bye });
@@ -125,6 +175,10 @@ async function pingPresence(bye = false) {
   } catch (e) { /* presence is best-effort */ }
 }
 
+/**
+ * Start the periodic presence ping and wire up visibility/page-hide pings.
+ * @returns {void}
+ */
 function startPresence() {
   pingPresence();
   clearInterval(presenceTimer);
@@ -141,22 +195,45 @@ function startPresence() {
   });
 }
 
+/**
+ * Build a titled section container for the shortcuts modal.
+ * @param {string} title - Section heading.
+ * @returns {HTMLElement} The created section.
+ */
 function shortcutSection(title) {
   return mk('div', 'shortcut-section', title);
 }
 
+// Canonical modifier labels in display order.
 const SHORTCUT_MODIFIERS = ['Ctrl', 'Alt', 'Shift', 'Meta'];
+// Maps KeyboardEvent.key modifier names to their display labels.
 const SHORTCUT_MODIFIER_KEYS = { Control: 'Ctrl', Alt: 'Alt', Shift: 'Shift', Meta: 'Meta' };
 
+/**
+ * Format a shortcut for display, using an em dash when unbound.
+ * @param {string} text - Shortcut string.
+ * @returns {string} The display text.
+ */
 function shortcutDisplay(text) {
   return text || '\u2014';
 }
 
+/**
+ * Look up the effective shortcut for an app or action name.
+ * @param {string} name - Shortcut name.
+ * @returns {string} The bound shortcut, or an empty string.
+ */
 function currentShortcut(name) {
   const info = appShortcuts[name] || actionShortcuts[name];
   return info ? info.shortcut : '';
 }
 
+/**
+ * Build an editable row for one shortcut, with a capture button and reset.
+ * @param {string} name - Shortcut name.
+ * @param {string} label - Human-readable label.
+ * @returns {HTMLElement} The created row.
+ */
 function shortcutEditRow(name, label) {
   const row = mk('div', 'menu-row shortcut-edit-row');
   row.appendChild(mk('span', 'menu-label', label));
@@ -177,6 +254,10 @@ function shortcutEditRow(name, label) {
   return row;
 }
 
+/**
+ * Render the shortcuts modal contents in view or edit mode.
+ * @returns {void}
+ */
 function renderShortcuts() {
   const wrap = el('shortcutItems');
   if (!wrap) return;
@@ -213,6 +294,11 @@ function renderShortcuts() {
 // --- editing the bindings (Settings > Shortcuts > Edit) ------------------- //
 let shortcutCapture = null; // {name, btn, held:Set, used:Set, keyPressed}
 
+/**
+ * Convert a keyboard event into a shortcut key token.
+ * @param {KeyboardEvent} e - The key event.
+ * @returns {string|null} The key token, or null when unsupported.
+ */
 function shortcutKeyFromEvent(e) {
   if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3);
   if (/^Digit[0-9]$/.test(e.code)) return e.code.slice(5);
@@ -227,6 +313,12 @@ function shortcutKeyFromEvent(e) {
   return named[e.key] || null;
 }
 
+/**
+ * Begin capturing a new key combination for a shortcut.
+ * @param {HTMLButtonElement} btn - The capture button being edited.
+ * @param {string} name - Shortcut name being rebound.
+ * @returns {void}
+ */
 function startShortcutCapture(btn, name) {
   stopShortcutCapture();
   shortcutCapture = { name, btn, held: new Set(), used: new Set(), keyPressed: false };
@@ -237,6 +329,10 @@ function startShortcutCapture(btn, name) {
   btn.focus();
 }
 
+/**
+ * Stop capturing and restore the capture button's label.
+ * @returns {void}
+ */
 function stopShortcutCapture() {
   if (!shortcutCapture) return;
   document.removeEventListener('keydown', onShortcutCaptureKeyDown, true);
@@ -246,6 +342,11 @@ function stopShortcutCapture() {
   shortcutCapture = null;
 }
 
+/**
+ * Commit a captured combination to the draft bindings.
+ * @param {string} value - The captured shortcut string.
+ * @returns {void}
+ */
 function applyShortcutCapture(value) {
   const name = shortcutCapture.name;
   shortcutDraft[name] = value;
@@ -254,6 +355,11 @@ function applyShortcutCapture(value) {
   renderShortcuts();
 }
 
+/**
+ * Handle keydown while capturing a shortcut.
+ * @param {KeyboardEvent} e - The key event.
+ * @returns {void}
+ */
 function onShortcutCaptureKeyDown(e) {
   if (!shortcutCapture) return;
   e.preventDefault();
@@ -276,6 +382,11 @@ function onShortcutCaptureKeyDown(e) {
   applyShortcutCapture(mods.concat(key).join('+'));
 }
 
+/**
+ * Handle keyup while capturing, allowing modifier-only bindings.
+ * @param {KeyboardEvent} e - The key event.
+ * @returns {void}
+ */
 function onShortcutCaptureKeyUp(e) {
   if (!shortcutCapture) return;
   e.preventDefault();
@@ -290,6 +401,11 @@ function onShortcutCaptureKeyUp(e) {
   }
 }
 
+/**
+ * Reset a shortcut to its shipped default in the draft bindings.
+ * @param {string} name - Shortcut name.
+ * @returns {void}
+ */
 function resetShortcut(name) {
   shortcutResets.add(name);
   const def = shortcutDefaults[name];
@@ -297,6 +413,11 @@ function resetShortcut(name) {
   renderShortcuts();
 }
 
+/**
+ * Enter or leave shortcut editing and initialise the draft bindings.
+ * @param {boolean} on - True to enter edit mode.
+ * @returns {void}
+ */
 function setShortcutEditMode(on) {
   stopShortcutCapture();
   shortcutEditMode = on;
@@ -312,6 +433,10 @@ function setShortcutEditMode(on) {
   renderShortcuts();
 }
 
+/**
+ * Save the changed and reset shortcuts to the server.
+ * @returns {Promise<void>}
+ */
 async function saveShortcuts() {
   const set = {};
   Object.entries(shortcutDraft).forEach(([name, value]) => {

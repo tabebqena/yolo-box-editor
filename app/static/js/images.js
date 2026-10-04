@@ -1,7 +1,10 @@
 // app/static/js/images.js — image loading/resume and tagging
 'use strict';
 
-// Blank the editor when there is no image to show (empty dataset / image list).
+/**
+ * Blank the editor when there is no image to show (empty dataset / image list).
+ * @returns {void}
+ */
 function resetToEmptyImage() {
   currentIndex = -1;
   boxes = [];
@@ -16,6 +19,10 @@ function resetToEmptyImage() {
   renderTagBar();
 }
 
+/**
+ * Fill the class dropdown, defaulting to `class_0` when there are no classes.
+ * @returns {void}
+ */
 function populateClasses() {
   if (classes.length === 0) classes = ['class_0'];
   if (defaultClass >= classes.length) defaultClass = 0;
@@ -26,6 +33,12 @@ function populateClasses() {
   sel.value = defaultClass;
 }
 
+/**
+ * Load server config, restore the saved view and open the first image.
+ * @param {number} [startIdx=0] - Image index to open.
+ * @param {Object} [opts={}] - Options such as `explicit`, `anchor` or `noResume`.
+ * @returns {Promise<void>}
+ */
 async function loadConfig(startIdx = 0, opts = {}) {
   const cfg0 = await apiGet('/api/config');
   console.log(`[ybe] yolo-box-editor v${cfg0.version || '?'}`);
@@ -106,9 +119,11 @@ async function loadConfig(startIdx = 0, opts = {}) {
   runHook('on_images_list_loaded');
 }
 
-// The active split and filter (and the split a filter was selected with) live
-// in the server's STATE, which a restart clears. Persist them per dataset so the
-// view is restored.
+/**
+ * Persist the active split and filters per dataset so a reload restores them.
+ * @param {Object} cfg - The server config payload.
+ * @returns {void}
+ */
 function persistView(cfg) {
   try {
     if (!cfg.data_yaml) return;
@@ -120,22 +135,40 @@ function persistView(cfg) {
   } catch (e) { /* storage unavailable */ }
 }
 
+/**
+ * Read the saved per-dataset view from localStorage.
+ * @returns {Object|null} The saved view, or null when absent/unreadable.
+ */
 function readSavedView() {
   try {
     return JSON.parse(localStorage.getItem(VIEW_KEY) || 'null');
   } catch (e) { return null; }
 }
 
+/**
+ * Remove the saved view from localStorage.
+ * @returns {void}
+ */
 function clearSavedView() {
   try { localStorage.removeItem(VIEW_KEY); } catch (e) { /* ignore */ }
 }
 
+/**
+ * POST a JSON body and return the parsed `data` field.
+ * @param {string} url - Request URL.
+ * @param {Object} body - JSON-serialisable request body.
+ * @returns {Promise<Object>} The response data.
+ */
 async function postJson(url, body) {
   return (await apiPost(url, body)).data;
 }
 
-// On load, re-apply the remembered split and/or filter when the server has none
-// (e.g. after a restart). Direct fetches only — never re-enters loadConfig.
+/**
+ * Re-apply the remembered split and/or filter when the server has none (e.g.
+ * after a restart). Direct fetches only — never re-enters loadConfig.
+ * @param {Object} cfg - The server config payload.
+ * @returns {Promise<Object>} The (possibly updated) config payload.
+ */
 async function maybeRestoreView(cfg) {
   if (!cfg.data_yaml) return cfg;
   const saved = readSavedView();
@@ -173,12 +206,22 @@ async function maybeRestoreView(cfg) {
   return cfg;
 }
 
+/**
+ * Show a filter error once, ignoring repeats on config reloads.
+ * @param {string} msg - The message to display.
+ * @returns {void}
+ */
 function showTransientFilterMessage(msg) {
   if (showTransientFilterMessage._last === msg) return; // don't re-toast on reload
   showTransientFilterMessage._last = msg;
   toast(msg, { type: 'error' });
 }
 
+/**
+ * Load the image at the given index and its annotations.
+ * @param {number} i - Image index (clamped to the list).
+ * @returns {void}
+ */
 function loadImage(i) {
   i = Math.max(0, Math.min(images.length - 1, i));
   currentIndex = i;
@@ -218,10 +261,11 @@ function loadImage(i) {
     });
 }
 
-// Remember the current image so the app can resume here on reload. One entry
-// per split is kept, plus a global `last`, so switching back to a split returns
-// to the image you were on there. Written through `settingsSet`, so the backend
-// keeps a copy and a fresh browser resumes at the same image too.
+/**
+ * Remember the current image so the app resumes here on reload. One entry per
+ * split is kept, plus a global `last`, written through `settingsSet`.
+ * @returns {void}
+ */
 function rememberLastImage() {
   if (currentIndex < 0 || !images[currentIndex]) return;
   const entry = images[currentIndex];
@@ -235,6 +279,10 @@ function rememberLastImage() {
   settingsSet(LAST_IMAGE_KEY, JSON.stringify(mem));
 }
 
+/**
+ * Read the remembered last-image map from settings.
+ * @returns {Object|null} The last-image memory, or null.
+ */
 function readLastImage() {
   try {
     const raw = settingsGet(LAST_IMAGE_KEY);
@@ -242,23 +290,29 @@ function readLastImage() {
   } catch (e) { return null; }
 }
 
-// A stable identity for an image, independent of its position in the list
-// (indices shift whenever the list is rescanned or a filter is re-applied).
+/**
+ * Build a stable identity for an image, independent of its list position.
+ * @param {Object} entry - Image entry with `split` and `name`.
+ * @returns {string|null} The `split/name` key, or null.
+ */
 function imageKey(entry) {
   return entry ? `${entry.split}/${entry.name}` : null;
 }
 
-// Identity query for an image, e.g. `?key=val%2F0014122.jpg`. All per-image
-// requests use this instead of an index: the list can be rebuilt (rescan,
-// filter) so an index may point at a different file than the one on screen.
+/**
+ * Build the identity query string for an image's API requests.
+ * @param {Object} entry - Image entry with `split` and `name`.
+ * @returns {string} A `?key=...` query string.
+ */
 function keyQuery(entry) {
   return '?key=' + encodeURIComponent(imageKey(entry));
 }
 
-// Snapshot where the user is *by path* before the image list is rebuilt: the
-// current image, plus (when `follow`) the ones that followed it. This is
-// filter/order agnostic, so a user without any filter keeps the plain "same
-// image / next image" behaviour.
+/**
+ * Snapshot the current image (and optionally its followers) by path.
+ * @param {boolean} [follow=true] - Also record the images that follow it.
+ * @returns {Object|null} The anchor, or null when no image is selected.
+ */
 function captureImageAnchor(follow = true) {
   if (currentIndex < 0 || !images[currentIndex]) return null;
   return {
@@ -268,10 +322,11 @@ function captureImageAnchor(follow = true) {
   };
 }
 
-// Find the image to show after the list was rebuilt: the same image by path;
-// else, when the anchor asked to `follow`, the first still-present image that
-// came after it (a removed/archived image thus shows its successor); else the
-// first image.
+/**
+ * Find the image to show after the list was rebuilt.
+ * @param {Object|null} anchor - Anchor from `captureImageAnchor`.
+ * @returns {number} The image index to load.
+ */
 function resolveImageAnchor(anchor) {
   if (!images.length) return -1;
   if (anchor && anchor.path) {
@@ -291,9 +346,11 @@ function resolveImageAnchor(anchor) {
     : 0;
 }
 
-// Resume the image last reached: for the active split when one is set, else the
-// global last image. `bySplit` is the new per-split memory; the old single-split
-// shape (`{split, name}`) is still understood.
+/**
+ * Resume the last-reached image for the active split or globally.
+ * @param {Object} cfg - The server config payload.
+ * @returns {Promise<void>}
+ */
 async function resumeLastImage(cfg) {
   const mem = readLastImage();
   if (!mem || mem.dataYaml !== cfg.data_yaml || !images.length) {
@@ -312,14 +369,21 @@ async function resumeLastImage(cfg) {
   loadImage(0);
 }
 
-// Leave the current image safely: auto-save pending edits, or ask before
-// discarding them. Returns false when navigation should be blocked.
+/**
+ * Auto-save or confirm discarding pending edits before leaving the image.
+ * @returns {Promise<boolean>} False when navigation should be blocked.
+ */
 async function saveOrDiscard() {
   if (!dirty) return true;
   if (autoSave) return flushAutoSave(); // stay put if the save failed
   return confirm('You have unsaved changes. Discard them?');
 }
 
+/**
+ * Move to the image `delta` away, running navigation hooks and saving first.
+ * @param {number} delta - Relative step (-1 or 1).
+ * @returns {Promise<void>}
+ */
 async function go(delta) {
   if (currentIndex < 0) return;
   const next = currentIndex + delta;
@@ -339,10 +403,23 @@ async function go(delta) {
 // ------------------------------------------------------------------------- //
 // tagging (per-image tag bar)
 // ------------------------------------------------------------------------- //
+/**
+ * Show a tag action status message as a toast.
+ * @param {string} msg - Message text.
+ * @param {string} [type='info'] - Toast type.
+ * @returns {void}
+ */
 function setTagStatus(msg, type = 'info') {
   toast(msg, { type, timeout: type === 'error' ? undefined : 2500 });
 }
 
+/**
+ * Build a clickable tag badge for the tag bar.
+ * @param {string} name - Tag name.
+ * @param {boolean} active - Whether the tag is on the current image.
+ * @param {number|null} num - Alt-number shortcut, if any.
+ * @returns {HTMLElement} The created badge.
+ */
 function tagBadge(name, active, num) {
   const b = mk('button', 'tag-badge' + (active ? ' active' : ''));
   b.type = 'button';
@@ -359,8 +436,10 @@ function tagBadge(name, active, num) {
   return b;
 }
 
-// Show the (…) button when the tag badges are wider than the row. Expanding
-// lets them wrap onto more lines (the bottom row grows on demand).
+/**
+ * Show the overflow (…) button when the tag badges are too wide for the row.
+ * @returns {void}
+ */
 function applyTagOverflow() {
   const bar = el('tagBar');
   const badges = el('tagBadges');
@@ -374,6 +453,10 @@ function applyTagOverflow() {
   btn.classList.toggle('hidden', !overflow);
 }
 
+/**
+ * Render the per-image tag bar, including orphan and warning states.
+ * @returns {void}
+ */
 function renderTagBar() {
   const bar = el('tagBar');
   const show = getWidgetVisible('tags') && datasetLoaded && currentIndex >= 0;
@@ -431,8 +514,11 @@ function renderTagBar() {
   updateDockPanels();
 }
 
-// Tag edits join the undo/redo history and are written with the image on Save:
-// the backend stores the image's tag file and adds new names to tags.yaml.
+/**
+ * Add a tag to the current image and mark it dirty.
+ * @param {string} name - Tag to add.
+ * @returns {void}
+ */
 function addTag(name) {
   if (readonly || currentIndex < 0) return;
   if (imageTags.includes(name)) return;
@@ -443,6 +529,11 @@ function addTag(name) {
   setTagStatus(`Tag "${name}" added`);
 }
 
+/**
+ * Remove a tag from the current image and mark it dirty.
+ * @param {string} name - Tag to remove.
+ * @returns {void}
+ */
 function removeTag(name) {
   if (readonly || currentIndex < 0) return;
   pushUndo();
@@ -452,6 +543,10 @@ function removeTag(name) {
   setTagStatus(`Tag "${name}" removed`);
 }
 
+/**
+ * Show and focus the new-tag input.
+ * @returns {void}
+ */
 function openTagInput() {
   if (readonly) return;
   showEl('tagInput');
@@ -459,11 +554,19 @@ function openTagInput() {
   el('tagInput').focus();
 }
 
+/**
+ * Hide the new-tag input and its submit button.
+ * @returns {void}
+ */
 function closeTagInput() {
   hideEl('tagInput');
   hideEl('tagSubmitBtn');
 }
 
+/**
+ * Add a tag typed into the input, after a basic duplicate/empty check.
+ * @returns {void}
+ */
 function addTagFromInput() {
   if (readonly || currentIndex < 0) return;
   const input = el('tagInput');
@@ -477,6 +580,11 @@ function addTagFromInput() {
   addTag(name);
 }
 
+/**
+ * Toggle the available tag at the given 1-based number.
+ * @param {number} n - 1-based tag position.
+ * @returns {void}
+ */
 function toggleTagByNumber(n) {
   if (readonly || currentIndex < 0) return;
   const i = n - 1;

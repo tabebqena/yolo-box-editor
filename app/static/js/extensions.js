@@ -9,6 +9,7 @@
 // palette. A file whose api_version is older than the UI is opened in a raw
 // YAML editor instead (see openYamlEditor), which preserves comments.
 // ------------------------------------------------------------------------- //
+// Human-readable labels for the extension reference/entry types.
 const EXT_TYPE_LABELS = {
   cmd: 'Shell command',
   app: 'App action',
@@ -16,6 +17,10 @@ const EXT_TYPE_LABELS = {
   action: 'Other action',
 };
 
+/**
+ * Build the reference-name lists for each extension reference type.
+ * @returns {{app: Array<string>, backend: Array<string>, action: Array<string>}}
+ */
 function extRefNames() {
   return {
     app: appActions,
@@ -24,6 +29,12 @@ function extRefNames() {
   };
 }
 
+/**
+ * Create a labelled text field row.
+ * @param {string} label - The field label.
+ * @param {string} [hint] - Optional placeholder text.
+ * @returns {{row: HTMLElement, input: HTMLInputElement}}
+ */
 function extTextField(label, hint) {
   const row = mk('label', 'ext-field');
   row.appendChild(mk('span', 'ext-field-label', label));
@@ -34,6 +45,12 @@ function extTextField(label, hint) {
   return { row, input };
 }
 
+/**
+ * Create a labelled checkbox row.
+ * @param {string} label - The checkbox label.
+ * @param {boolean} checked - Initial checked state.
+ * @returns {{row: HTMLElement, input: HTMLInputElement}}
+ */
 function extCheckbox(label, checked) {
   const wrap = mk('label', 'ext-check');
   const input = mk('input');
@@ -43,6 +60,11 @@ function extCheckbox(label, checked) {
   return { row: wrap, input };
 }
 
+/**
+ * Build the click-to-insert placeholder palette for a builder.
+ * @param {object} builder - The builder state.
+ * @returns {HTMLElement}
+ */
 function makeCommandPalette(builder) {
   const root = mk('div', 'ext-palette');
   root.appendChild(mk('span', 'ext-palette-label', 'Insert placeholder:'));
@@ -67,6 +89,12 @@ function makeCommandPalette(builder) {
   return root;
 }
 
+/**
+ * Insert a placeholder token at the cursor of the active command input.
+ * @param {object} builder - The builder state.
+ * @param {string} token - The placeholder token to insert.
+ * @returns {void}
+ */
 function extInsertToken(builder, token) {
   let input = builder.lastCmdInput;
   if (!input || !input.isConnected) input = builder.root.querySelector('.ext-cmd-input');
@@ -83,6 +111,12 @@ function extInsertToken(builder, token) {
   builder.lastCmdInput = input;
 }
 
+/**
+ * Build an editable list of command/reference entries.
+ * @param {object} builder - The builder state.
+ * @param {object} opts - List options (allowRefs, addLabel, placeholder).
+ * @returns {HTMLElement}
+ */
 function makeEntryList(builder, opts) {
   const root = mk('div', 'ext-list');
   const rows = mk('div', 'ext-rows');
@@ -152,6 +186,11 @@ function makeEntryList(builder, opts) {
   return root;
 }
 
+/**
+ * Build the argument editor used by filter definitions.
+ * @param {object} builder - The builder state.
+ * @returns {HTMLElement}
+ */
 function makeArgList(builder) {
   const root = mk('div', 'ext-args');
   const rows = mk('div', 'ext-arg-rows');
@@ -208,12 +247,23 @@ function makeArgList(builder) {
   return root;
 }
 
+/**
+ * Render the API-version status badge for an extension definition.
+ * @param {object} def - The extension definition.
+ * @returns {HTMLElement}
+ */
 function versionBadge(def) {
   if (def.status === 'newer') return mk('span', 'ext-badge ext-badge-newer', 'newer than app');
   if (def.status === 'current') return mk('span', 'ext-badge ext-badge-current', 'v' + (def.api_version || extensionApiVersion));
   return mk('span', 'ext-badge ext-badge-outdated', def.api_version ? ('outdated v' + def.api_version) : 'outdated');
 }
 
+/**
+ * Render the list of existing definitions for one extension kind.
+ * @param {string} kind - The definition kind (action, hook or filter).
+ * @param {Array<object>} defs - The definitions to render.
+ * @returns {HTMLElement}
+ */
 function renderDefList(kind, defs) {
   const wrap = mk('div', 'ext-defs');
   wrap.appendChild(mk('div', 'settings-group-title', 'Existing'));
@@ -258,6 +308,13 @@ function renderDefList(kind, defs) {
   return wrap;
 }
 
+/**
+ * Build the save/clear footer buttons for an extension form.
+ * @param {string} label - The save button label.
+ * @param {Function} onSave - Save click handler.
+ * @param {Function} onClear - Clear click handler.
+ * @returns {HTMLElement}
+ */
 function extFormButtons(label, onSave, onClear) {
   const bar = mk('div', 'settings-actions ext-form-actions');
   const save = mk('button', 'primary', label);
@@ -272,10 +329,22 @@ function extFormButtons(label, onSave, onClear) {
   return bar;
 }
 
+/**
+ * Create the mutable state object shared by the extension builders.
+ * @param {string} kind - The extension kind.
+ * @param {HTMLElement} root - The container the builder renders into.
+ * @param {Function} getPlaceholders - Returns the available placeholders.
+ * @returns {object}
+ */
 function newBuilder(kind, root, getPlaceholders) {
   return { kind, root, lastCmdInput: null, getPlaceholders, palette: null };
 }
 
+/**
+ * Apply a server config response to the shared extension state and re-render.
+ * @param {object} cfg - The config payload from the server.
+ * @returns {void}
+ */
 function applyExtensionConfig(cfg) {
   appActions = cfg.app_actions || [];
   backendActions = cfg.backend_actions || [];
@@ -290,9 +359,15 @@ function applyExtensionConfig(cfg) {
   renderFilterBuilder();
 }
 
-// The create forms are laid out as a small editor: a titled header, grouped
-// sections and a footer action bar. `extEditor` returns the pieces so each
-// builder can drop fields into `body` and buttons into `foot`.
+/**
+ * Build the titled editor shell (header, body, footer) used by the create forms.
+ * The create forms are laid out as a small editor with grouped sections and a
+ * footer action bar; returns the pieces so each builder can drop fields into
+ * `body` and buttons into `foot`.
+ * @param {string} title - The editor title.
+ * @param {string} [badge] - Optional badge text.
+ * @returns {{editor: HTMLElement, body: HTMLElement, foot: HTMLElement}}
+ */
 function extEditor(title, badge) {
   const editor = mk('div', 'ext-editor');
   const head = mk('div', 'ext-editor-head');
@@ -307,6 +382,12 @@ function extEditor(title, badge) {
   return { editor, body, foot };
 }
 
+/**
+ * Build a titled form section with an optional hint.
+ * @param {string} title - The section title.
+ * @param {string} [hint] - Optional hint text.
+ * @returns {{sec: HTMLElement, body: HTMLElement}}
+ */
 function extSection(title, hint) {
   const sec = mk('div', 'ext-section');
   const head = mk('div', 'ext-section-head');
@@ -322,6 +403,7 @@ function extSection(title, hint) {
 // a few fields and options; each is described by a spec and built by the shared
 // renderExtensionBuilder below.
 const EXTENSION_SPECS = {
+  // Spec for the Actions tab.
   action: {
     kind: 'action',
     rootId: 'actionBuilder',
@@ -341,6 +423,7 @@ const EXTENSION_SPECS = {
     defs: () => actionDefs,
     save: (b) => saveActionForm(b),
   },
+  // Spec for the Hooks tab.
   hook: {
     kind: 'hook',
     rootId: 'hookBuilder',
@@ -363,6 +446,7 @@ const EXTENSION_SPECS = {
     defs: () => hookDefs,
     save: (b, f) => saveHookForm(b, f.event, f.active),
   },
+  // Spec for the Filters tab.
   filter: {
     kind: 'filter',
     rootId: 'filterBuilder',
@@ -397,6 +481,11 @@ const EXTENSION_SPECS = {
   },
 };
 
+/**
+ * Create the form control for a field spec.
+ * @param {object} field - The field spec (text, select or checkbox).
+ * @returns {{row: HTMLElement, input: HTMLElement}}
+ */
 function extFieldFor(field) {
   if (field.type === 'select') {
     const row = mk('label', 'ext-field');
@@ -410,6 +499,11 @@ function extFieldFor(field) {
   return extTextField(field.label, field.hint);
 }
 
+/**
+ * Render one extension create form and its existing-definitions list.
+ * @param {object} spec - The builder spec (see EXTENSION_SPECS).
+ * @returns {void}
+ */
 function renderExtensionBuilder(spec) {
   const root = el(spec.rootId);
   if (!root) return;
@@ -468,10 +562,28 @@ function renderExtensionBuilder(spec) {
 }
 
 // Kept as named entry points: the Settings tabs and other modules call these.
+/**
+ * Render the Actions tab builder.
+ * @returns {void}
+ */
 function renderActionBuilder() { renderExtensionBuilder(EXTENSION_SPECS.action); }
+/**
+ * Render the Hooks tab builder.
+ * @returns {void}
+ */
 function renderHookBuilder() { renderExtensionBuilder(EXTENSION_SPECS.hook); }
+/**
+ * Render the Filters tab builder.
+ * @returns {void}
+ */
 function renderFilterBuilder() { renderExtensionBuilder(EXTENSION_SPECS.filter); }
 
+/**
+ * POST an extension payload, confirming before overwriting an existing file.
+ * @param {string} url - The save endpoint.
+ * @param {object} body - The payload to send.
+ * @returns {Promise<object|null>} The server response, or null when cancelled.
+ */
 async function postExtension(url, body) {
   let { res, data } = await apiPost(url, body);
   if (res.status === 409) {
@@ -486,6 +598,11 @@ async function postExtension(url, body) {
   return data;
 }
 
+/**
+ * Validate and submit the action create form.
+ * @param {object} b - The builder state.
+ * @returns {Promise<void>}
+ */
 async function saveActionForm(b) {
   const name = b.nameInput.value.trim();
   if (!name) { toast('Give the action a name', { type: 'warning' }); return; }
@@ -497,6 +614,13 @@ async function saveActionForm(b) {
   applyExtensionConfig(data);
 }
 
+/**
+ * Submit the hook create form.
+ * @param {object} b - The builder state.
+ * @param {HTMLInputElement} ev - The event select element.
+ * @param {HTMLInputElement} active - The active checkbox element.
+ * @returns {Promise<void>}
+ */
 async function saveHookForm(b, ev, active) {
   const event = ev.value;
   const data = await postExtension('/api/hooks/save', {
@@ -507,6 +631,13 @@ async function saveHookForm(b, ev, active) {
   applyExtensionConfig(data);
 }
 
+/**
+ * Validate and submit the filter create form.
+ * @param {object} b - The builder state.
+ * @param {HTMLInputElement} desc - The description input element.
+ * @param {HTMLInputElement} active - The active checkbox element.
+ * @returns {Promise<void>}
+ */
 async function saveFilterForm(b, desc, active) {
   const name = b.nameInput.value.trim();
   if (!name) { toast('Give the filter a name', { type: 'warning' }); return; }
@@ -519,6 +650,12 @@ async function saveFilterForm(b, desc, active) {
   applyExtensionConfig(data);
 }
 
+/**
+ * Delete a user extension file after confirmation.
+ * @param {string} kind - The extension kind.
+ * @param {string} name - The extension name.
+ * @returns {Promise<void>}
+ */
 async function deleteExtension(kind, name) {
   if (readonly) { toast('Read-only mode', { type: 'warning' }); return; }
   if (!confirm(`Delete "${name}"? This removes your file.`)) return;
@@ -528,7 +665,13 @@ async function deleteExtension(kind, name) {
   applyExtensionConfig(data);
 }
 
-// Disable/enable one action or hook for the loaded dataset only (no file edit).
+/**
+ * Disable or enable one action or hook for the loaded dataset only (no file edit).
+ * @param {string} kind - The extension kind.
+ * @param {string} name - The extension name.
+ * @param {boolean} disabled - Whether to disable it.
+ * @returns {Promise<void>}
+ */
 async function setExtensionDisabled(kind, name, disabled) {
   const data = await postJson('/api/extensions/disabled', { kind, name, disabled });
   if (!data.ok) {
@@ -543,6 +686,12 @@ async function setExtensionDisabled(kind, name, disabled) {
     { type: 'success' });
 }
 
+/**
+ * Fetch an extension file and open it in the raw YAML editor.
+ * @param {string} kind - The extension kind.
+ * @param {string} name - The extension name.
+ * @returns {Promise<void>}
+ */
 async function openYamlEditor(kind, name) {
   let data;
   try {
@@ -571,11 +720,19 @@ async function openYamlEditor(kind, name) {
   textarea.focus();
 }
 
+/**
+ * Close the raw YAML editor and clear its state.
+ * @returns {void}
+ */
 function closeYamlEditor() {
   closeModal('yamlEditorModal');
   yamlEditor = null;
 }
 
+/**
+ * Save the raw YAML editor contents back to the server.
+ * @returns {Promise<void>}
+ */
 async function saveYamlEditor() {
   if (!yamlEditor || !yamlEditor.writable) return;
   const btn = el('yamlEditorSave');
@@ -608,6 +765,10 @@ async function saveYamlEditor() {
   await refreshExtensions();
 }
 
+/**
+ * Reload the extension config from the server and apply it.
+ * @returns {Promise<void>}
+ */
 async function refreshExtensions() {
   try {
     const cfg = await apiGet('/api/config');

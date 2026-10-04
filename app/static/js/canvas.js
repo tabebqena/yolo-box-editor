@@ -7,8 +7,10 @@ let start = null;      // canvas px
 let dragStart = null;  // canvas px
 let mouse = null;      // canvas px
 let origBox = null;    // normalized snapshot at drag start
+// active resize-handle name (nw, n, …) during a resize
 let handle = null;
 
+// the single <img> backing the canvas; loading it resizes the canvas
 const imageEl = new Image();
 imageEl.onload = () => {
   imgW = imageEl.naturalWidth;
@@ -33,10 +35,20 @@ imageEl.onerror = () => {
   draw();
 };
 
+/**
+ * Clamp a number to the 0..1 range.
+ * @param {number} v - Value to clamp.
+ * @returns {number}
+ */
 function clamp01(v) {
   return Math.max(0, Math.min(1, v));
 }
 
+/**
+ * Convert a normalized YOLO box to a canvas pixel rect.
+ * @param {{cx:number,cy:number,w:number,h:number}} b - Normalized box.
+ * @returns {{x:number,y:number,w:number,h:number}}
+ */
 function toPx(b) {
   return {
     x: (b.cx - b.w / 2) * imgW,
@@ -46,6 +58,11 @@ function toPx(b) {
   };
 }
 
+/**
+ * Convert a canvas pixel rect to a normalized YOLO box.
+ * @param {{x:number,y:number,w:number,h:number}} r - Pixel rect.
+ * @returns {{class:number,cx:number,cy:number,w:number,h:number}}
+ */
 function toNorm(r) {
   return {
     class: defaultClass,
@@ -56,6 +73,12 @@ function toNorm(r) {
   };
 }
 
+/**
+ * Build the axis-aligned pixel rect spanned by two points.
+ * @param {{x:number,y:number}} a
+ * @param {{x:number,y:number}} b
+ * @returns {{x:number,y:number,w:number,h:number}}
+ */
 function normRect(a, b) {
   return {
     x: Math.min(a.x, b.x),
@@ -65,6 +88,11 @@ function normRect(a, b) {
   };
 }
 
+/**
+ * Clamp a canvas pixel point to the loaded image bounds.
+ * @param {{x:number,y:number}} p
+ * @returns {{x:number,y:number}}
+ */
 function clampToImage(p) {
   return {
     x: Math.max(0, Math.min(imgW, p.x)),
@@ -72,6 +100,11 @@ function clampToImage(p) {
   };
 }
 
+/**
+ * Return the eight resize-handle positions for a pixel rect.
+ * @param {{x:number,y:number,w:number,h:number}} r
+ * @returns {Array<{x:number,y:number,name:string}>}
+ */
 function handlePoints(r) {
   const midX = r.x + r.w / 2;
   const midY = r.y + r.h / 2;
@@ -87,6 +120,9 @@ function handlePoints(r) {
   ];
 }
 
+/**
+ * Redraw the canvas: image, boxes, handles and in-progress interactions.
+ */
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (imgW && imgH && imageEl.complete && imageEl.naturalWidth) {
@@ -142,6 +178,10 @@ function draw() {
   syncSidePanel();
 }
 
+/**
+ * Draw the resize handles for a pixel rect.
+ * @param {{x:number,y:number,w:number,h:number}} r
+ */
 function drawHandles(r) {
   ctx.fillStyle = '#fff';
   ctx.strokeStyle = '#111';
@@ -152,9 +192,13 @@ function drawHandles(r) {
   }
 }
 
-// Highlight the coordinate currently edited in the side panel, so the user
-// sees which value (cx / cy / w / h) the focused input controls. cx/cy show
-// only the box center point in colour; w/h also mark the box edges they span.
+/**
+ * Highlight the coordinate currently edited in the side panel, so the user
+ * sees which value (cx / cy / w / h) the focused input controls. cx/cy show
+ * only the box center point in colour; w/h also mark the box edges they span.
+ * @param {{x:number,y:number,w:number,h:number}} r
+ * @param {string} name - Coordinate name (cx, cy, w or h).
+ */
 function drawPointGuide(r, name) {
   const midX = r.x + r.w / 2;
   const midY = r.y + r.h / 2;
@@ -183,14 +227,28 @@ function drawPointGuide(r, name) {
   ctx.restore();
 }
 
+/**
+ * Pixel rect of the delete button for a box.
+ * @param {{x:number,y:number,w:number,h:number}} r
+ * @returns {{x:number,y:number,w:number,h:number}}
+ */
 function deleteBtnRect(r) {
   return { x: r.x + r.w - DEL_BTN, y: r.y, w: DEL_BTN, h: DEL_BTN };
 }
 
+/**
+ * Pixel rect of the class-cycle button for a box.
+ * @param {{x:number,y:number,w:number,h:number}} r
+ * @returns {{x:number,y:number,w:number,h:number}}
+ */
 function classBtnRect(r) {
   return { x: r.x, y: r.y, w: DEL_BTN, h: DEL_BTN };
 }
 
+/**
+ * Draw the class-cycle button in the top-left of a box.
+ * @param {{x:number,y:number,w:number,h:number}} r
+ */
 function drawClassButton(r) {
   const d = classBtnRect(r);
   ctx.fillStyle = 'rgba(76, 201, 240, 0.9)';
@@ -207,6 +265,10 @@ function drawClassButton(r) {
   ctx.textBaseline = 'alphabetic';
 }
 
+/**
+ * Draw the delete button in the top-right of a box.
+ * @param {{x:number,y:number,w:number,h:number}} r
+ */
 function drawDeleteButton(r) {
   const d = deleteBtnRect(r);
   ctx.fillStyle = 'rgba(231, 76, 60, 0.9)';
@@ -227,6 +289,11 @@ function drawDeleteButton(r) {
   ctx.stroke();
 }
 
+/**
+ * Convert a mouse event to canvas pixel coordinates.
+ * @param {MouseEvent} e
+ * @returns {{x:number,y:number}}
+ */
 function canvasPos(e) {
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
@@ -237,6 +304,11 @@ function canvasPos(e) {
   };
 }
 
+/**
+ * Hit-test a canvas point against handles, buttons and boxes.
+ * @param {{x:number,y:number}} p
+ * @returns {{type:string,handle?:string,index?:number}}
+ */
 function hitTest(p) {
   // hidden boxes are not drawn, so they must not swallow clicks either
   if (!boxesVisible) return { type: 'none' };
@@ -278,6 +350,10 @@ const RESIZE_CURSORS = {
   e: 'ew-resize', w: 'ew-resize',
 };
 
+/**
+ * Update the canvas cursor for the hovered resize handle.
+ * @param {{x:number,y:number}} p
+ */
 function updateCursor(p) {
   if (mode !== 'idle' || readonly || !boxesVisible) return;
   const hit = hitTest(p);
@@ -285,11 +361,15 @@ function updateCursor(p) {
     hit.type === 'handle' ? RESIZE_CURSORS[hit.handle] || 'crosshair' : '';
 }
 
-// True when the force-draw modifier is held for this event. The modifier is
-// configured by the `app_force_draw` binding in your shortcuts.txt
-// (e.g. <Ctrl>, <Alt> or <Ctrl+Shift>); it is not a keydown action. Falls back
-// to Ctrl when unbound. Ctrl/Meta are the Linux-safe choices — many window
-// managers swallow Alt+drag, and Shift is reserved for selecting boxes.
+/**
+ * True when the force-draw modifier is held for this event. The modifier is
+ * configured by the `app_force_draw` binding in your shortcuts.txt
+ * (e.g. <Ctrl>, <Alt> or <Ctrl+Shift>); it is not a keydown action. Falls back
+ * to Ctrl when unbound. Ctrl/Meta are the Linux-safe choices — many window
+ * managers swallow Alt+drag, and Shift is reserved for selecting boxes.
+ * @param {KeyboardEvent|MouseEvent} e
+ * @returns {boolean}
+ */
 function forceDrawActive(e) {
   const info = appShortcuts['app_force_draw'];
   const spec = (info && info.shortcut) || 'Ctrl';
@@ -304,6 +384,10 @@ function forceDrawActive(e) {
   });
 }
 
+/**
+ * Sync the class select to a box (or the default) and remember the last pick.
+ * @param {number} idx - Selected box index, or -1.
+ */
 function syncClassSelect(idx) {
   if (idx >= 0) lastSelected = idx;
   const sel = el('classSelect');
@@ -311,6 +395,10 @@ function syncClassSelect(idx) {
   sel.value = idx >= 0 ? boxes[idx].class : defaultClass;
 }
 
+/**
+ * Move the selected box by dragging, keeping it inside the image.
+ * @param {{x:number,y:number}} p - Current canvas pixel point.
+ */
 function moveBox(p) {
   if (!dragUndoPushed) { pushUndo(); dragUndoPushed = true; }
   const dx = (p.x - dragStart.x) / imgW;
@@ -324,6 +412,10 @@ function moveBox(p) {
   draw();
 }
 
+/**
+ * Resize the selected box from the active handle.
+ * @param {{x:number,y:number}} p - Current canvas pixel point.
+ */
 function resizeBox(p) {
   if (!dragUndoPushed) { pushUndo(); dragUndoPushed = true; }
   p = clampToImage(p);
@@ -365,6 +457,9 @@ function resizeBox(p) {
 // ------------------------------------------------------------------------- //
 // read-only mode
 // ------------------------------------------------------------------------- //
+/**
+ * Apply the read-only state to the canvas controls and redraw.
+ */
 function applyReadonly() {
   const sw = el('readonlySw');
   sw.checked = readonly;

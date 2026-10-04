@@ -6,16 +6,26 @@
 // Accounts live in the server-side user store (managed with --create-user /
 // --list-users); the UI does sign in, sign out and password changes.
 // ---------------------------------------------------------------------------
+// Guards startApp so the app is built only once after login.
 let appStarted = false;
 
-// Show the signed-in-only controls: the Settings > Account tab and its
-// Sign out / Change password buttons.
+/**
+ * Show the signed-in-only controls: the Settings > Account tab and its
+ * Sign out / Change password buttons.
+ * @param {boolean} visible
+ * @returns {void}
+ */
 function setAccountControls(visible) {
   setHidden('accountTabBtn', !visible);
   setHidden('logoutBtn', !visible);
   setHidden('changePwBtn', !visible);
 }
 
+/**
+ * Show the sign-in overlay, optionally with an error message.
+ * @param {string} [message]
+ * @returns {void}
+ */
 function showLogin(message) {
   const overlay = el('loginOverlay');
   if (!overlay) return;
@@ -28,12 +38,21 @@ function showLogin(message) {
   if (user && !user.value) user.focus();
 }
 
+/**
+ * Hide the sign-in overlay and clear the password field.
+ * @returns {void}
+ */
 function hideLogin() {
   hideEl('loginOverlay');
   hideEl('loginError');
   el('loginPass').value = '';
 }
 
+/**
+ * Submit the sign-in form and start the app on success.
+ * @param {Event} [e] Submit event, if any.
+ * @returns {Promise<void>}
+ */
 async function submitLogin(e) {
   if (e) e.preventDefault();
   const btn = el('loginBtn');
@@ -58,11 +77,19 @@ async function submitLogin(e) {
   }
 }
 
+/**
+ * Sign out on the server, then reload the page.
+ * @returns {Promise<void>}
+ */
 async function logout() {
   try { await apiPost('/api/logout', {}); } catch (e) { /* ignore */ }
   location.reload();
 }
 
+/**
+ * Open the change-password modal with empty fields.
+ * @returns {void}
+ */
 function openPasswordModal() {
   el('pwCurrent').value = '';
   el('pwNew').value = '';
@@ -72,10 +99,18 @@ function openPasswordModal() {
   el('pwCurrent').focus();
 }
 
+/**
+ * Close the change-password modal.
+ * @returns {void}
+ */
 function closePasswordModal() {
   closeModal('passwordModal');
 }
 
+/**
+ * Validate and submit a password change.
+ * @returns {Promise<void>}
+ */
 async function savePassword() {
   const err = el('pwError');
   const fail = (msg) => { err.textContent = msg; err.classList.remove('hidden'); };
@@ -101,7 +136,10 @@ async function savePassword() {
   }
 }
 
-// Build the app once, after login has been satisfied.
+/**
+ * Build the app once, after login has been satisfied.
+ * @returns {void}
+ */
 function startApp() {
   if (appStarted) return;
   appStarted = true;
@@ -116,7 +154,10 @@ function startApp() {
   UPDATE_POLL_MS.forEach((ms) => setTimeout(() => refreshUpdateInfo(), ms));
 }
 
-// Ask the server whether a login is needed before starting the app.
+/**
+ * Ask the server whether a login is needed, then show the login form or start.
+ * @returns {Promise<void>}
+ */
 async function boot() {
   let info = null;
   try {

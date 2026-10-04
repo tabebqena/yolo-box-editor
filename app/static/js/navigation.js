@@ -4,6 +4,9 @@
 // ------------------------------------------------------------------------- //
 // navigation & data loading
 // ------------------------------------------------------------------------- //
+/**
+ * Update the counter and prev/next buttons to match the current image.
+ */
 function updateNav() {
   const total = images.length;
   el('counter').value = total ? `${currentIndex + 1} / ${total}` : '0 / 0';
@@ -11,7 +14,11 @@ function updateNav() {
   el('nextBtn').disabled = total === 0 || currentIndex >= total - 1;
 }
 
-// jump to image N (1-based) typed into the counter input
+/**
+ * Jump to image N (1-based) typed into the counter input.
+ * @param {string} text
+ * @returns {Promise<void>}
+ */
 async function jumpToImage(text) {
   if (!images.length) return;
   const m = String(text).match(/\d+/);
@@ -28,13 +35,17 @@ async function jumpToImage(text) {
   loadImage(idx);
 }
 
+// set once the load-data modal has been auto-opened for this page load
 let loadDataAutoOpened = false;
 let tipChecked = false; // the daily tip is considered at most once per page load
 
-// Show one random, not-yet-seen tip at most once per day. The tip list ships in
-// the backend (config.tips); the browser + backend remember the date and which
-// indices have been seen (so it carries across browsers), and reset the seen
-// list once every tip has appeared.
+/**
+ * Show one random, not-yet-seen tip at most once per day. The tip list ships in
+ * the backend (config.tips); the browser + backend remember the date and which
+ * indices have been seen (so it carries across browsers), and reset the seen
+ * list once every tip has appeared.
+ * @param {string[]} tips
+ */
 function maybeShowTip(tips) {
   if (tipChecked) return;
   tipChecked = true;
@@ -63,11 +74,18 @@ function maybeShowTip(tips) {
   });
 }
 
+/**
+ * Close the daily tip modal and release its auto-modal slot.
+ */
 function closeTipModal() {
   closeModal('tipModal');
   releaseAutoModal('tip');
 }
 
+/**
+ * Activate a top-level Settings tab.
+ * @param {string} name
+ */
 function selectSettingsTab(name) {
   qsa('.settings-tab').forEach((tab) => {
     tab.classList.toggle('active', tab.dataset.tab === name);
@@ -77,10 +95,13 @@ function selectSettingsTab(name) {
   });
 }
 
-// The Filters / Actions / Hooks tabs each have their own segmented sub-tabs
-// (e.g. Active chain / Create / Library). Kept separate from
-// `selectSettingsTab` so the main tabs are untouched; `scope` is the owning
-// `.settings-panel` so the same names in other panels never clash.
+/**
+ * Switch a segmented sub-tab within one settings panel. Kept separate from
+ * `selectSettingsTab` so the main tabs are untouched; `scope` is the owning
+ * `.settings-panel` so the same names in other panels never clash.
+ * @param {string} name
+ * @param {Element} [scope] - Owning panel; defaults to the document.
+ */
 function selectSubTab(name, scope) {
   const root = scope || document;
   qsa('.sub-tab', root).forEach((tab) => {
@@ -91,6 +112,9 @@ function selectSubTab(name, scope) {
   });
 }
 
+/**
+ * Open the Settings modal, focusing the dataset tab when none is loaded.
+ */
 function openSettingsModal() {
   openModal('settingsModal');
   el('shortcutEditBtn').disabled = readonly;
@@ -106,10 +130,16 @@ function openSettingsModal() {
   }
 }
 
+/**
+ * Close the Settings modal.
+ */
 function closeSettingsModal() {
   closeModal('settingsModal');
 }
 
+/**
+ * Open the load-dataset modal, focusing and selecting the path input.
+ */
 function openLoadDataModal() {
   queueAutoModal('loadData', () => {
     openModal('loadDataModal');
@@ -119,11 +149,17 @@ function openLoadDataModal() {
   });
 }
 
+/**
+ * Close the load-dataset modal and release its auto-modal slot.
+ */
 function closeLoadDataModal() {
   closeModal('loadDataModal');
   releaseAutoModal('loadData');
 }
 
+/**
+ * Fill the split select with "All splits" plus every known split.
+ */
 function populateSplitSelect() {
   const sel = el('splitSelect');
   sel.innerHTML = '';
@@ -132,12 +168,23 @@ function populateSplitSelect() {
   sel.value = activeSplit || '';
 }
 
+// maximum number of filters that can be chained
 const FILTER_CHAIN_MAX = 8;
 
+/**
+ * Look up a filter definition by name.
+ * @param {string} name
+ * @returns {object|null}
+ */
 function filterDef(name) {
   return filters.find((f) => f.name === name) || null;
 }
 
+/**
+ * Build one filter-chain block (select, remove button and argument fields).
+ * @param {number} i - Block index; the first block reads "No filter".
+ * @returns {HTMLElement}
+ */
 function buildFilterBlock(i) {
   const block = mk('div', 'filter-chain-item');
 
@@ -199,8 +246,10 @@ function buildFilterBlock(i) {
   return block;
 }
 
-// Keep the first block reading "No filter" and the rest "(none)" after adds and
-// removes, so the empty slot is obvious.
+/**
+ * Keep the first block reading "No filter" and the rest "(none)" after adds and
+ * removes, so the empty slot is obvious.
+ */
 function relabelFilterChain() {
   const body = el('filterPanelBody');
   if (!body) return;
@@ -212,8 +261,10 @@ function relabelFilterChain() {
   });
 }
 
-// Add is allowed until FILTER_CHAIN_MAX; remove is blocked on the last block, so
-// there is always one slot to build in.
+/**
+ * Add is allowed until FILTER_CHAIN_MAX; remove is blocked on the last block, so
+ * there is always one slot to build in.
+ */
 function updateFilterChainControls() {
   const body = el('filterPanelBody');
   if (!body) return;
@@ -232,6 +283,9 @@ function updateFilterChainControls() {
   });
 }
 
+/**
+ * Append a filter block to the chain, if there is room.
+ */
 function addFilterBlock() {
   const body = el('filterPanelBody');
   if (!body || !filters.length) return;
@@ -242,6 +296,10 @@ function addFilterBlock() {
   updateFilterChainControls();
 }
 
+/**
+ * Remove a filter block, leaving at least one behind.
+ * @param {HTMLElement} block
+ */
 function removeFilterBlock(block) {
   const body = el('filterPanelBody');
   if (!body || !block) return;
@@ -251,6 +309,9 @@ function removeFilterBlock(block) {
   updateFilterChainControls();
 }
 
+/**
+ * Render the filter chain editor from the active filter chain.
+ */
 function populateFilterPanel() {
   const body = el('filterPanelBody');
   if (!body) return;
@@ -269,6 +330,10 @@ function populateFilterPanel() {
   updateFilterChainControls();
 }
 
+/**
+ * Read the selected filters and their argument values from the UI.
+ * @returns {Array<{name:string,arguments:Object}>}
+ */
 function selectedFilterChain() {
   const chain = [];
   const body = el('filterPanelBody');

@@ -10,22 +10,29 @@
 // widget-only panel on the opposite side, which appears only while it has a
 // visible child.
 // ------------------------------------------------------------------------- //
+// Settings keys for the control-panel side and dock panel sizes.
 const PANEL_SIDE_KEY = 'ybe_panel_side';
 const DOCK_SIDE_W_KEY = 'ybe_dock_side_w';
 const DOCK_BOTTOM_H_KEY = 'ybe_dock_bottom_h';
+// Legacy localStorage keys migrated to the widget settings on first run.
 const LEGACY_TAGGING_KEY = 'taggingEnabled';
 const LEGACY_DETACH_TAGS_KEY = 'ybe_detach_tags';
 const LEGACY_DETACH_BOXES_KEY = 'ybe_detach_boxes';
+// Floating-window margin and dock panel size bounds (px).
 const FLOAT_MARGIN = 8;
 const DOCK_SIDE_MIN = 200;
 const DOCK_SIDE_MAX = 720;
 const DOCK_BOTTOM_MIN = 100;
+// Valid docking locations for a widget.
 const DOCK_LOCATIONS = ['default', 'float', 'left', 'right', 'bottom'];
 
+// Which side the control panel is docked to ('left' or 'right').
 let panelSide = 'left';
 
-// The dockable widgets. `default` puts the content back where it lives in the
-// markup; the other locations are the floating window or an edge panel.
+/*
+ * The dockable widgets. `default` puts the content back where it lives in the
+ * markup; the other locations are the floating window or an edge panel.
+ */
 const WIDGETS = {
   tags: {
     frame: 'tagFloat', body: 'tagFloatBody',
@@ -65,19 +72,36 @@ const WIDGETS = {
   },
 };
 
+// Per-widget current dock location (see DOCK_LOCATIONS), keyed by widget name.
 const dockState = {};
+// Per-widget visibility, keyed by widget name.
 const visibleState = {};
 Object.keys(WIDGETS).forEach((name) => {
   dockState[name] = 'default';
   visibleState[name] = true;
 });
 
+/**
+ * Toggle the body class that reflects the control-panel side.
+ */
 function applyPanelSide() {
   document.body.classList.toggle('panel-left', panelSide === 'left');
 }
 
+/**
+ * Settings key that stores a floating window's position.
+ * @param {string} id - Floating window element id.
+ * @returns {string} The settings key.
+ */
 function floatKey(id) { return 'ybe_float_' + id; }
 
+/**
+ * Clamp a floating window position to keep it on screen.
+ * @param {HTMLElement} win - The floating window.
+ * @param {number} x - Desired left position.
+ * @param {number} y - Desired top position.
+ * @returns {{x:number, y:number}} The clamped position.
+ */
 function clampFloatPos(win, x, y) {
   const w = win.offsetWidth || 260;
   const h = win.offsetHeight || 120;
@@ -89,6 +113,13 @@ function clampFloatPos(win, x, y) {
   };
 }
 
+/**
+ * Position a floating window, clamped to the viewport.
+ * @param {HTMLElement} win - The floating window.
+ * @param {number} x - Desired left position.
+ * @param {number} y - Desired top position.
+ * @returns {{x:number, y:number}} The applied position.
+ */
 function setFloatPos(win, x, y) {
   const p = clampFloatPos(win, x, y);
   win.style.left = p.x + 'px';
@@ -96,12 +127,21 @@ function setFloatPos(win, x, y) {
   return p;
 }
 
+/**
+ * Persist a floating window's current position.
+ * @param {HTMLElement} win - The floating window.
+ */
 function saveFloatPos(win) {
   settingsSet(floatKey(win.id), JSON.stringify({
     x: win.offsetLeft, y: win.offsetTop,
   }));
 }
 
+/**
+ * Compute the default opening position for a floating window.
+ * @param {HTMLElement} win - The floating window.
+ * @returns {{x:number, y:number}} The default position.
+ */
 function defaultFloatPos(win) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -112,6 +152,10 @@ function defaultFloatPos(win) {
   return { x: 24 + i * 28, y: Math.max(20, vh - 260 - i * 28) };
 }
 
+/**
+ * Restore a floating window position from settings or fall back to default.
+ * @param {HTMLElement} win - The floating window.
+ */
 function restoreFloatPos(win) {
   let pos = null;
   try { pos = JSON.parse(settingsGet(floatKey(win.id)) || 'null'); } catch (e) { /* ignore */ }
@@ -124,26 +168,83 @@ function restoreFloatPos(win) {
 }
 
 // ---- widget <-> DOM helpers ---------------------------------------------- //
+/**
+ * List all dockable widget names.
+ * @returns {string[]} The widget names.
+ */
 function widgetNames() { return Object.keys(WIDGETS); }
+/**
+ * Resolve the widget name that owns a floating frame element.
+ * @param {HTMLElement} win - The floating frame.
+ * @returns {string} The widget name.
+ */
 function widgetNameForFrame(win) {
   if (!win) return 'tags';
   return widgetNames().find((n) => WIDGETS[n].frame === win.id) || 'tags';
 }
+/**
+ * Settings key for a widget's dock location.
+ * @param {string} name - Widget name.
+ * @returns {string} The settings key.
+ */
 function dockKey(name) { return WIDGETS[name].key; }
+/**
+ * Element id of a widget's dock-location select.
+ * @param {string} name - Widget name.
+ * @returns {string} The select element id.
+ */
 function dockSelectId(name) { return WIDGETS[name].select; }
+/**
+ * Get a widget's current dock location.
+ * @param {string} name - Widget name.
+ * @returns {string} The dock location.
+ */
 function getDock(name) { return dockState[name] || 'default'; }
+/**
+ * Set a widget's in-memory dock location (no persistence or reflow).
+ * @param {string} name - Widget name.
+ * @param {string} loc - Dock location.
+ */
 function setDockState(name, loc) { dockState[name] = loc; }
+/**
+ * Get a widget's floating frame element.
+ * @param {string} name - Widget name.
+ * @returns {HTMLElement|null} The frame element.
+ */
 function widgetFrame(name) { return el(WIDGETS[name].frame); }
+/**
+ * Get a widget's floating frame body element.
+ * @param {string} name - Widget name.
+ * @returns {HTMLElement|null} The body element.
+ */
 function widgetFrameBody(name) { return el(WIDGETS[name].body); }
+/**
+ * Get a widget's movable content element.
+ * @param {string} name - Widget name.
+ * @returns {HTMLElement|null} The content element.
+ */
 function widgetContent(name) { return WIDGETS[name].content(); }
+/**
+ * Get the element a widget returns to when its location is `default`.
+ * @param {string} name - Widget name.
+ * @returns {HTMLElement|null} The default parent element.
+ */
 function widgetDefaultParent(name) { return WIDGETS[name].parent(); }
+/**
+ * Get the container a widget docks into for a given location.
+ * @param {string} name - Widget name.
+ * @param {string} loc - Dock location.
+ * @returns {HTMLElement|null} The dock target element.
+ */
 function widgetDockTarget(name, loc) {
   if (loc === 'bottom') return el('dockBottomBody');
   if (loc === panelSide) return qs('#sidebar .sidebar-body');
   return el('dockSideBody');
 }
 
-// A panel exists only while it holds a visible child.
+/**
+ * Show or hide the dock panels based on whether they hold visible children.
+ */
 function updateDockPanels() {
   const hasChild = (node) => !!node
     && Array.from(node.children).some((c) => !c.classList.contains('hidden'));
@@ -160,6 +261,11 @@ function updateDockPanels() {
   if (bottom) bottom.classList.toggle('hidden', !hasChild(bottomBody) && !hasChild(imagebar));
 }
 
+/**
+ * Move a widget's content and frame into the given dock location.
+ * @param {string} name - Widget name.
+ * @param {string} loc - Dock location.
+ */
 function placeWidget(name, loc) {
   const frame = widgetFrame(name);
   const body = widgetFrameBody(name);
@@ -196,8 +302,18 @@ function placeWidget(name, loc) {
   updateDockPanels();
 }
 
+/**
+ * Whether a widget is currently visible.
+ * @param {string} name - Widget name.
+ * @returns {boolean} True when visible.
+ */
 function getWidgetVisible(name) { return visibleState[name] !== false; }
 
+/**
+ * Show or hide a widget and sync its toggle.
+ * @param {string} name - Widget name.
+ * @param {boolean} on - New visibility.
+ */
 function setWidgetVisible(name, on) {
   visibleState[name] = !!on;
   settingsSet(WIDGETS[name].visibleKey, on ? '1' : '0');
@@ -206,6 +322,10 @@ function setWidgetVisible(name, on) {
   applyWidget(name);
 }
 
+/**
+ * Re-place and show/hide a widget from its current state.
+ * @param {string} name - Widget name.
+ */
 function applyWidget(name) {
   placeWidget(name, getDock(name));
   const on = getWidgetVisible(name);
@@ -220,10 +340,18 @@ function applyWidget(name) {
   updateDockPanels();
 }
 
+/**
+ * Re-apply every widget from its current state.
+ */
 function applyAllWidgets() {
   widgetNames().forEach(applyWidget);
 }
 
+/**
+ * Dock a widget at a new location, persisting and syncing the UI.
+ * @param {string} name - Widget name.
+ * @param {string} loc - New dock location.
+ */
 function setWidgetDock(name, loc) {
   if (!DOCK_LOCATIONS.includes(loc)) loc = 'default';
   // docking into the control panel while it is collapsed would hide the widget
@@ -238,6 +366,11 @@ function setWidgetDock(name, loc) {
 }
 
 // ---- panel resizers ------------------------------------------------------- //
+/**
+ * Clamp and apply the dock-side panel width.
+ * @param {number} w - Desired width in pixels.
+ * @returns {number} The clamped width in pixels.
+ */
 function applyDockSideWidth(w) {
   const clamped = Math.min(DOCK_SIDE_MAX, Math.max(DOCK_SIDE_MIN, Math.round(w)));
   const panel = el('dockSide');
@@ -245,6 +378,11 @@ function applyDockSideWidth(w) {
   return clamped;
 }
 
+/**
+ * Clamp and apply the bottom dock panel height.
+ * @param {number} h - Desired height in pixels.
+ * @returns {number} The clamped height in pixels.
+ */
 function applyDockBottomHeight(h) {
   const max = Math.max(DOCK_BOTTOM_MIN, window.innerHeight - 160);
   const clamped = Math.min(max, Math.max(DOCK_BOTTOM_MIN, Math.round(h)));
@@ -253,6 +391,9 @@ function applyDockBottomHeight(h) {
   return clamped;
 }
 
+/**
+ * Wire up pointer dragging for the side and bottom dock resizers.
+ */
 function initDockResizers() {
   const side = el('dockSideResizer');
   if (side) {
@@ -318,6 +459,10 @@ function initDockResizers() {
   }
 }
 
+/**
+ * Wire up dragging, docking and closing for a floating widget window.
+ * @param {HTMLElement} win - The floating window element.
+ */
 function initFloatWindow(win) {
   if (!win) return;
   const name = widgetNameForFrame(win);
@@ -357,6 +502,9 @@ function initFloatWindow(win) {
   });
 }
 
+/**
+ * Sync the appearance controls (panel side, dock selects, visibility toggles).
+ */
 function setAppearanceControls() {
   el('panelSideSel').value = panelSide;
   widgetNames().forEach((name) => {
@@ -367,15 +515,28 @@ function setAppearanceControls() {
   });
 }
 
+/**
+ * Read a persisted dock location, falling back to `default`.
+ * @param {string} key - Settings key.
+ * @returns {string} The saved dock location.
+ */
 function savedDock(key) {
   const raw = settingsGet(key);
   return DOCK_LOCATIONS.includes(raw) ? raw : 'default';
 }
 
+/**
+ * Read a persisted visibility flag (missing means visible).
+ * @param {string} key - Settings key.
+ * @returns {boolean} True when visible.
+ */
 function savedVisible(key) {
   return settingsGet(key) !== '0';
 }
 
+/**
+ * Load persisted appearance state, migrate legacy settings and wire controls.
+ */
 function initAppearance() {
   panelSide = settingsGet(PANEL_SIDE_KEY) === 'right' ? 'right' : 'left';
   widgetNames().forEach((name) => {
@@ -427,6 +588,10 @@ function initAppearance() {
   });
 }
 
+/**
+ * Select a box from the side panel and refresh the canvas.
+ * @param {number} i - Box index.
+ */
 function selectFromPanel(i) {
   closeClassPicker();
   selected = i;
@@ -435,11 +600,23 @@ function selectFromPanel(i) {
   draw();
 }
 
+/**
+ * Set an input's value unless the user is currently editing it.
+ * @param {HTMLInputElement} f - The input element.
+ * @param {string} val - The value to set.
+ */
 function setFieldValue(f, val) {
   if (!f) return;
   if (document.activeElement !== f) f.value = val;
 }
 
+/**
+ * Build a class select or numeric point input for a side-panel box row.
+ * @param {string} tag - `select` or `input`.
+ * @param {string} cls - CSS class list.
+ * @param {{value?:string}} [opts] - Optional initial value for inputs.
+ * @returns {HTMLElement} The created control.
+ */
 function makeRowControl(tag, cls, opts) {
   const c = mk(tag, cls);
   if (tag === 'select') {
@@ -454,6 +631,9 @@ function makeRowControl(tag, cls, opts) {
   return c;
 }
 
+/**
+ * Render the side-panel list of boxes.
+ */
 function renderSidePanel() {
   const list = el('boxList');
   if (!list) return;
@@ -575,6 +755,9 @@ function renderSidePanel() {
   updateSidePanelState();
 }
 
+/**
+ * Refresh selection, fixed state and field values for the side-panel rows.
+ */
 function updateSidePanelState() {
   const list = el('boxList');
   if (!list) return;
@@ -600,6 +783,9 @@ function updateSidePanelState() {
   });
 }
 
+/**
+ * Re-render the side-panel list only when its length changed, else update it.
+ */
 function syncSidePanel() {
   const list = el('boxList');
   if (!list) return;

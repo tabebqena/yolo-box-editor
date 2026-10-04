@@ -4,10 +4,17 @@
 // ------------------------------------------------------------------------- //
 // actions
 // ------------------------------------------------------------------------- //
+/**
+ * Capture the current boxes and tags for the undo/redo history.
+ * @returns {{boxes: Array<object>, tags: string[]}} A copy of the current state.
+ */
 function snapshot() {
   return { boxes: boxes.map((b) => ({ ...b })), tags: [...imageTags] };
 }
 
+/**
+ * Enable or disable the undo, redo and save buttons from the current state.
+ */
 function updateHistoryButtons() {
   const undo = el('undoBtn');
   const redo = el('redoBtn');
@@ -17,6 +24,9 @@ function updateHistoryButtons() {
   if (save) save.disabled = readonly || !dirty || currentIndex < 0;
 }
 
+/**
+ * Snapshot the current image, push it onto the undo stack and clear redo.
+ */
 function pushUndo() {
   undoStack.push(snapshot());
   if (undoStack.length > 100) undoStack.shift();
@@ -24,8 +34,12 @@ function pushUndo() {
   updateHistoryButtons();
 }
 
-// Apply a history snapshot to the current image. Shared by undo/redo; the
-// caller has already moved the snapshot between the two stacks.
+/**
+ * Apply a history snapshot to the current image. Shared by undo/redo; the
+ * caller has already moved the snapshot between the two stacks.
+ * @param {{boxes: Array<object>, tags: string[]}} snap - The snapshot to restore.
+ * @param {string} label - Debug label for the source of the change.
+ */
 function applySnapshot(snap, label) {
   boxes = snap.boxes;
   imageTags = snap.tags;
@@ -40,18 +54,27 @@ function applySnapshot(snap, label) {
   draw();
 }
 
+/**
+ * Restore the previous snapshot from the undo stack, if any.
+ */
 function undo() {
   if (readonly || !undoStack.length) return;
   redoStack.push(snapshot());
   applySnapshot(undoStack.pop(), 'undo');
 }
 
+/**
+ * Reapply the next snapshot from the redo stack, if any.
+ */
 function redo() {
   if (readonly || !redoStack.length) return;
   undoStack.push(snapshot());
   applySnapshot(redoStack.pop(), 'redo');
 }
 
+/**
+ * Delete the currently selected box and record the change.
+ */
 function deleteSelected() {
   if (selected >= 0) {
     pushUndo();
@@ -66,9 +89,11 @@ function deleteSelected() {
   }
 }
 
-// Fix / unfix the selected box. A fixed box ignores dragging (moving and
-// resizing) but can still be clicked / selected and deleted. The flag is
-// transient UI state: it is never saved and is cleared when the image changes.
+/**
+ * Fix / unfix the selected box. A fixed box ignores dragging (moving and
+ * resizing) but can still be clicked / selected and deleted. The flag is
+ * transient UI state: it is never saved and is cleared when the image changes.
+ */
 function toggleFixSelected() {
   if (readonly || selected < 0) return;
   boxes[selected].fixed = !boxes[selected].fixed;
@@ -76,12 +101,17 @@ function toggleFixSelected() {
   updateSidePanelState();
 }
 
-// Mark the labels as changed and, when auto-save is on, queue a save.
+/**
+ * Mark the labels as changed and, when auto-save is on, queue a save.
+ */
 function markDirty() {
   dirty = true;
   scheduleAutoSave();
 }
 
+/**
+ * Queue an auto-save after the debounce delay when auto-save is enabled.
+ */
 function scheduleAutoSave() {
   if (!autoSave || readonly || currentIndex < 0) return;
   clearTimeout(autoSaveTimer);
@@ -89,6 +119,10 @@ function scheduleAutoSave() {
 }
 
 // Save any pending auto-save now (used before navigating away).
+/**
+ * Save any pending auto-save now (used before navigating away).
+ * @returns {Promise<boolean>} True when there was nothing to save or it succeeded.
+ */
 async function flushAutoSave() {
   if (autoSaveTimer) {
     clearTimeout(autoSaveTimer);
@@ -98,8 +132,11 @@ async function flushAutoSave() {
   return save({ silent: true });
 }
 
-// Returns true on success, false when the write failed or a hook cancelled it.
-// `silent` suppresses the success toast (used by auto-save); failures always show.
+/**
+ * Save the current image's boxes and tags to the server.
+ * @param {{silent?:boolean}} [opts] - `silent` suppresses the success toast (used by auto-save).
+ * @returns {Promise<boolean>} True when the write succeeded, false when it failed or a hook cancelled it.
+ */
 async function save(opts = {}) {
   if (currentIndex < 0) return false;
   // a failing before_save hook cancels the write
@@ -135,6 +172,10 @@ async function save(opts = {}) {
   return ok;
 }
 
+/**
+ * Load a dataset from a data.yaml path and refresh the UI.
+ * @param {string} rawPath - Path to the data.yaml file.
+ */
 async function loadDataset(rawPath) {
   const yamlPath = (rawPath || '').trim();
   if (!yamlPath) {
@@ -159,14 +200,26 @@ async function loadDataset(rawPath) {
   }
 }
 
+/**
+ * Load the dataset typed into the main path field.
+ * @returns {Promise<void>} Resolves when the load attempt finishes.
+ */
 function setDataYaml() {
   return loadDataset(el('dataYaml').value);
 }
 
+/**
+ * Load the dataset typed into the load-data modal field.
+ * @returns {Promise<void>} Resolves when the load attempt finishes.
+ */
 function loadDataFromModal() {
   return loadDataset(el('loadDataYaml').value);
 }
 
+/**
+ * Switch to a dataset split (or all splits) on the server.
+ * @param {string|null} split - Split name, or null for all splits.
+ */
 async function setSplit(split) {
   try {
     const { res, data } = await apiPost('/api/split', { split: split || null });
@@ -186,7 +239,9 @@ async function setSplit(split) {
   }
 }
 
-// Set the per-dataset tags folder (empty restores the images -> tags default).
+/**
+ * Set the per-dataset tags folder (empty restores the images -> tags default).
+ */
 async function setTagsDir() {
   const anchor = captureImageAnchor(false);
   try {
@@ -206,8 +261,11 @@ async function setTagsDir() {
   }
 }
 
-// Busy state for the chain apply/clear: show a spinner on Apply and block both
-// buttons until the request + config reload finish.
+/**
+ * Busy state for the chain apply/clear: show a spinner on Apply and block both
+ * buttons until the request + config reload finish.
+ * @param {boolean} on - Whether a filter chain is being applied.
+ */
 function setFilterApplying(on) {
   const apply = el('filterPanelApply');
   const clear = el('filterPanelClear');
@@ -218,6 +276,10 @@ function setFilterApplying(on) {
   if (clear) clear.disabled = on;
 }
 
+/**
+ * Apply a filter chain by name and reload the dataset.
+ * @param {string[]} names - Filter names to run, top to bottom.
+ */
 async function applyFilterChain(names) {
   const anchor = captureImageAnchor(false);
   setFilterApplying(true);
@@ -245,12 +307,22 @@ async function applyFilterChain(names) {
 // ------------------------------------------------------------------------- //
 // user actions (actions.yaml)
 // ------------------------------------------------------------------------- //
+/**
+ * Write text into a result field, toggling its empty style.
+ * @param {string} id - Element id.
+ * @param {string} text - Text to display.
+ * @param {boolean} [emptyClass] - Optional flag forwarded for the empty style.
+ */
 function setResultText(id, text, emptyClass) {
   const node = el(id);
   node.textContent = text || '';
   node.classList.toggle('modal-empty', !text);
 }
 
+/**
+ * Show the result of a user action in the result modal.
+ * @param {object} data - The backend action response.
+ */
 function showActionResult(data) {
   const ok = !!data.ok;
   const title = `${data.action || 'Action'} — ${ok ? 'succeeded' : 'failed'}`;
@@ -263,20 +335,30 @@ function showActionResult(data) {
   openModal('actionResult');
 }
 
+/**
+ * Close the action result modal.
+ */
 function closeActionResult() {
   closeModal('actionResult');
 }
 
-// Event hooks report success as a transient toast; failures still use the modal.
+/**
+ * Event hooks report success as a transient toast; failures still use the modal.
+ * @param {string} msg - Status message to toast.
+ */
 function setHookStatus(msg) {
   toast(msg, { type: 'success', timeout: 3000 });
 }
 
-// Run one user action (or event hook) on the current image. `confirm: false`
-// skips the confirmation prompt — hooks run automatically. The backend owns the
-// steps + after_success chain and pauses whenever an app action is needed: it
-// returns `client_action` + a `uid`, which we run and report back. Returns true
-// when the whole run succeeded (or there was nothing to run), false on failure.
+/**
+ * Run one user action (or event hook) on the current image. `confirm: false`
+ * skips the confirmation prompt — hooks run automatically. The backend owns the
+ * steps + after_success chain and pauses whenever an app action is needed: it
+ * returns `client_action` + a `uid`, which we run and report back.
+ * @param {string} name - Action or hook name.
+ * @param {{confirm?:boolean, hook?:boolean}} [opts] - `confirm` and `hook` flags.
+ * @returns {Promise<boolean>} True when the whole run succeeded, false on failure.
+ */
 async function runAction(name, opts = {}) {
   const ask = opts.confirm !== false;
   const isHook = !!opts.hook;
@@ -325,13 +407,22 @@ async function runAction(name, opts = {}) {
   }
 }
 
+/**
+ * POST to the action-run endpoint and return the parsed response.
+ * @param {object} body - Request body (action+target, or uid+result).
+ * @returns {Promise<object>} The parsed action response.
+ */
 function postActionRun(body) {
   return postJson('/api/actions/run', body);
 }
 
-// Fire an event hook if it is defined and an image is loaded. No-op otherwise.
-// The in-flight guard keeps a hook from re-entering itself (e.g. a hook whose
-// after_success refreshes the image list, which would fire it again).
+/**
+ * Fire an event hook if it is defined and an image is loaded. No-op otherwise.
+ * The in-flight guard keeps a hook from re-entering itself (e.g. a hook whose
+ * after_success refreshes the image list, which would fire it again).
+ * @param {string} name - Hook event name (e.g. `on_before_save`).
+ * @returns {Promise<boolean>} True when the hook succeeded or was skipped.
+ */
 async function runHook(name) {
   if (!hooksByName.has(name) || currentIndex < 0) return true;
   if (hookInFlight.has(name)) { dbg(`hook ${name} skipped (already running)`); return true; }
@@ -347,8 +438,14 @@ async function runHook(name) {
 // ------------------------------------------------------------------------- //
 // class picker (shown after drawing a new box)
 // ------------------------------------------------------------------------- //
+// The class-picker popup element, shown after drawing a new box.
 const classPicker = el('classPicker');
 
+/**
+ * Open the class picker popup near the given screen coordinates.
+ * @param {number} x - Screen x position.
+ * @param {number} y - Screen y position.
+ */
 function openClassPicker(x, y) {
   classPicker.innerHTML = '';
   classPicker.appendChild(mk('div', 'picker-title', 'Choose class'));
@@ -385,6 +482,9 @@ function openClassPicker(x, y) {
   classPicker.style.top = Math.max(pad, py) + 'px';
 }
 
+/**
+ * Open the class picker centred on the currently selected box.
+ */
 function openPickerForSelectedBox() {
   if (selected < 0) return;
   const r = toPx(boxes[selected]);
@@ -394,6 +494,9 @@ function openPickerForSelectedBox() {
   openClassPicker(sx, sy);
 }
 
+/**
+ * Close the class picker popup.
+ */
 function closeClassPicker() {
   closeModal('classPicker');
 }
@@ -401,22 +504,37 @@ function closeClassPicker() {
 // ------------------------------------------------------------------------- //
 // left sidebar: resizable, collapsible body (the header row stays visible)
 // ------------------------------------------------------------------------- //
+// Whether the left sidebar is currently expanded.
 let sidePanelOpen = true;
 
+/**
+ * Round a normalized coordinate to four decimals for display.
+ * @param {number} v - Value to round.
+ * @returns {number} The rounded value.
+ */
 function fmtNum(v) {
   return Math.round(v * 10000) / 10000;
 }
 
+// Sidebar resize bounds (px) and the settings key that remembers the width.
 const SIDEBAR_MIN = 220;
 const SIDEBAR_MAX = 720;
 const SIDEBAR_W_KEY = 'ybe_side_panel_w';
 
+/**
+ * Clamp and apply the sidebar width, returning the applied pixel value.
+ * @param {number} w - Desired width in pixels.
+ * @returns {number} The clamped width in pixels.
+ */
 function applySidePanelWidth(w) {
   const clamped = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, Math.round(w)));
   el('sidebar').style.setProperty('--sidebar-w', clamped + 'px');
   return clamped;
 }
 
+/**
+ * Wire up pointer dragging on the sidebar resize handle.
+ */
 function initSidePanelResizer() {
   const handle = el('sidebarResizer');
   if (!handle) return;
@@ -450,6 +568,9 @@ function initSidePanelResizer() {
   });
 }
 
+/**
+ * Restore the sidebar open state, width and toggle, and init its resizer.
+ */
 function initSidePanel() {
   sidePanelOpen = settingsGet('sidePanelOpen') !== '0';
   toggleSidePanel(sidePanelOpen, false);
@@ -459,6 +580,11 @@ function initSidePanel() {
   initSidePanelResizer();
 }
 
+/**
+ * Show or hide the sidebar, optionally persisting the choice.
+ * @param {boolean} [show] - Force a state; toggles when omitted.
+ * @param {boolean} [persist=true] - Whether to save the state to settings.
+ */
 function toggleSidePanel(show, persist = true) {
   const open = show !== undefined ? !!show : !sidePanelOpen;
   sidePanelOpen = open;

@@ -17,6 +17,12 @@ const ESCAPE_CLOSERS = [
 // canvas interaction (draw / move / resize)
 // ------------------------------------------------------------------------- //
 
+/**
+ * Handle a mousedown on the canvas: select a box, start moving/resizing it,
+ * delete or change a box, or draw a new one.
+ * @param {MouseEvent} e
+ * @returns {void}
+ */
 function onCanvasMouseDown(e) {
   closeClassPicker();
   if (!imgW || !imgH || readonly) return;
@@ -92,8 +98,12 @@ function onCanvasMouseDown(e) {
   draw();
 }
 
-// Listen on window (not just the canvas) so a drag that leaves the image still
-// tracks the cursor and completes on release instead of losing the box.
+/**
+ * Track the cursor on window (not just the canvas) so a drag that leaves the
+ * image still completes on release instead of losing the box.
+ * @param {MouseEvent} e
+ * @returns {void}
+ */
 function onWindowMouseMove(e) {
   const p = canvasPos(e);
   if (mode === 'drawing' && start) {
@@ -111,6 +121,12 @@ function onWindowMouseMove(e) {
   }
 }
 
+/**
+ * Finish a drag: commit a newly drawn box or the moved/resized one, then reset
+ * the interaction mode.
+ * @param {MouseEvent} e
+ * @returns {void}
+ */
 function onWindowMouseUp(e) {
   const edited = (mode === 'moving' || mode === 'resizing') && moved;
   let created = false;
@@ -150,9 +166,15 @@ function onWindowMouseUp(e) {
 // image list reload + app shortcut actions
 // ------------------------------------------------------------------------- //
 
-// Fetch a fresh image list and apply it, keeping the current image by path.
-// `url` is the endpoint (GET) or the endpoint plus a fetch init; `tag` and
-// `label` keep the console messages specific to the calling action.
+/**
+ * Fetch a fresh image list and apply it, keeping the current image by path.
+ * `url` is the endpoint (GET) or an endpoint plus a fetch init.
+ * @param {string} url
+ * @param {RequestInit|undefined} init
+ * @param {string} tag Console tag for errors.
+ * @param {string} label Human-readable action name for messages.
+ * @returns {Promise<void>}
+ */
 async function reloadImagesList(url, init, tag, label) {
   const anchor = captureImageAnchor();
   dbg(`${label} images list`, { was: images.length, index: currentIndex,
@@ -170,6 +192,8 @@ async function reloadImagesList(url, init, tag, label) {
   }
 }
 
+// Map of app action name -> handler; keys must match APP_SHORTCUT_ORDER and the
+// app_* names in config.APP_ACTIONS.
 const APP_SHORTCUT_HANDLERS = {
   app_prev: (e) => { e.preventDefault(); go(-1); },
   app_next: (e) => { e.preventDefault(); go(1); },
@@ -265,9 +289,14 @@ const APP_SHORTCUT_HANDLERS = {
   },
 };
 
-// Apply an /api/images (GET) or /api/images/rescan (POST) payload to the client
-// list, keeping the current image by path through `anchor`. Shared by
-// app_refresh_images_list (disk rescan) and app_reload_images_list (in-memory).
+/**
+ * Apply an /api/images (GET) or /api/images/rescan (POST) payload to the client
+ * list, keeping the current image by path through `anchor`.
+ * @param {Object} data
+ * @param {Object|null} anchor Image anchor captured before the request.
+ * @param {string} label Human-readable action name for messages.
+ * @returns {void}
+ */
 function applyImagesPayload(data, anchor, label) {
   images = data.images || [];
   activeSplit = data.active_split || null;
@@ -285,9 +314,13 @@ function applyImagesPayload(data, anchor, label) {
   runHook('on_images_list_loaded');
 }
 
-// Run an app action by name through the same path used for keyboard shortcuts,
-// so after_success hooks behave exactly like bound keys. Rejects with an Error
-// on unknown names or handler failures.
+/**
+ * Run an app action by name through the same path used for keyboard shortcuts,
+ * so after_success hooks behave exactly like bound keys.
+ * @param {string} name
+ * @param {Event} [e] Original event, if any.
+ * @returns {Promise<void>}
+ */
 async function runAppAction(name, e) {
   const handler = APP_SHORTCUT_HANDLERS[name];
   if (!handler) {
@@ -296,7 +329,11 @@ async function runAppAction(name, e) {
   return handler(e || { preventDefault() {} });
 }
 
-// Tab on the selected box's row: cycle class select -> cx -> cy -> w -> h (forward).
+/**
+ * Tab on the selected box's row: cycle class select -> cx -> cy -> w -> h.
+ * @param {KeyboardEvent} e
+ * @returns {boolean} True when the event was handled.
+ */
 function tabCycleRow(e) {
   if (e.target.matches && e.target.matches('.box-row-ctl')) {
     const row = e.target.closest('.box-row');
@@ -329,7 +366,11 @@ function tabCycleRow(e) {
   return false;
 }
 
-// Esc while a side-panel row control is focused deactivates that row.
+/**
+ * Esc while a side-panel row control is focused deactivates that row.
+ * @param {KeyboardEvent} e
+ * @returns {boolean} True when the event was handled.
+ */
 function escDeactivateRow(e) {
   if (e.target.matches && e.target.matches('.box-row-ctl')) {
     e.target.blur(); // clears the editing-point highlight
@@ -347,6 +388,11 @@ function escDeactivateRow(e) {
 // keyboard dispatch
 // ------------------------------------------------------------------------- //
 
+/**
+ * Match a key event against the bound app shortcuts and run the first match.
+ * @param {KeyboardEvent} e
+ * @returns {boolean} True when an app shortcut was dispatched.
+ */
 function dispatchAppShortcut(e) {
   for (const name of APP_SHORTCUT_ORDER) {
     if (name === 'app_force_draw') continue; // modifier-only, matched on mousedown
@@ -359,6 +405,12 @@ function dispatchAppShortcut(e) {
   return false;
 }
 
+/**
+ * Test whether a key event matches a shortcut string such as "Ctrl+S".
+ * @param {KeyboardEvent} e
+ * @param {string} shortcut
+ * @returns {boolean}
+ */
 function shortcutMatches(e, shortcut) {
   const parts = shortcut.split('+').map((s) => s.trim());
   const key = parts[parts.length - 1].toUpperCase();
@@ -374,6 +426,11 @@ function shortcutMatches(e, shortcut) {
   return e.key.toUpperCase() === key;
 }
 
+/**
+ * Match the key event against the user's action shortcuts and run the first.
+ * @param {KeyboardEvent} e
+ * @returns {void}
+ */
 function runActionForShortcut(e) {
   if (readonly) return;
   for (const [name, info] of Object.entries(actionShortcuts)) {
@@ -385,6 +442,12 @@ function runActionForShortcut(e) {
   }
 }
 
+/**
+ * Global keydown entry point: close overlays, then handle app/action shortcuts
+ * and tag number toggles (order matters).
+ * @param {KeyboardEvent} e
+ * @returns {void}
+ */
 function onGlobalKeyDown(e) {
   if (e.key === 'Escape') {
     for (const [id, close] of ESCAPE_CLOSERS) {
@@ -411,10 +474,15 @@ function onGlobalKeyDown(e) {
   runActionForShortcut(e);
 }
 
-// Set up the appearance controls once, after /api/config has supplied the
-// server's settings (so `settingsGet` can fall back to them). Idempotent: the
-// fallback path below and later config reloads must not re-init.
+// Guards initSettings so it only builds the appearance controls once.
 let settingsInitialized = false;
+
+/**
+ * Set up the appearance controls once, after /api/config has supplied the
+ * server's settings (so `settingsGet` can fall back to them). Idempotent: the
+ * fallback path below and later config reloads must not re-init.
+ * @returns {void}
+ */
 function initSettings() {
   if (settingsInitialized) return;
   settingsInitialized = true;
@@ -430,6 +498,10 @@ function initSettings() {
 // wiring
 // ------------------------------------------------------------------------- //
 
+/**
+ * Wire the canvas mouse handlers.
+ * @returns {void}
+ */
 function wireCanvas() {
   canvas.addEventListener('mousedown', onCanvasMouseDown);
   // window (not just the canvas): a drag that leaves the image still tracks
@@ -438,6 +510,10 @@ function wireCanvas() {
   window.addEventListener('mouseup', onWindowMouseUp);
 }
 
+/**
+ * Wire the prev/next, split, recent-dataset and image-jump controls.
+ * @returns {void}
+ */
 function wireNavigation() {
   el('prevBtn').addEventListener('click', () => go(-1));
   el('nextBtn').addEventListener('click', () => go(1));
@@ -466,6 +542,10 @@ function wireNavigation() {
   counterInput.addEventListener('blur', () => updateNav());
 }
 
+/**
+ * Wire the save/undo/redo, auto-save and class-select controls.
+ * @returns {void}
+ */
 function wireEditingControls() {
   el('saveBtn').addEventListener('click', () => save());
   el('undoBtn').addEventListener('click', undo);
@@ -497,6 +577,10 @@ function wireEditingControls() {
   }
 }
 
+/**
+ * Wire the tag bar: add/submit, expand and input keyboard handling.
+ * @returns {void}
+ */
 function wireTags() {
   el('addTagBtn').addEventListener('click', () => {
     if (el('tagInput').classList.contains('hidden')) openTagInput();
@@ -525,6 +609,10 @@ function wireTags() {
   window.addEventListener('resize', applyTagOverflow);
 }
 
+/**
+ * Wire the update-check button and update modal.
+ * @returns {void}
+ */
 function wireUpdates() {
   el('updateCheckBtn').addEventListener('click', () => {
     el('updateStatus').textContent = 'Checking…';
@@ -535,6 +623,10 @@ function wireUpdates() {
   bindModalBackdrop('updateModal', closeUpdateModal);
 }
 
+/**
+ * Wire the settings modal: tabs, shortcuts, actions and filters.
+ * @returns {void}
+ */
 function wireSettings() {
   el('settingsBtn').addEventListener('click', openSettingsModal);
   el('settingsModalClose').addEventListener('click', closeSettingsModal);
@@ -563,6 +655,10 @@ function wireSettings() {
   });
 }
 
+/**
+ * Wire the load-data, changelog and tip modals.
+ * @returns {void}
+ */
 function wireDatasetModals() {
   el('loadDataBtn').addEventListener('click', loadDataFromModal);
   el('loadDataYaml').addEventListener('keydown', (e) => {
@@ -576,6 +672,10 @@ function wireDatasetModals() {
   bindModalBackdrop('tipModal', closeTipModal);
 }
 
+/**
+ * Wire the raw YAML editor modal.
+ * @returns {void}
+ */
 function wireYamlEditor() {
   el('yamlEditorClose').addEventListener('click', closeYamlEditor);
   el('yamlEditorCancel').addEventListener('click', closeYamlEditor);
@@ -583,6 +683,10 @@ function wireYamlEditor() {
   el('yamlEditorSave').addEventListener('click', saveYamlEditor);
 }
 
+/**
+ * Wire the notifications button, panel and outside-click dismissal.
+ * @returns {void}
+ */
 function wireNotifications() {
   el('notifBtn').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -601,6 +705,10 @@ function wireNotifications() {
   });
 }
 
+/**
+ * Wire every part of the UI, then start listening for keyboard shortcuts.
+ * @returns {void}
+ */
 function wireEvents() {
   wireCanvas();
   wireNavigation();
