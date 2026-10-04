@@ -14,7 +14,26 @@ permissions:
   contents: write
 
 jobs:
+  # Gate the release on the JavaScript test suite (jsdom + node:test). This job
+  # only runs on a version change, which is when the release workflow triggers.
+  js-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install JS test dependencies
+        run: npm ci
+
+      - name: Run the JavaScript tests
+        run: npm run test:js
+
   release:
+    needs: js-tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

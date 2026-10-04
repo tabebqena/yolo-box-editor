@@ -23,3 +23,7 @@ __pycache__/
 .venv/
 venv/
 .secret_key
+
+# --- Node / JS test tooling ---
+/node_modules/
+npm-debug.log*

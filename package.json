@@ -1,0 +1,16 @@
+{
+  "name": "yolo-box-editor-js-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "JavaScript test suite for app/static/app.js (jsdom + node:test)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test tests/js",
+    "test:js": "node --test tests/js"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.2"
+  }
+}
