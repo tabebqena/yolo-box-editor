@@ -221,6 +221,50 @@ test('runAppAction rejects an unknown action name', async () => {
   await assert.rejects(() => app.api.runAppAction('app_nope', {}), /unknown app action/);
 });
 
+test('app_select_next_box / app_select_prev_box wrap the selection', () => {
+  ready({ boxes: [box(), box(), box()], selected: -1, lastSelected: 0, boxesVisible: true });
+  app.api.runAppAction('app_select_next_box', { preventDefault() {} });
+  assert.equal(app.state().selected, 0);
+  app.api.runAppAction('app_select_next_box', { preventDefault() {} });
+  assert.equal(app.state().selected, 1);
+  app.api.runAppAction('app_select_prev_box', { preventDefault() {} });
+  assert.equal(app.state().selected, 0);
+  app.api.runAppAction('app_select_prev_box', { preventDefault() {} });
+  assert.equal(app.state().selected, 2);
+});
+
+test('app_clear_tags removes every tag and marks the image dirty', () => {
+  ready({ imageTags: ['fire', 'smoke'], dirty: false });
+  app.api.runAppAction('app_clear_tags', { preventDefault() {} });
+  assert.deepEqual(plain(app.state().imageTags), []);
+  assert.equal(app.state().dirty, true);
+});
+
+test('app_clear_tags / app_copy_labels_from_prev do nothing in read-only mode', async () => {
+  ready({ readonly: true, imageTags: ['fire'], images: [{ split: 'train', name: 'a.jpg' }] });
+  app.api.runAppAction('app_clear_tags', { preventDefault() {} });
+  assert.deepEqual(plain(app.state().imageTags), ['fire']);
+  await app.api.runAppAction('app_copy_labels_from_prev', { preventDefault() {} });
+  assert.equal(app.state().dirty, false);
+});
+
+test('app_copy_labels_from_prev copies boxes and tags from the previous image', async () => {
+  ready({
+    images: [{ split: 'train', name: 'a.jpg' }, { split: 'train', name: 'b.jpg' }],
+    currentIndex: 1,
+    boxes: [],
+    imageTags: ['mine'],
+  });
+  app.fetchMock.on('/api/annotations?key=train%2Fa.jpg', () => ({
+    body: { boxes: [box({ cx: 0.3 })], tags: ['fire'] },
+  }));
+  await app.api.runAppAction('app_copy_labels_from_prev', { preventDefault() {} });
+  assert.equal(app.state().boxes.length, 1);
+  assert.equal(app.state().boxes[0].cx, 0.3);
+  assert.deepEqual(plain(app.state().imageTags), ['fire']);
+  assert.equal(app.state().dirty, true);
+});
+
 test('dispatchAppShortcut runs a bound app action', () => {
   ready({ appShortcuts: { app_show_hide: { shortcut: 'H', label: 'Show/hide' } }, boxesVisible: true });
   const handled = app.api.dispatchAppShortcut({

@@ -192,8 +192,24 @@ async function reloadImagesList(url, init, tag, label) {
   }
 }
 
-// Map of app action name -> handler; keys must match APP_SHORTCUT_ORDER and the
-// app_* names in config.APP_ACTIONS.
+// Move the box selection by `delta` (+1 next, -1 prev), wrapping around. When
+// no box is selected yet it resumes from the last active one. Shared by the
+// key-bound app_sel_box and the hook-callable app_select_next_box/prev_box.
+function selectRelativeBox(delta) {
+  if (!boxes.length) return;
+  if (selected < 0) {
+    selected = Math.min(Math.max(lastSelected, 0), boxes.length - 1);
+  } else {
+    selected = (selected + delta + boxes.length) % boxes.length;
+  }
+  justDrawn = false;
+  syncClassSelect(selected);
+  draw();
+}
+
+// Map of app action name -> handler; keys must cover every app_* name in
+// config.APP_ACTIONS. APP_SHORTCUT_ORDER additionally lists the ones bound to
+// keys by default (the openers below and the trailing hook-only actions).
 const APP_SHORTCUT_HANDLERS = {
   app_prev: (e) => { e.preventDefault(); go(-1); },
   app_next: (e) => { e.preventDefault(); go(1); },
@@ -236,13 +252,32 @@ const APP_SHORTCUT_HANDLERS = {
   app_sel_box: (e) => {
     if (e.repeat || !boxes.length) return;
     e.preventDefault();
-    if (selected < 0) {
-      selected = Math.min(lastSelected >= 0 ? lastSelected : 0, boxes.length - 1);
-    } else {
-      selected = (selected + 1) % boxes.length;
-    }
+    selectRelativeBox(1);
+  },
+  app_select_next_box: (e) => { e.preventDefault(); selectRelativeBox(1); },
+  app_select_prev_box: (e) => { e.preventDefault(); selectRelativeBox(-1); },
+  app_clear_tags: () => {
+    if (readonly || currentIndex < 0 || !imageTags.length) return;
+    pushUndo();
+    imageTags = [];
+    markDirty();
+    renderTagBar();
+  },
+  // Copy the previous image's boxes and tags onto the current one. The action
+  // is opt-in (a hook/action step), so no-op quietly on the first image.
+  app_copy_labels_from_prev: async () => {
+    if (readonly || currentIndex <= 0) return;
+    const prev = images[currentIndex - 1];
+    const data = await apiGetOrNull('/api/annotations' + keyQuery(prev));
+    if (!data) throw new Error('could not read previous annotations');
+    pushUndo();
+    boxes = Array.isArray(data.boxes) ? data.boxes.map((b) => ({ ...b })) : [];
+    imageTags = Array.isArray(data.tags) ? [...data.tags] : [];
+    selected = -1;
     justDrawn = false;
-    syncClassSelect(selected);
+    markDirty();
+    syncClassSelect(-1);
+    renderTagBar();
     draw();
   },
   app_sel_points: (e) => { tabCycleRow(e); },

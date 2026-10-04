@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.5.0
+- Four new built-in actions you can run from an action or hook step: app_select_next_box, app_select_prev_box, app_clear_tags and app_copy_labels_from_prev (copy the previous image's boxes and tags).
+
 ## 7.4.0
 - Change password and Sign out moved from the side panel's top bar into a new Settings > Account tab (it appears only when sign-in is enabled).
 

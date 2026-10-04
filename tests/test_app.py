@@ -635,6 +635,17 @@ def test_modifier_only_shortcut_is_valid_app_binding(tmp_path, monkeypatch):
     assert "app_force_draw" in ybe.config.APP_ACTIONS
 
 
+def test_app_actions_include_hook_only_client_actions():
+    # client-only names called from a step / after_success, not bound to keys
+    for name in (
+        "app_select_next_box",
+        "app_select_prev_box",
+        "app_clear_tags",
+        "app_copy_labels_from_prev",
+    ):
+        assert name in ybe.config.APP_ACTIONS
+
+
 def test_split_shortcuts_partitions_and_reports_unknown(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe.config, "ACTIONS_DIR", str(tmp_path / "actions"))
     monkeypatch.setattr(ybe.config, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
@@ -1499,6 +1510,26 @@ def test_api_action_run_can_run_a_hook_by_name(clean_state, tmp_path):
     assert payload["ok"] is True
     assert "hooked" in payload["stdout"]
     assert payload["client_action"] == "app_refresh_image"
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "app_select_next_box",
+        "app_select_prev_box",
+        "app_clear_tags",
+        "app_copy_labels_from_prev",
+    ],
+)
+def test_api_action_run_accepts_new_client_actions(clean_state, tmp_path, name):
+    write_action(tmp_path, "NewClients.yaml", f"after_success:\n  - {name}\n")
+    client = ybe.app.test_client()
+    load_dataset(client, make_dataset(tmp_path))
+    payload = client.post(
+        "/api/actions/run", json={"action": "NewClients", "target": "train/a.jpg"}
+    ).get_json()
+    assert payload["ok"] is True
+    assert payload["client_action"] == name
 
 
 def test_api_action_run_substitutes_app_dir(clean_state, tmp_path):

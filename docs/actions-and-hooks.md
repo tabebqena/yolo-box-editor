@@ -58,13 +58,20 @@ references).
 | `app_refresh_images_list` | — | re-scan the image folders; stay on the same image by path |
 | `app_reload_images_list` | — | re-read the server list **without** re-scanning the disk |
 | `app_refresh_image` | — | re-fetch the current image (cache-busted) |
+| `app_select_next_box` | — | select the next box (same as `app_sel_box`, callable from a step) |
+| `app_select_prev_box` | — | select the previous box |
+| `app_clear_tags` | — | remove every tag from the current image |
+| `app_copy_labels_from_prev` | — | copy the previous image's boxes and tags onto the current one |
+
+The four actions at the end are meant to be called from an action/hook `steps`
+or `after_success` rather than bound to a key; they have no default key.
 
 `app_force_draw` is special: its binding is a *modifier* (`Ctrl`, `Alt`,
 `Shift`, `Meta`, or a `+`-joined combination), not a key.
 
 Editing actions (`app_del`, `app_save`, `app_undo`, `app_redo`, `app_ch_box`,
-`app_fix_box`) do nothing in read-only mode; navigation, `app_drop` and
-`app_show_hide` still work.
+`app_fix_box`, `app_clear_tags`, `app_copy_labels_from_prev`) do nothing in
+read-only mode; navigation, `app_drop` and `app_show_hide` still work.
 
 ## User actions
 

@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.5.0] - 2026-10-04
+
+### Added
+
+- **Four built-in app actions for actions and hooks.** `app_select_next_box`,
+  `app_select_prev_box`, `app_clear_tags` and `app_copy_labels_from_prev` can be
+  listed in an action's or hook's `steps` / `after_success` (or bound to a key in
+  `shortcuts.txt`). They run in the browser like the other `app_*` actions and do
+  nothing in read-only mode.
+
 ## [7.4.0] - 2026-10-04
 
 ### Changed

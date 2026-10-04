@@ -131,6 +131,12 @@ APP_ACTIONS = {
     "app_refresh_images_list",
     "app_reload_images_list",
     "app_refresh_image",
+    # Client-only actions meant to be called from an action/hook `steps` or
+    # `after_success` (not bound to keys by default).
+    "app_select_next_box",
+    "app_select_prev_box",
+    "app_clear_tags",
+    "app_copy_labels_from_prev",
 }
 
 # Server-side built-in actions (name -> callable) usable as a `steps` /
