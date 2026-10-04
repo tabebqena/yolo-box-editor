@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.6.0
+- Fixed: the app no longer becomes heavy, laggy or sluggish after you browse many images. Each image is decoded once and its memory is released as soon as you move on, so long sessions stay responsive.
+
 ## 7.5.0
 - Four new built-in actions you can run from an action or hook step: app_select_next_box, app_select_prev_box, app_clear_tags and app_copy_labels_from_prev (copy the previous image's boxes and tags).
 

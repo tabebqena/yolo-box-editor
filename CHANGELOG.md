@@ -4,6 +4,17 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.6.0] - 2026-10-04
+
+### Fixed
+
+- **The app no longer gets heavy after browsing many images.** Each image is now
+  decoded with `createImageBitmap` and drawn as a bitmap that is explicitly
+  released when the next image loads, instead of relying on the browser's
+  per-URL `<img>` decode cache, which kept growing the more images were viewed.
+  This stops the memory creep (and the sluggish pointer/clicks) on long
+  labelling sessions.
+
 ## [7.5.0] - 2026-10-04
 
 ### Added

@@ -12,6 +12,7 @@ function resetToEmptyImage() {
   imageTags = [];
   imgW = 0;
   imgH = 0;
+  releaseFrame();
   canvas.width = 0;
   canvas.height = 0;
   updateNav();
@@ -245,13 +246,13 @@ function loadImage(i) {
       imageTags = (data && data.tags) || [];
       undoStack = []; // history is per image
       redoStack = [];
-      imageEl.removeAttribute('src');
-      imageEl.src = '/api/image' + q + '&_=' + Date.now();
+      const imageUrl = '/api/image' + q + '&_=' + Date.now();
+      displayImage(imageUrl);
       rememberLastImage();
       renderTagBar();
       updateHistoryButtons();
       dbg('loadImage resolved', { index: currentIndex, boxes: boxes.length,
-        tags: imageTags.length, src: imageEl.src });
+        tags: imageTags.length, src: imageUrl });
       runHook('on_image_loaded');
     }).catch((err) => {
       // e.g. the key is no longer in the server list (a stale tab): blank it

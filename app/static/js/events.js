@@ -318,9 +318,8 @@ const APP_SHORTCUT_HANDLERS = {
   app_refresh_image: (e) => {
     e.preventDefault();
     if (currentIndex < 0) { dbg('refresh image skipped (no image)'); return; }
-    imageEl.removeAttribute('src');
-    imageEl.src = '/api/image' + keyQuery(images[currentIndex]) + '&_=' + Date.now();
-    dbg('refresh image', { index: currentIndex, src: imageEl.src });
+    displayImage('/api/image' + keyQuery(images[currentIndex]) + '&_=' + Date.now());
+    dbg('refresh image', { index: currentIndex });
   },
 };
 

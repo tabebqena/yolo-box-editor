@@ -10,7 +10,19 @@ let origBox = null;    // normalized snapshot at drag start
 // active resize-handle name (nw, n, …) during a resize
 let handle = null;
 
-// the single <img> backing the canvas; loading it resizes the canvas
+// The decoded frame currently on screen, preferred over `imageEl`. It is a
+// `createImageBitmap` result, closed and replaced on every image so the browser
+// frees the previous bitmap's native memory immediately. An <img> instead keeps
+// a decoded bitmap cached by URL, and because every load is cache-busted that
+// cache grows with the number of images viewed — the tab gets heavier and
+// heavier. `null` means the fallback <img> path is in use.
+let currentBitmap = null;
+// Monotonic id of the newest requested image; a late decode for an older
+// request is closed and dropped instead of overwriting the current frame.
+let imageLoadSeq = 0;
+
+// the single <img> backing the canvas when createImageBitmap is unavailable
+// (e.g. the jsdom tests); loading it resizes the canvas
 const imageEl = new Image();
 imageEl.onload = () => {
   imgW = imageEl.naturalWidth;
@@ -21,9 +33,30 @@ imageEl.onload = () => {
   draw();
 };
 imageEl.onerror = () => {
-  // the image file is gone (e.g. removed by an action): blank the canvas so
-  // no stale frame keeps showing a deleted image.
   dbgWarn('image failed to load', { src: imageEl.src });
+  blankImage();
+};
+
+/**
+ * Drop the current decoded frame (bitmap and/or <img> source) so its native
+ * memory can be reclaimed. Safe to call when nothing is loaded.
+ * @returns {void}
+ */
+function releaseFrame() {
+  if (currentBitmap) {
+    currentBitmap.close();
+    currentBitmap = null;
+  }
+  imageEl.removeAttribute('src');
+}
+
+/**
+ * Blank the editor after the current image could not be loaded (e.g. removed by
+ * an action) so no stale frame keeps showing a deleted image.
+ * @returns {void}
+ */
+function blankImage() {
+  releaseFrame();
   imgW = 0;
   imgH = 0;
   canvas.width = 0;
@@ -33,7 +66,54 @@ imageEl.onerror = () => {
   selected = -1;
   imageTags = [];
   draw();
-};
+}
+
+/**
+ * Show the image at `url` on the canvas. Prefers a decoded `ImageBitmap`
+ * (closed when replaced) over the shared <img> element; falls back to the <img>
+ * when `createImageBitmap` is not available.
+ * @param {string} url
+ * @returns {Promise<void>} Resolves once the frame is applied (or failed).
+ */
+function displayImage(url) {
+  const seq = ++imageLoadSeq;
+  if (typeof createImageBitmap !== 'function') {
+    // Fallback: reuse the <img> as before (jsdom has no createImageBitmap).
+    return new Promise((resolve) => {
+      const done = () => {
+        imageEl.removeEventListener('load', done);
+        imageEl.removeEventListener('error', done);
+        resolve();
+      };
+      imageEl.addEventListener('load', done);
+      imageEl.addEventListener('error', done);
+      imageEl.removeAttribute('src');
+      imageEl.src = url;
+    });
+  }
+  return fetch(url, { cache: 'no-store' })
+    .then((res) => {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.blob();
+    })
+    .then((blob) => createImageBitmap(blob, { imageOrientation: 'from-image' }))
+    .then((bitmap) => {
+      if (seq !== imageLoadSeq) { bitmap.close(); return; } // superseded
+      releaseFrame();
+      currentBitmap = bitmap;
+      imgW = bitmap.width;
+      imgH = bitmap.height;
+      canvas.width = imgW;
+      canvas.height = imgH;
+      dbg('image loaded', { src: url, size: `${imgW}x${imgH}` });
+      draw();
+    })
+    .catch((err) => {
+      if (seq !== imageLoadSeq) return; // a newer image superseded this one
+      dbgWarn('image failed to load', { src: url, error: String(err) });
+      blankImage();
+    });
+}
 
 /**
  * Clamp a number to the 0..1 range.
@@ -125,7 +205,9 @@ function handlePoints(r) {
  */
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (imgW && imgH && imageEl.complete && imageEl.naturalWidth) {
+  if (currentBitmap) {
+    ctx.drawImage(currentBitmap, 0, 0);
+  } else if (imgW && imgH && imageEl.complete && imageEl.naturalWidth) {
     ctx.drawImage(imageEl, 0, 0);
   }
 
