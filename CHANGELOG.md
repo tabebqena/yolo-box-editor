@@ -8,27 +8,26 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Optional login** with a persistent, multi-user account store. Create users
-  from the command line with `--create-user NAME PASS` (or seed one with
-  `--auth NAME:PASS`, which only registers the user when new); `--list-users`
-  prints the registered names. Once the store has at least one user, the app
-  shows a sign-in screen before loading the dataset, every `/api/*` call returns
-  `401` until signed in, and a **Sign out** button in the side panel ends the
-  session. With no users there is no login, so local single-user use is
-  unchanged.
+- **Login** with a persistent, multi-user account store. On first run, while no
+  users exist, the app shows a **create the first account** screen (open to
+  anyone who can reach the app); once at least one user exists, every `/api/*`
+  call returns `401` until signed in. The side panel has **Sign out** and
+  **Change password** (current password required). Accounts are managed from the
+  command line with `--create-user NAME`, which **prompts for the password
+  without echo** (so it never lands in the shell history or the process list),
+  and `--list-users`.
 
   Accounts live in `users.json` in the user folder, stored as salted PBKDF2
-  hashes (never plaintext) with owner-only (`0600`) permissions. New session
-  routes: `GET /api/session`, `POST /api/login`, `POST /api/logout`;
-  `/api/config` reports an `auth` object.
+  hashes (never plaintext) with owner-only (`0600`) permissions. New routes:
+  `GET /api/session`, `POST /api/setup`, `POST /api/login`, `POST /api/logout`,
+  `POST /api/password`; `/api/config` reports an `auth` object.
 
 ### Security
 
 - The login is a **convenience gate, not strong security**. Over plain `http://`
-  the password is sent in the request body (cleartext), and a password passed on
-  the command line is visible in the process list and shell history. Use it only
-  on localhost or a trusted network, or put the app behind an HTTPS reverse
-  proxy. The stored hashes protect the file, not the command line.
+  the password is sent in the request body (cleartext). Use it only on localhost
+  or a trusted network, or behind an HTTPS reverse proxy. The stored hashes
+  protect the file; passwords are never passed on the command line.
 
 ## [6.9.0] - 2026-10-03
 

@@ -5,9 +5,8 @@ const ctx = canvas.getContext('2d');
 
 const el = (id) => document.getElementById(id);
 
-// Login is optional (enabled with `--auth USER:PASS`). A 401 from any API call
-// means the session is gone or absent, so surface the login form; the auth
-// probes themselves are excluded to avoid a loop.
+// Login: a 401 from any API call means the session is gone, so surface the
+// sign-in form; the auth probes themselves are excluded to avoid a loop.
 const nativeFetch = window.fetch.bind(window);
 window.fetch = async (...args) => {
   const res = await nativeFetch(...args);
@@ -4387,14 +4386,22 @@ function initSettings() {
 }
 
 // ---------------------------------------------------------------------------
-// login (optional; enabled with `--auth USER:PASS`)
+// login / first-run setup / change password
+// Accounts live in the server-side user store (managed with --create-user /
+// --list-users); the UI does sign in, sign out and password changes.
 // ---------------------------------------------------------------------------
 let appStarted = false;
+
+// Show the signed-in-only controls (sign out, change password).
+function setAccountControls(visible) {
+  el('logoutBtn').classList.toggle('hidden', !visible);
+  el('changePwBtn').classList.toggle('hidden', !visible);
+}
 
 function showLogin(message) {
   const overlay = el('loginOverlay');
   if (!overlay) return;
-  el('logoutBtn').classList.add('hidden');
+  setAccountControls(false);
   overlay.classList.remove('hidden');
   const err = el('loginError');
   if (message) {
@@ -4425,7 +4432,7 @@ async function submitLogin(e) {
     });
     if (res.ok) {
       hideLogin();
-      el('logoutBtn').classList.remove('hidden');
+      setAccountControls(true);
       startApp();
     } else {
       let msg = 'Sign in failed';
@@ -4444,12 +4451,115 @@ async function submitLogin(e) {
   }
 }
 
+// First run: no users exist yet, so offer to create the first account.
+function showSetup(message) {
+  const overlay = el('setupOverlay');
+  if (!overlay) return;
+  setAccountControls(false);
+  overlay.classList.remove('hidden');
+  const err = el('setupError');
+  if (message) {
+    err.textContent = message;
+    err.classList.remove('hidden');
+  } else {
+    err.classList.add('hidden');
+  }
+  const user = el('setupUser');
+  if (user && !user.value) user.focus();
+}
+
+function hideSetup() {
+  el('setupOverlay').classList.add('hidden');
+  el('setupError').classList.add('hidden');
+  el('setupPass').value = '';
+  el('setupPass2').value = '';
+}
+
+async function submitSetup(e) {
+  if (e) e.preventDefault();
+  const pass = el('setupPass').value;
+  if (pass !== el('setupPass2').value) {
+    showSetup('Passwords do not match');
+    return;
+  }
+  const btn = el('setupBtn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: el('setupUser').value, password: pass }),
+    });
+    if (res.ok) {
+      hideSetup();
+      setAccountControls(true);
+      startApp();
+    } else {
+      let msg = 'Could not create the account';
+      try {
+        const d = await res.json();
+        if (d && d.error) msg = d.error;
+      } catch (err) { /* ignore */ }
+      showSetup(msg);
+    }
+  } catch (err) {
+    showSetup('Could not reach the server');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function logout() {
   try { await fetch('/api/logout', { method: 'POST' }); } catch (e) { /* ignore */ }
   location.reload();
 }
 
-// Build the app once, with or without a login in front of it.
+function openPasswordModal() {
+  el('pwCurrent').value = '';
+  el('pwNew').value = '';
+  el('pwConfirm').value = '';
+  el('pwError').classList.add('hidden');
+  el('passwordModal').classList.remove('hidden');
+  el('pwCurrent').focus();
+}
+
+function closePasswordModal() {
+  el('passwordModal').classList.add('hidden');
+}
+
+async function savePassword() {
+  const err = el('pwError');
+  const fail = (msg) => { err.textContent = msg; err.classList.remove('hidden'); };
+  const next = el('pwNew').value;
+  if (!next) return fail('New password must not be empty');
+  if (next !== el('pwConfirm').value) return fail('New passwords do not match');
+  const btn = el('passwordSave');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_password: el('pwCurrent').value, new_password: next }),
+    });
+    if (res.ok) {
+      closePasswordModal();
+      toast('Password changed');
+    } else {
+      let msg = 'Could not change the password';
+      try {
+        const d = await res.json();
+        if (d && d.error) msg = d.error;
+      } catch (e) { /* ignore */ }
+      fail(msg);
+    }
+  } catch (e) {
+    fail('Could not reach the server');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Build the app once, after setup / login has been satisfied.
 function startApp() {
   if (appStarted) return;
   appStarted = true;
@@ -4464,18 +4574,22 @@ function startApp() {
   UPDATE_POLL_MS.forEach((ms) => setTimeout(() => refreshUpdateInfo(), ms));
 }
 
-// Ask the server whether a login is needed before building the app.
+// Ask the server whether first-run setup or a login is needed before starting.
 async function boot() {
   let info = null;
   try {
     const res = await fetch('/api/session');
     if (res.ok) info = await res.json();
   } catch (e) { /* offline: try to start anyway */ }
+  if (info && info.setup_required) {
+    showSetup();
+    return;
+  }
   if (info && info.auth_required && !info.authenticated) {
     showLogin();
     return;
   }
-  if (info && info.auth_required) el('logoutBtn').classList.remove('hidden');
+  if (info && info.auth_required) setAccountControls(true);
   startApp();
 }
 
@@ -4485,5 +4599,10 @@ window.addEventListener('error', (e) => dbgWarn('uncaught error', e.error || e.m
 window.addEventListener('unhandledrejection', (e) => dbgWarn('unhandled rejection', e.reason));
 
 el('loginForm').addEventListener('submit', submitLogin);
+el('setupForm').addEventListener('submit', submitSetup);
 el('logoutBtn').addEventListener('click', logout);
+el('changePwBtn').addEventListener('click', openPasswordModal);
+el('passwordModalClose').addEventListener('click', closePasswordModal);
+el('passwordCancel').addEventListener('click', closePasswordModal);
+el('passwordSave').addEventListener('click', savePassword);
 boot();

@@ -23,6 +23,7 @@ with the `images` path segment replaced by `labels`
 """
 
 import argparse
+import getpass
 import json
 import logging
 import os
@@ -99,7 +100,8 @@ VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")  # active split/filter pe
 SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")  # cross-browser UI prefs
 # Login accounts: {"version": 1, "users": {"name": "<password_hash>"}}. A
 # non-empty store turns login on; the file is owner-only (0600) because it holds
-# password hashes. Managed with --auth / --create-user / --list-users.
+# password hashes. Managed with --create-user / --list-users and the first-run
+# signup page.
 USERS_FILE = os.path.join(YBX_HOME, "users.json")
 
 # Update check: compare the shipped VERSION with the newest GitHub one. A check
@@ -2596,12 +2598,13 @@ def _prune_clients(now=None):
 
 
 # --------------------------------------------------------------------------- #
-# authentication (optional, enabled by --auth USER:PASS)
+# authentication (a non-empty user store turns login on)
 # --------------------------------------------------------------------------- #
 # Paths served without a session so the login page itself can load. Everything
 # else under /api/ answers 401 until the user signs in; the SPA shell and its
-# static assets are public so the login form can be rendered.
-_AUTH_PUBLIC_PATHS = {"/api/login", "/api/session", "/api/logout"}
+# static assets are public so the login form can be rendered. /api/setup creates
+# the very first account and is a no-op (403) once any user exists.
+_AUTH_PUBLIC_PATHS = {"/api/login", "/api/session", "/api/logout", "/api/setup"}
 
 
 def _valid_username(username):
@@ -2656,12 +2659,25 @@ def set_user(username, password):
     return "updated" if existed else "created"
 
 
-def add_user_if_absent(username, password):
-    """Register a user only when missing; True when a user was added."""
-    if username in USERS:
-        return False
-    USERS[username] = generate_password_hash(password)
-    return _write_users()
+def _prompt_password():
+    """Read a new password twice with getpass; None on empty or mismatch.
+
+    Prompting keeps the password out of the process list and shell history.
+    """
+    try:
+        first = getpass.getpass("Password: ")
+        second = getpass.getpass("Confirm password: ")
+    except (EOFError, KeyboardInterrupt):
+        print("", file=sys.stderr)
+        print("error: password entry cancelled", file=sys.stderr)
+        return None
+    if not first:
+        print("error: password must not be empty", file=sys.stderr)
+        return None
+    if first != second:
+        print("error: passwords do not match", file=sys.stderr)
+        return None
+    return first
 
 
 def verify_user(username, password):
@@ -2720,8 +2736,29 @@ def api_session():
             "auth_required": auth_enabled(),
             "authenticated": _is_authenticated(),
             "username": username,
+            "setup_required": not USERS,
         }
     )
+
+
+@app.route("/api/setup", methods=["POST"])
+def api_setup():
+    """Create the very first account; only allowed while the store is empty."""
+    if USERS:
+        return jsonify({"ok": False, "error": "users already exist"}), 403
+    data = request.get_json(silent=True) or {}
+    username = str(data.get("username", ""))
+    password = str(data.get("password", ""))
+    if not _valid_username(username):
+        return jsonify({"ok": False, "error": "invalid username"}), 400
+    if not password:
+        return jsonify({"ok": False, "error": "password must not be empty"}), 400
+    try:
+        set_user(username, password)
+    except OSError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+    session["ybe_user"] = username
+    return jsonify({"ok": True, "username": username})
 
 
 @app.route("/api/login", methods=["POST"])
@@ -2742,6 +2779,26 @@ def api_login():
 def api_logout():
     """Sign out: drop the session's user marker."""
     session.pop("ybe_user", None)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/password", methods=["POST"])
+def api_password():
+    """Change the signed-in user's own password (needs the current one)."""
+    username = _session_username()
+    if not username:
+        return jsonify({"ok": False, "error": "authentication required"}), 401
+    data = request.get_json(silent=True) or {}
+    current = str(data.get("current_password", ""))
+    new = str(data.get("new_password", ""))
+    if not verify_user(username, current):
+        return jsonify({"ok": False, "error": "current password is incorrect"}), 403
+    if not new:
+        return jsonify({"ok": False, "error": "new password must not be empty"}), 400
+    try:
+        set_user(username, new)
+    except OSError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
     return jsonify({"ok": True})
 
 
@@ -3556,15 +3613,10 @@ def main():
         help="serve as a read-only viewer (no saving labels)",
     )
     parser.add_argument(
-        "--auth",
-        metavar="USER:PASS",
-        help="register USER (with PASS) if not already known, then require a login",
-    )
-    parser.add_argument(
         "--create-user",
-        nargs=2,
-        metavar=("NAME", "PASSWORD"),
-        help="create a user (or reset an existing password) in the user store, then exit",
+        metavar="NAME",
+        help="create a user (or reset a password) in the user store, prompting "
+        "for the password, then exit",
     )
     parser.add_argument(
         "--list-users",
@@ -3633,9 +3685,12 @@ def main():
         return
 
     if args.create_user:
-        username, password = args.create_user
+        username = args.create_user
         if not _valid_username(username):
             parser.error("--create-user NAME must be non-empty and contain no ':'")
+        password = _prompt_password()
+        if password is None:
+            sys.exit(1)
         try:
             action = set_user(username, password)
         except OSError as exc:
@@ -3643,17 +3698,6 @@ def main():
             sys.exit(1)
         print(f"{action} user {username!r} in {USERS_FILE}")
         return
-
-    if args.auth is not None:
-        if ":" not in args.auth:
-            parser.error("--auth must be in the form USER:PASS")
-        username, password = args.auth.split(":", 1)
-        if not _valid_username(username):
-            parser.error("--auth USER must be non-empty and contain no ':'")
-        if add_user_if_absent(username, password):
-            log.info("registered login user %r in %s", username, USERS_FILE)
-        else:
-            log.info("login user %r already registered (existing password kept)", username)
 
     start_update_checker()
 

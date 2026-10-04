@@ -2,8 +2,8 @@
 
 ## Project
 Flask app for labelling images in YOLO format. The shipped code lives in `app/`:
-`app/app.py` (~3250 lines) is the entire backend; the UI is plain
-`app/templates/index.html` + `app/static/app.js` (~4200 lines) +
+`app/app.py` (~3700 lines) is the entire backend; the UI is plain
+`app/templates/index.html` + `app/static/app.js` (~4600 lines) +
 `app/static/style.css` with **no build step**. No package layout, no database.
 The `data.yaml` reader is hand-rolled — no PyYAML at runtime. User files live in
 `YBX_HOME` (below).
@@ -14,13 +14,15 @@ The `data.yaml` reader is hand-rolled — no PyYAML at runtime. User files live 
   custom user folder; `--host`/`--port`, default `127.0.0.1:5000`). Other flags:
   `--no-resume` (open Settings instead of the last dataset), `--keep-pipe` and
   `--keep-filter-pipes` (keep scratch pipe files), `--no-update-check`,
-  `--log-file`, `--no-reload`. Flask runs with `debug=True`.
+  `--log-file`, `--no-reload`. Auth admin commands (run, print and exit):
+  `--create-user NAME` (prompts for the password with `getpass`, no echo) and
+  `--list-users`. Flask runs with `debug=True`.
 - Install/update/remove: `ybx.sh` (`install` / `upgrade` / `update` / `version` /
   `check-update` / `uninstall`); e.g. `./ybx.sh install --from .`. It replaces
   only `<dir>/app/` atomically and leaves user files and `.venv` alone.
   `app/launcher.sh.in` is the `ybe` launcher template (start/stop/restart/status/
   logs) that `ybx.sh` fills in. (Replaces the old `install.sh`.)
-- Tests (from repo root): `python -m pytest -q` (~253 tests); single test
+- Tests (from repo root): `python -m pytest -q` (~288 tests); single test
   `python -m pytest tests/test_app.py::test_name -q`. `pytest.ini` puts `app/`
   on `pythonpath`.
 - No lint / format / typecheck config exists.
@@ -34,7 +36,10 @@ The `data.yaml` reader is hand-rolled — no PyYAML at runtime. User files live 
   `APP_SCRIPT_DIR`, `SHORTCUTS_FILE`, `VERSION_FILE`, `CHANGES_FILE`; user
   `USER_ACTIONS_DIR`, `USER_HOOKS_DIR`, `USER_FILTERS_DIR`, `USER_SCRIPT_DIR`,
   `USER_SHORTCUTS_FILE`; state files `RECENT_FILE`, `VIEW_FILE`,
-  `SETTINGS_FILE`, `UPDATE_CHECK_FILE`; and `FILTER_PIPES_DIR` (temp scratch).
+  `SETTINGS_FILE`, `UPDATE_CHECK_FILE`, `USERS_FILE` (the login accounts); and
+  `FILTER_PIPES_DIR` (temp scratch). Module global `USERS`
+  (`{username: password_hash}`) is loaded from `USERS_FILE` at startup; a
+  non-empty map turns login on.
   There is deliberately no `SCRIPTS_DIR` symbol: scripts are reached relatively
   (`scripts/…`, since cwd is the home) or as `{APP_DIR}/scripts/…`.
 - `YBX_HOME` resolution: `--home <dir>` > `$YBX_HOME` > the parent of `app.py`.
@@ -72,8 +77,18 @@ The `data.yaml` reader is hand-rolled — no PyYAML at runtime. User files live 
   `/api/hooks/save`, `/api/filters/save`, `/api/extensions/delete`,
   `/api/extensions/file`; all honour read-only. `/api/config` also returns
   `hook_events`, `app_actions`, `backend_actions`,
-  `action_defs`/`hook_defs`/`filter_defs` (each with `source`, `api_version`,
-  `status`) and `extension_api_version`.
+   `action_defs`/`hook_defs`/`filter_defs` (each with `source`, `api_version`,
+   `status`) and `extension_api_version`.
+- Auth: accounts are a `{username: password_hash}` map in `users.json`
+  (`USERS_FILE`, owner-only `0600`, hashed via `werkzeug.security`). A non-empty
+  `USERS` turns login on: `before_request` returns 401 for `/api/*` without a
+  signed session, while `/`, `/static/*` and
+  `/api/{session,login,logout,setup}` stay public. The UI shows a first-run
+  signup form when the store is empty (`/api/session` → `setup_required`), else a
+  sign-in form, and offers Sign out and Change password. Routes: `GET
+  /api/session`, `POST /api/setup` (only while empty), `POST /api/login`,
+  `POST /api/logout`, `POST /api/password`. Account admin is CLI-only
+  (`--create-user`/`--list-users`); there is no users tab in the UI.
 - `app/VERSION`, `app/CHANGES` (per-version "what's new" notes shown once per
   installed version) and `CHANGELOG.md` (Keep a Changelog); `README.md` /
   `TUTORIAL.md` and `docs/` (`actions-and-hooks.md`, `filters.md`, `tags.md`,
@@ -96,10 +111,11 @@ The `data.yaml` reader is hand-rolled — no PyYAML at runtime. User files live 
 ## Tests
 - `tests/test_app.py` monkeypatches the module-level path constants above
   (shipped, `USER_*`, and the `*_FILE` state files) and resets `STATE`; keep
-  those names module-level so tests can patch them.
+  those names module-level so tests can patch them. `clean_state` also patches
+  `USERS_FILE` and resets `USERS = {}`.
 - Fixtures create real JPEGs (Pillow) in `tmp_path`; tests never touch the repo's
   own `app/actions/`, `shortcuts.txt`, `.recent_data_yamls.json`,
-  `.settings.json` or `.view_state.json`.
+  `.settings.json`, `.view_state.json` or `users.json`.
 
 ## Repo conventions & boundaries
 

@@ -3,8 +3,9 @@
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
 ## 7.0.0
-- Optional login for a shared or LAN instance. Create users from the command line with `--create-user NAME PASS` (or `--auth NAME:PASS` to register one if new); `--list-users` shows them. Once at least one user exists the app asks for a login before showing the dataset, and a Sign out button ends the session. With no users there is no login.
-- Accounts are stored hashed in `users.json` in your user folder and the file is owner-only. This is a convenience gate for a trusted network, not strong security: over plain http the password is sent in clear text and is visible in the process list while the app runs.
+- Login for a shared or LAN instance. On first run the app asks you to create the first account; after that it asks you to sign in. The side panel has Sign out and Change password, and anyone who can open the app can create that first account while none exists.
+- Accounts live in `users.json` in your user folder, stored hashed (never as plain text) and owner-only. Admins can also manage them from the command line: `--create-user NAME` prompts for the password with no echo, and `--list-users` shows the names.
+- This is a convenience gate for a trusted network, not strong security: over plain http the password is sent in clear text.
 
 ## 6.9.0
 - Creating an action, hook or filter now looks like an editor: a titled header, grouped sections (Details, Steps, After success, Arguments) and a sticky Create / Clear footer. Command and argument fields are shown in monospace.

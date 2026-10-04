@@ -817,6 +817,14 @@ body.panel-left #dockSide {
 .login-error.hidden { display: none; }
 .login-box button { margin-top: 12px; }
 
+.password-modal { width: min(420px, 92vw); }
+.password-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+}
+
 .filter-panel-body {
   display: flex;
   flex-direction: column;

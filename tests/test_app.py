@@ -3144,6 +3144,7 @@ def test_auth_off_when_store_empty(clean_state):
     info = client.get("/api/session").get_json()
     assert info["auth_required"] is False
     assert info["authenticated"] is True
+    assert info["setup_required"] is True  # first run: offer to create an account
     assert client.get("/api/config").status_code == 200
 
 
@@ -3153,6 +3154,7 @@ def test_auth_on_when_store_has_user(clean_state):
     assert client.get("/api/config").status_code == 401
     info = client.get("/api/session").get_json()
     assert info["auth_required"] is True and info["authenticated"] is False
+    assert info["setup_required"] is False
     # The SPA shell loads so the login form can be rendered.
     assert client.get("/").status_code == 200
 
@@ -3189,13 +3191,6 @@ def test_login_rejects_unknown_user(clean_state):
     resp = ybe.app.test_client().post(
         "/api/login", json={"username": "bob", "password": "s3cret"})
     assert resp.status_code == 401
-
-
-def test_add_user_if_absent_keeps_existing_password(clean_state):
-    ybe.set_user("alice", "first")
-    assert ybe.add_user_if_absent("alice", "second") is False
-    assert ybe.verify_user("alice", "first")
-    assert not ybe.verify_user("alice", "second")
 
 
 def test_set_user_updates_password(clean_state):
@@ -3242,9 +3237,96 @@ def test_login_is_noop_when_auth_off(clean_state):
     assert resp.get_json()["auth_required"] is False
 
 
+def test_setup_creates_first_user_and_signs_in(clean_state):
+    client = ybe.app.test_client()
+    assert client.get("/api/session").get_json()["setup_required"] is True
+    resp = client.post("/api/setup", json={"username": "alice", "password": "s3cret"})
+    assert resp.status_code == 200 and resp.get_json()["ok"] is True
+    # The new user is registered and this client is already signed in.
+    assert ybe.verify_user("alice", "s3cret")
+    assert client.get("/api/config").status_code == 200
+    info = client.get("/api/session").get_json()
+    assert info["setup_required"] is False
+    assert info["authenticated"] is True
+
+
+def test_setup_rejected_when_users_exist(clean_state):
+    ybe.set_user("alice", "s3cret")
+    resp = ybe.app.test_client().post(
+        "/api/setup", json={"username": "bob", "password": "pw"})
+    assert resp.status_code == 403
+    assert not ybe.verify_user("bob", "pw")
+
+
+def test_setup_rejects_empty_password_and_bad_username(clean_state):
+    client = ybe.app.test_client()
+    assert client.post(
+        "/api/setup", json={"username": "alice", "password": ""}).status_code == 400
+    assert client.post(
+        "/api/setup", json={"username": "a:b", "password": "x"}).status_code == 400
+    assert not ybe.USERS
+
+
+def test_change_password(clean_state):
+    ybe.set_user("alice", "old")
+    client = ybe.app.test_client()
+    client.post("/api/login", json={"username": "alice", "password": "old"})
+    # Wrong current password is refused.
+    assert client.post("/api/password", json={
+        "current_password": "nope", "new_password": "new"}).status_code == 403
+    assert ybe.verify_user("alice", "old")
+
+    resp = client.post("/api/password", json={
+        "current_password": "old", "new_password": "new"})
+    assert resp.status_code == 200 and resp.get_json()["ok"] is True
+    assert ybe.verify_user("alice", "new")
+    assert not ybe.verify_user("alice", "old")
+
+
+def test_change_password_requires_login(clean_state):
+    ybe.set_user("alice", "old")
+    resp = ybe.app.test_client().post("/api/password", json={
+        "current_password": "old", "new_password": "new"})
+    assert resp.status_code == 401
+
+
+def test_change_password_rejects_empty(clean_state):
+    ybe.set_user("alice", "old")
+    client = ybe.app.test_client()
+    client.post("/api/login", json={"username": "alice", "password": "old"})
+    assert client.post("/api/password", json={
+        "current_password": "old", "new_password": ""}).status_code == 400
+
+
 def test_valid_username_rules():
     assert ybe._valid_username("alice")
     assert not ybe._valid_username("")
     assert not ybe._valid_username("a:b")
     assert not ybe._valid_username("a\nb")
+
+
+def test_prompt_password_reads_twice(monkeypatch):
+    replies = iter(["secret", "secret"])
+    monkeypatch.setattr(ybe.getpass, "getpass", lambda prompt="": next(replies))
+    assert ybe._prompt_password() == "secret"
+
+
+def test_prompt_password_mismatch(monkeypatch):
+    replies = iter(["secret", "other"])
+    monkeypatch.setattr(ybe.getpass, "getpass", lambda prompt="": next(replies))
+    assert ybe._prompt_password() is None
+
+
+def test_prompt_password_empty(monkeypatch):
+    replies = iter(["", ""])
+    monkeypatch.setattr(ybe.getpass, "getpass", lambda prompt="": next(replies))
+    assert ybe._prompt_password() is None
+
+
+def test_prompt_password_cancelled(monkeypatch):
+    def boom(prompt=""):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(ybe.getpass, "getpass", boom)
+    assert ybe._prompt_password() is None
 

@@ -67,9 +67,8 @@ and run `python app/app.py`:
 ```bash
 python app/app.py --data /path/to/data.yaml
 python app/app.py --data /path/to/data.yaml --readonly   # viewer only
-python app/app.py --create-user alice secret             # register a login user, then exit
+python app/app.py --create-user alice                   # register a login user (prompts), exit
 python app/app.py --list-users                           # show registered users, then exit
-python app/app.py --data /path/to/data.yaml --auth alice:secret  # register if new, then serve
 python app/app.py --data /path/to/data.yaml --debug      # verbose browser console
 python app/app.py --no-resume                            # Load-a-dataset dialog, no auto-open
 python app/app.py --data /path/to/data.yaml --keep-pipe  # keep each run's {PIPE_PATH} file
@@ -93,18 +92,20 @@ the loaded config, image loads, saves, tag writes, user actions / `after_success
 chains, hook runs, rescans and box edits. It also surfaces uncaught errors and
 unhandled promise rejections.
 
-`--create-user NAME PASS` registers a login user (or resets an existing one's
-password) and exits; `--list-users` prints the registered names. Once `users.json`
-(in your user folder) has at least one user, the app shows a sign-in screen before
-loading the dataset, and a **Sign out** button ends the session. With no users
-there is no login. `--auth NAME:PASS` registers the user only when new and then
-serves, so it is handy for a first run.
+On first run, while no users exist, the web page shows a **create the first
+account** form — anyone who can reach the app can create that first account.
+Once `users.json` (in your user folder) has at least one user, the app asks you
+to sign in before loading the dataset; the side panel has **Sign out** and
+**Change password** (the current password is required). Accounts can also be
+managed from the command line: `--create-user NAME` registers a user (or resets
+an existing password) and exits, prompting for the password twice with no echo so
+it never reaches the shell history or process list; `--list-users` prints the
+registered names.
 
 Accounts are stored as salted hashes (never plaintext) and the file is
 owner-only. This is a convenience gate, **not strong security**: over plain
-`http://` the password is sent in clear text, and a password given on the command
-line is visible in the process list and shell history. Use it on localhost or a
-trusted network, or behind an HTTPS reverse proxy.
+`http://` the password is sent in clear text. Use it on localhost or a trusted
+network, or behind an HTTPS reverse proxy.
 
 ## Changelog and releases
 
