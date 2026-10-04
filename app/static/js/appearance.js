@@ -756,41 +756,64 @@ function renderSidePanel() {
 }
 
 /**
- * Refresh selection, fixed state and field values for the side-panel rows.
+ * Refresh selection, fixed state and field values for one side-panel row.
+ * @param {HTMLElement} row - The `.box-row` element.
+ * @param {number} i - Box index this row shows.
  */
-function updateSidePanelState() {
+function updateSidePanelRow(row, i) {
+  const b = boxes[i];
+  if (!b) return;
+  const on = i === selected && !readonly;
+  row.classList.toggle('selected', i === selected);
+  row.classList.toggle('fixed', !!b.fixed);
+  const idx = row.querySelector('.box-row-idx');
+  if (idx) idx.textContent = i;
+  const fixBtn = row.querySelector('.box-row-fix');
+  if (fixBtn) {
+    fixBtn.classList.toggle('active', !!b.fixed);
+    fixBtn.title = b.fixed ? 'Unfix this box (F)' : 'Fix this box (F)';
+  }
+  row.querySelectorAll('.box-row-ctl').forEach((ctl) => { ctl.disabled = !on; });
+  setFieldValue(row.querySelector('.box-row-class'), String(b.class));
+  setFieldValue(row.querySelector('.box-row-cx'), String(fmtNum(b.cx)));
+  setFieldValue(row.querySelector('.box-row-cy'), String(fmtNum(b.cy)));
+  setFieldValue(row.querySelector('.box-row-w'), String(fmtNum(b.w)));
+  setFieldValue(row.querySelector('.box-row-h'), String(fmtNum(b.h)));
+}
+
+/**
+ * Refresh selection, fixed state and field values for the side-panel rows.
+ * @param {number} [only] - When given, update only that box's row (used by the
+ *   drag hot path, where only the dragged box changed); otherwise all rows.
+ */
+function updateSidePanelState(only) {
   const list = el('boxList');
   if (!list) return;
   el('sidePanelCount').textContent = boxes.length;
-  list.querySelectorAll('.box-row').forEach((row, i) => {
-    const b = boxes[i];
-    if (!b) return;
-    const on = i === selected && !readonly;
-    row.classList.toggle('selected', i === selected);
-    row.classList.toggle('fixed', !!b.fixed);
-    row.querySelector('.box-row-idx').textContent = i;
-    const fixBtn = row.querySelector('.box-row-fix');
-    if (fixBtn) {
-      fixBtn.classList.toggle('active', !!b.fixed);
-      fixBtn.title = b.fixed ? 'Unfix this box (F)' : 'Fix this box (F)';
-    }
-    row.querySelectorAll('.box-row-ctl').forEach((ctl) => { ctl.disabled = !on; });
-    setFieldValue(row.querySelector('.box-row-class'), String(b.class));
-    setFieldValue(row.querySelector('.box-row-cx'), String(fmtNum(b.cx)));
-    setFieldValue(row.querySelector('.box-row-cy'), String(fmtNum(b.cy)));
-    setFieldValue(row.querySelector('.box-row-w'), String(fmtNum(b.w)));
-    setFieldValue(row.querySelector('.box-row-h'), String(fmtNum(b.h)));
-  });
+  if (only !== undefined) {
+    const row = list.children[only];
+    if (row) updateSidePanelRow(row, only);
+    return;
+  }
+  Array.from(list.children).forEach((row, i) => updateSidePanelRow(row, i));
 }
 
 /**
  * Re-render the side-panel list only when its length changed, else update it.
+ * @param {number|false} [panelMode] - `false` skips the update entirely (no box
+ *   changed, e.g. while drawing); a number updates only that row (the dragged
+ *   box); omitted does a full update.
  */
-function syncSidePanel() {
+function syncSidePanel(panelMode) {
   const list = el('boxList');
   if (!list) return;
   if (list.children.length !== boxes.length) {
     renderSidePanel();
+    return;
+  }
+  if (panelMode === false) return;
+  if (typeof panelMode === 'number') {
+    updateSidePanelState(panelMode);
     return;
   }
   updateSidePanelState();

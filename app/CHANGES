@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.7.0
+- Fixed: creating or resizing a box no longer gets slow on images with many boxes. Only the box you are dragging is updated while you drag, so the pointer stays responsive.
+
 ## 7.6.0
 - Fixed: the app no longer becomes heavy, laggy or sluggish after you browse many images. Each image is decoded once and its memory is released as soon as you move on, so long sessions stay responsive.
 

@@ -202,8 +202,11 @@ function handlePoints(r) {
 
 /**
  * Redraw the canvas: image, boxes, handles and in-progress interactions.
+ * @param {number|false} [panelMode] - Forwarded to `syncSidePanel`: omitted
+ *   syncs the whole side panel, a number syncs only that box's row (the drag
+ *   hot path), `false` skips it (nothing changed, e.g. drawing a new box).
  */
-function draw() {
+function draw(panelMode) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (currentBitmap) {
     ctx.drawImage(currentBitmap, 0, 0);
@@ -257,7 +260,7 @@ function draw() {
     ctx.setLineDash([]);
   }
 
-  syncSidePanel();
+  syncSidePanel(panelMode);
 }
 
 /**
@@ -387,6 +390,24 @@ function canvasPos(e) {
 }
 
 /**
+ * Hit-test a canvas point against the selected box's resize handles only.
+ * Cheap (O(1)) helper for the hover cursor, which does not care about the
+ * buttons or the other boxes.
+ * @param {{x:number,y:number}} p
+ * @returns {string|null} The handle name, or null.
+ */
+function handleHit(p) {
+  if (!boxesVisible || selected < 0 || boxes[selected].fixed) return null;
+  const r = toPx(boxes[selected]);
+  for (const hp of handlePoints(r)) {
+    if (Math.abs(p.x - hp.x) <= HANDLE_SIZE && Math.abs(p.y - hp.y) <= HANDLE_SIZE) {
+      return hp.name;
+    }
+  }
+  return null;
+}
+
+/**
  * Hit-test a canvas point against handles, buttons and boxes.
  * @param {{x:number,y:number}} p
  * @returns {{type:string,handle?:string,index?:number}}
@@ -394,14 +415,8 @@ function canvasPos(e) {
 function hitTest(p) {
   // hidden boxes are not drawn, so they must not swallow clicks either
   if (!boxesVisible) return { type: 'none' };
-  if (selected >= 0 && !boxes[selected].fixed) {
-    const r = toPx(boxes[selected]);
-    for (const hp of handlePoints(r)) {
-      if (Math.abs(p.x - hp.x) <= HANDLE_SIZE && Math.abs(p.y - hp.y) <= HANDLE_SIZE) {
-        return { type: 'handle', handle: hp.name, index: selected };
-      }
-    }
-  }
+  const h = handleHit(p);
+  if (h) return { type: 'handle', handle: h, index: selected };
   for (let i = boxes.length - 1; i >= 0; i--) {
     const d = deleteBtnRect(toPx(boxes[i]));
     if (p.x >= d.x && p.x <= d.x + d.w && p.y >= d.y && p.y <= d.y + d.h) {
@@ -438,9 +453,8 @@ const RESIZE_CURSORS = {
  */
 function updateCursor(p) {
   if (mode !== 'idle' || readonly || !boxesVisible) return;
-  const hit = hitTest(p);
-  canvas.style.cursor =
-    hit.type === 'handle' ? RESIZE_CURSORS[hit.handle] || 'crosshair' : '';
+  const name = handleHit(p);
+  canvas.style.cursor = name ? RESIZE_CURSORS[name] || 'crosshair' : '';
 }
 
 /**
@@ -491,7 +505,7 @@ function moveBox(p) {
   const cy = Math.max(origBox.h / 2, Math.min(1 - origBox.h / 2, origBox.cy + dy));
   boxes[selected] = { ...origBox, cx, cy };
   moved = true;
-  draw();
+  draw(selected); // only the dragged row changed
 }
 
 /**
@@ -533,7 +547,7 @@ function resizeBox(p) {
     h: clamp01(h / imgH),
   };
   moved = true;
-  draw();
+  draw(selected); // only the dragged row changed
 }
 
 // ------------------------------------------------------------------------- //

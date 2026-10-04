@@ -108,7 +108,7 @@ function onWindowMouseMove(e) {
   const p = canvasPos(e);
   if (mode === 'drawing' && start) {
     mouse = clampToImage(p);
-    draw();
+    draw(false); // no box changed, so the side panel needs no update
   } else {
     mouse = p;
     if (mode === 'moving' && origBox) {

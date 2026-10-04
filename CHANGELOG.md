@@ -4,6 +4,17 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.7.0] - 2026-10-04
+
+### Fixed
+
+- **Creating or resizing a box no longer gets slow on images with many boxes.**
+  Every mouse move during a drag redrew the canvas and re-synced the whole
+  side-panel box list, so the work grew with the number of boxes and the pointer
+  started ignoring drags. A move/resize now updates only the dragged box's row,
+  and the hover cursor only checks the selected box's handles, so editing stays
+  responsive regardless of how many boxes an image has.
+
 ## [7.6.0] - 2026-10-04
 
 ### Fixed
