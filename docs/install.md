@@ -94,8 +94,8 @@ unhandled promise rejections.
 
 The app ships with a ready-to-use account so `ybe start` works with no extra
 setup: sign in as **`admin`** with password **`admin`**, then change the password
-from the side panel (the key button: **Change password**; the current password is
-required). **Sign out** ends the session. Accounts can also be managed from the
+in **Settings → Account → Change password** (the current password is required).
+**Sign out** ends the session. Accounts can also be managed from the
 command line: `--create-user NAME` registers a user (or resets an existing
 password) and exits, prompting for the password twice with no echo so it never
 reaches the shell history or process list; `--list-users` prints the registered

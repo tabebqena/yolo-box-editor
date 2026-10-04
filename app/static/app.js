@@ -4234,8 +4234,10 @@ function initSettings() {
 // ---------------------------------------------------------------------------
 let appStarted = false;
 
-// Show the signed-in-only controls (sign out, change password).
+// Show the signed-in-only controls: the Settings > Account tab and its
+// Sign out / Change password buttons.
 function setAccountControls(visible) {
+  setHidden('accountTabBtn', !visible);
   setHidden('logoutBtn', !visible);
   setHidden('changePwBtn', !visible);
 }

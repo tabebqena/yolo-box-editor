@@ -909,6 +909,7 @@ button.is-loading::after {
 /* settings modal */
 .settings-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   padding: 0 10px;
   border-bottom: 1px solid var(--border);

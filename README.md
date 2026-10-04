@@ -51,9 +51,9 @@ Full details: [install, update and run](docs/install.md).
 - **Undo / Redo / Save**, plus optional **auto-save** so navigation never asks.
 - **Read-only mode** (`--readonly`) to browse a dataset safely.
 - **Login** for a shared or LAN instance: sign in as `admin` / `admin` (shipped
-  default — change it), with Sign out and Change password in the side panel, and
-  `--create-user` / `--list-users` to manage the hashed store from the command
-  line. A convenience gate, not strong security — see
+  default — change it), with Sign out and Change password in **Settings →
+  Account**, and `--create-user` / `--list-users` to manage the hashed store from
+  the command line. A convenience gate, not strong security — see
   [install](docs/install.md).
 - **Arrange the UI**: put the panel left or right, and float or dock the Tags,
   Boxes, Actions, Navigation and Save widgets. The layout is remembered.

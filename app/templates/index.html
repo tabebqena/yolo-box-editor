@@ -32,8 +32,6 @@
             <span aria-hidden="true">&#128276;</span>
             <span id="notifBadge" class="notif-badge hidden">0</span>
           </button>
-          <button id="logoutBtn" class="icon-btn hidden" title="Sign out">&#9099;</button>
-          <button id="changePwBtn" class="icon-btn hidden" title="Change password">&#128273;</button>
           <button id="sidePanelToggle" title="Hide / show the side panel">Panel</button>
         </div>
       </div>
@@ -202,6 +200,7 @@
         <button class="settings-tab" type="button" role="tab" data-tab="hooks">Hooks</button>
         <button class="settings-tab" type="button" role="tab" data-tab="shortcuts">Shortcuts</button>
         <button class="settings-tab" type="button" role="tab" data-tab="updates">Updates</button>
+        <button id="accountTabBtn" class="settings-tab hidden" type="button" role="tab" data-tab="account">Account</button>
       </div>
       <div class="settings-modal-body">
         <section class="settings-panel active" data-panel="general">
@@ -418,6 +417,14 @@
             <span id="updateStatus" class="hint">Checking…</span>
             <button id="updateCheckBtn" title="Check GitHub for a newer version">Check now</button>
             <button id="updateHowBtn" class="primary hidden" title="How to update">How to update</button>
+          </div>
+        </section>
+
+        <section class="settings-panel" data-panel="account">
+          <p class="hint">You are signed in. Change your password or end the session here.</p>
+          <div class="settings-actions">
+            <button id="changePwBtn" type="button" title="Change your password">Change password</button>
+            <button id="logoutBtn" class="danger" type="button" title="Sign out">Sign out</button>
           </div>
         </section>
       </div>

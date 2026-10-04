@@ -4,6 +4,15 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.4.0] - 2026-10-04
+
+### Changed
+
+- **Change password and Sign out moved out of the side panel's top bar.** They
+  now live in a dedicated **Settings → Account** tab, which appears only when
+  sign-in is enabled. This keeps the top bar focused on the app (settings,
+  notifications, panel toggle).
+
 ## [7.3.0] - 2026-10-04
 
 ### Changed

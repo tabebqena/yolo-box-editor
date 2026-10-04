@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.4.0
+- Change password and Sign out moved from the side panel's top bar into a new Settings > Account tab (it appears only when sign-in is enabled).
+
 ## 7.3.0
 - The developer debug console and auto-reloader are now off by default, so an error page can no longer run code for anyone who reaches the app. If you are developing, pass `--flask-debug`. The `--debug` flag is unchanged: it only adds verbose logging to the browser console.
 
