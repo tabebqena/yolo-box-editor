@@ -23,15 +23,10 @@ with the `images` path segment replaced by `labels`
 """
 
 import argparse
-import getpass
-import json
 import os
 import secrets
 import sys
-import threading
 import time
-import urllib.error
-import urllib.request
 import uuid
 
 from flask import (
@@ -43,8 +38,6 @@ from flask import (
     send_from_directory,
     session,
 )
-from werkzeug.security import check_password_hash, generate_password_hash
-
 from ybe.parsing import (
     _extract_yaml_block,
     _is_toplevel_list_item,
@@ -65,7 +58,18 @@ from ybe.parsing import (
     parse_shortcut_line,
 )
 
-from ybe import config, state
+from ybe import auth, config, state, update
+from ybe.auth import (
+    DEFAULT_ADMIN_PASSWORD,
+    DEFAULT_ADMIN_USER,
+    _prompt_password,
+    _valid_username,
+    auth_enabled,
+    ensure_default_admin,
+    load_users,
+    set_user,
+    verify_user,
+)
 from ybe.commands import (
     BACKEND_ACTIONS,
     _advance_execution,
@@ -161,6 +165,18 @@ from ybe.userconfig import (
     _set_extension_disabled,
     _update_settings,
 )
+from ybe.update import (
+    _http_get_text,
+    _update_payload,
+    changelog_for,
+    check_for_update,
+    fetch_latest_version,
+    load_changes,
+    parse_changes,
+    read_version,
+    start_update_checker,
+    update_status,
+)
 
 
 app = Flask(
@@ -173,183 +189,6 @@ app = Flask(
 # key from `config.SECRET_KEY_FILE`, so a real run keeps sessions across
 # restarts and app updates.
 app.secret_key = secrets.token_hex(32)
-
-
-# --------------------------------------------------------------------------- #
-# update check (newest GitHub version vs. this app's VERSION)
-# --------------------------------------------------------------------------- #
-_UPDATE_THREAD = None
-
-
-def read_version():
-    """The shipped app version, from app/VERSION (never raises)."""
-    try:
-        with open(config.VERSION_FILE, encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    return line.strip()
-    except OSError:
-        pass
-    return "unknown"
-
-
-def _http_get_text(url, timeout=config.UPDATE_CHECK_TIMEOUT):
-    """GET a URL and return its body as text (GitHub needs a User-Agent)."""
-    req = urllib.request.Request(url, headers={"User-Agent": f"yolo-box-editor/{read_version()}"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", "replace")
-
-
-def fetch_latest_version(timeout=config.UPDATE_CHECK_TIMEOUT):
-    """Newest published version, or None when it cannot be determined.
-
-    Considers the latest release **and** every tag and returns the highest
-    version (so a newer tag is not hidden by an older release), else the `main`
-    branch's VERSION. Any network/parse error is swallowed.
-    """
-    candidates = []
-    try:
-        data = json.loads(_http_get_text(f"{config.UPDATE_API}/releases/latest", timeout))
-        tag = str(data.get("tag_name") or "").strip().lstrip("vV")
-        if tag:
-            candidates.append(tag)
-    except (urllib.error.URLError, OSError, ValueError, AttributeError):
-        pass
-    try:
-        data = json.loads(_http_get_text(f"{config.UPDATE_API}/tags", timeout))
-        if isinstance(data, list):
-            for entry in data:
-                name = str((entry or {}).get("name") or "").strip().lstrip("vV")
-                if name:
-                    candidates.append(name)
-    except (urllib.error.URLError, OSError, ValueError, AttributeError):
-        pass
-
-    parsed = [(v, name) for name, v in ((n, _parse_version(n)) for n in candidates) if v]
-    if parsed:
-        return max(parsed)[1]
-    try:
-        text = _http_get_text(f"{config.UPDATE_RAW}/main/app/VERSION", timeout).strip()
-        if text:
-            return text.splitlines()[0].strip()
-    except (urllib.error.URLError, OSError):
-        pass
-    return candidates[0] if candidates else None
-
-
-def parse_changes(text):
-    """Parse the shipped CHANGES file into `{version: [lines]}`.
-
-    A `## <version>` line starts a section; every following non-empty line is
-    that version's changelog (a leading `- ` is stripped). Lines before the
-    first section (the header comment) are ignored.
-    """
-    sections = {}
-    current = None
-    for raw in (text or "").splitlines():
-        line = raw.strip()
-        if line.startswith("## "):
-            current = line[3:].strip()
-            sections[current] = []
-        elif current is not None and line:
-            sections[current].append(line[2:].strip() if line.startswith("- ") else line)
-    return sections
-
-
-def load_changes():
-    """The shipped CHANGES sections (empty on error)."""
-    try:
-        with open(config.CHANGES_FILE, encoding="utf-8") as f:
-            return parse_changes(f.read())
-    except OSError:
-        return {}
-
-
-def changelog_for(version):
-    """The changelog lines for `version` (empty when it has no section)."""
-    return load_changes().get((version or "").strip(), [])
-
-
-def _load_update_cache():
-    """The last update-check result, or {} when missing/invalid."""
-    try:
-        with open(config.UPDATE_CHECK_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
-
-
-def _update_payload(info):
-    """A stable UI shape built from a (possibly empty) cache entry."""
-    current = info.get("current_version") or read_version()
-    latest = info.get("latest_version")
-    return {
-        "current_version": current,
-        "latest_version": latest,
-        "update_available": bool(latest) and _version_newer(latest, current),
-        "checked_at": info.get("checked_at"),
-    }
-
-
-def update_status():
-    """The cached update info; never touches the network (fast for /api/config)."""
-    return _update_payload(_load_update_cache())
-
-
-def check_for_update(force=False, now=None):
-    """Check for a newer version, using/storing the cache, and return its payload.
-
-    A network request is made only when `force` is set, the cache is missing, it
-    is older than config.UPDATE_CHECK_INTERVAL, or the running version changed.
-    """
-    now = time.time() if now is None else now
-    current = read_version()
-    cache = _load_update_cache()
-    checked_at = cache.get("checked_at")
-    fresh = (
-        isinstance(checked_at, (int, float))
-        and now - checked_at < config.UPDATE_CHECK_INTERVAL
-        and cache.get("current_version") == current
-    )
-    if fresh and not force:
-        return _update_payload(cache)
-
-    latest = fetch_latest_version()
-    info = {
-        "checked_at": now,
-        "current_version": current,
-        "latest_version": latest,
-    }
-    try:
-        os.makedirs(os.path.dirname(config.UPDATE_CHECK_FILE), exist_ok=True)
-        with open(config.UPDATE_CHECK_FILE, "w", encoding="utf-8") as f:
-            json.dump(info, f, indent=2)
-            f.write("\n")
-    except OSError:
-        pass
-    return _update_payload(info)
-
-
-def _update_check_loop():
-    """Check now, then wake up periodically (the cache enforces the weekly gap)."""
-    while True:
-        try:
-            check_for_update()
-        except Exception:  # noqa: BLE001 - the checker must never crash the app
-            pass
-        time.sleep(config.UPDATE_POLL_INTERVAL)
-
-
-def start_update_checker():
-    """Start the background update checker once (no-op when disabled)."""
-    global _UPDATE_THREAD
-    if state.STATE.get("no_update_check"):
-        return
-    if _UPDATE_THREAD is not None and _UPDATE_THREAD.is_alive():
-        return
-    _UPDATE_THREAD = threading.Thread(target=_update_check_loop, name="update-check", daemon=True)
-    _UPDATE_THREAD.start()
 
 
 # --------------------------------------------------------------------------- #
@@ -388,110 +227,12 @@ def _prune_clients(now=None):
 
 
 # --------------------------------------------------------------------------- #
-# authentication (a non-empty user store turns login on)
+# authentication: the Flask session wiring (the account store lives in ybe.auth)
 # --------------------------------------------------------------------------- #
 # Paths served without a session so the login page itself can load. Everything
 # else under /api/ answers 401 until the user signs in; the SPA shell and its
 # static assets are public so the login form can be rendered.
 _AUTH_PUBLIC_PATHS = {"/api/login", "/api/session", "/api/logout"}
-
-# Shipped default account, created on first run so `ybe start` is usable with no
-# extra setup. Change it from the UI (Change password) or with --create-user.
-DEFAULT_ADMIN_USER = "admin"
-DEFAULT_ADMIN_PASSWORD = "admin"
-
-
-def _valid_username(username):
-    """A username may not be empty, contain ':', or include control chars."""
-    return bool(username) and ":" not in username and not any(
-        ord(ch) < 32 for ch in username
-    )
-
-
-def load_users():
-    """Load config.USERS_FILE into the state.USERS map; missing/corrupt file means none."""
-    try:
-        with open(config.USERS_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, ValueError):
-        state.USERS = {}
-        return state.USERS
-    raw = data.get("users") if isinstance(data, dict) else None
-    state.USERS = (
-        {str(name): str(hash_) for name, hash_ in raw.items()}
-        if isinstance(raw, dict)
-        else {}
-    )
-    return state.USERS
-
-
-def _write_users():
-    """Persist state.USERS atomically and owner-only; returns False on failure."""
-    try:
-        os.makedirs(os.path.dirname(config.USERS_FILE) or ".", exist_ok=True)
-        tmp = config.USERS_FILE + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"version": 1, "users": state.USERS}, f, indent=2, sort_keys=True)
-            f.write("\n")
-        os.replace(tmp, config.USERS_FILE)
-        try:
-            os.chmod(config.USERS_FILE, 0o600)
-        except OSError:
-            pass
-        return True
-    except OSError:
-        return False
-
-
-def set_user(username, password):
-    """Create or update a user; returns "created" or "updated"."""
-    existed = username in state.USERS
-    state.USERS[username] = generate_password_hash(password)
-    if not _write_users():
-        raise OSError(f"could not write {config.USERS_FILE}")
-    return "updated" if existed else "created"
-
-
-def ensure_default_admin():
-    """Seed the shipped admin/admin account when no users exist; True if created."""
-    if state.USERS:
-        return False
-    set_user(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD)
-    return True
-
-
-def _prompt_password():
-    """Read a new password twice with getpass; None on empty or mismatch.
-
-    Prompting keeps the password out of the process list and shell history.
-    """
-    try:
-        first = getpass.getpass("Password: ")
-        second = getpass.getpass("Confirm password: ")
-    except (EOFError, KeyboardInterrupt):
-        print("", file=sys.stderr)
-        print("error: password entry cancelled", file=sys.stderr)
-        return None
-    if not first:
-        print("error: password must not be empty", file=sys.stderr)
-        return None
-    if first != second:
-        print("error: passwords do not match", file=sys.stderr)
-        return None
-    return first
-
-
-def verify_user(username, password):
-    """Constant-time check of a submitted password against the store."""
-    hashed = state.USERS.get(str(username))
-    if not hashed:
-        return False
-    return check_password_hash(hashed, str(password))
-
-
-def auth_enabled():
-    """True when at least one user is registered and a login is required."""
-    return bool(state.USERS)
 
 
 def _session_username():

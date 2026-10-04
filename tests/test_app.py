@@ -2550,7 +2550,7 @@ def test_version_newer_compares_numerically():
 
 def test_check_for_update_writes_cache(clean_state, monkeypatch):
     _write_version(clean_state, "2.2.0")
-    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.3.0")
+    monkeypatch.setattr(ybe.update, "fetch_latest_version", lambda timeout=None: "2.3.0")
     info = ybe.check_for_update(now=1000)
     assert info["update_available"] is True
     cached = json.loads((clean_state / "update.json").read_text(encoding="utf-8"))
@@ -2570,7 +2570,7 @@ def test_check_for_update_uses_fresh_cache(clean_state, monkeypatch):
         calls.append(1)
         return "9.9.9"
 
-    monkeypatch.setattr(ybe, "fetch_latest_version", fake)
+    monkeypatch.setattr(ybe.update, "fetch_latest_version", fake)
     info = ybe.check_for_update(now=1000 + ybe.config.UPDATE_CHECK_INTERVAL - 1)
     assert info["latest_version"] == "2.3.0"
     assert calls == []
@@ -2581,7 +2581,7 @@ def test_check_for_update_refetches_after_interval(clean_state, monkeypatch):
     (clean_state / "update.json").write_text(json.dumps({
         "checked_at": 1000, "current_version": "2.2.0", "latest_version": "2.3.0",
     }), encoding="utf-8")
-    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.4.0")
+    monkeypatch.setattr(ybe.update, "fetch_latest_version", lambda timeout=None: "2.4.0")
     info = ybe.check_for_update(now=1000 + ybe.config.UPDATE_CHECK_INTERVAL + 1)
     assert info["latest_version"] == "2.4.0"
 
@@ -2591,14 +2591,14 @@ def test_check_for_update_force_bypasses_cache(clean_state, monkeypatch):
     (clean_state / "update.json").write_text(json.dumps({
         "checked_at": 10, "current_version": "2.2.0", "latest_version": "2.3.0",
     }), encoding="utf-8")
-    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.4.0")
+    monkeypatch.setattr(ybe.update, "fetch_latest_version", lambda timeout=None: "2.4.0")
     info = ybe.check_for_update(force=True, now=11)
     assert info["latest_version"] == "2.4.0"
 
 
 def test_check_for_update_offline_marks_not_available(clean_state, monkeypatch):
     _write_version(clean_state, "2.2.0")
-    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: None)
+    monkeypatch.setattr(ybe.update, "fetch_latest_version", lambda timeout=None: None)
     info = ybe.check_for_update(now=1000)
     assert info["update_available"] is False
     assert info["latest_version"] is None
@@ -2609,7 +2609,7 @@ def test_check_for_update_version_change_refetches(clean_state, monkeypatch):
     (clean_state / "update.json").write_text(json.dumps({
         "checked_at": 1000, "current_version": "2.2.0", "latest_version": "2.3.0",
     }), encoding="utf-8")
-    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.3.0")
+    monkeypatch.setattr(ybe.update, "fetch_latest_version", lambda timeout=None: "2.3.0")
     info = ybe.check_for_update(now=1001)
     assert info["update_available"] is False
 
@@ -2643,7 +2643,7 @@ def test_api_update_check_returns_cached(clean_state):
 
 def test_api_update_check_post_forces_refresh(clean_state, monkeypatch):
     _write_version(clean_state, "2.2.0")
-    monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.5.0")
+    monkeypatch.setattr(ybe.update, "fetch_latest_version", lambda timeout=None: "2.5.0")
     data = ybe.app.test_client().post(
         "/api/update-check", json={"force": True}
     ).get_json()
@@ -2769,7 +2769,7 @@ def test_fetch_latest_version_picks_highest_of_release_and_tags(monkeypatch):
             return '[{"name": "2.6.0"}, {"name": "2.5.0"}]'
         raise AssertionError(f"unexpected url: {url}")
 
-    monkeypatch.setattr(ybe, "_http_get_text", fake_get)
+    monkeypatch.setattr(ybe.update, "_http_get_text", fake_get)
     assert ybe.fetch_latest_version() == "2.6.0"
 
 
@@ -2781,7 +2781,7 @@ def test_fetch_latest_version_falls_back_to_release_without_tags(monkeypatch):
             return "[]"
         raise AssertionError(f"unexpected url: {url}")
 
-    monkeypatch.setattr(ybe, "_http_get_text", fake_get)
+    monkeypatch.setattr(ybe.update, "_http_get_text", fake_get)
     assert ybe.fetch_latest_version() == "3.1.0"
 
 
@@ -3306,19 +3306,19 @@ def test_valid_username_rules():
 
 def test_prompt_password_reads_twice(monkeypatch):
     replies = iter(["secret", "secret"])
-    monkeypatch.setattr(ybe.getpass, "getpass", lambda prompt="": next(replies))
+    monkeypatch.setattr(ybe.auth.getpass, "getpass", lambda prompt="": next(replies))
     assert ybe._prompt_password() == "secret"
 
 
 def test_prompt_password_mismatch(monkeypatch):
     replies = iter(["secret", "other"])
-    monkeypatch.setattr(ybe.getpass, "getpass", lambda prompt="": next(replies))
+    monkeypatch.setattr(ybe.auth.getpass, "getpass", lambda prompt="": next(replies))
     assert ybe._prompt_password() is None
 
 
 def test_prompt_password_empty(monkeypatch):
     replies = iter(["", ""])
-    monkeypatch.setattr(ybe.getpass, "getpass", lambda prompt="": next(replies))
+    monkeypatch.setattr(ybe.auth.getpass, "getpass", lambda prompt="": next(replies))
     assert ybe._prompt_password() is None
 
 
@@ -3326,6 +3326,6 @@ def test_prompt_password_cancelled(monkeypatch):
     def boom(prompt=""):
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(ybe.getpass, "getpass", boom)
+    monkeypatch.setattr(ybe.auth.getpass, "getpass", boom)
     assert ybe._prompt_password() is None
 
