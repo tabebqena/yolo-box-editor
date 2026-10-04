@@ -80,15 +80,16 @@ The `data.yaml` reader is hand-rolled — no PyYAML at runtime. User files live 
    `action_defs`/`hook_defs`/`filter_defs` (each with `source`, `api_version`,
    `status`) and `extension_api_version`.
 - Auth: accounts are a `{username: password_hash}` map in `users.json`
-  (`USERS_FILE`, owner-only `0600`, hashed via `werkzeug.security`). A non-empty
-  `USERS` turns login on: `before_request` returns 401 for `/api/*` without a
-  signed session, while `/`, `/static/*` and
-  `/api/{session,login,logout,setup}` stay public. The UI shows a first-run
-  signup form when the store is empty (`/api/session` → `setup_required`), else a
-  sign-in form, and offers Sign out and Change password. Routes: `GET
-  /api/session`, `POST /api/setup` (only while empty), `POST /api/login`,
-  `POST /api/logout`, `POST /api/password`. Account admin is CLI-only
-  (`--create-user`/`--list-users`); there is no users tab in the UI.
+  (`USERS_FILE`, owner-only `0600`, hashed via `werkzeug.security`). `main()`
+  calls `ensure_default_admin()`, which seeds `admin`/`admin`
+  (`DEFAULT_ADMIN_USER`/`DEFAULT_ADMIN_PASSWORD`) when the store is empty, so a
+  fresh install is usable with no setup. A non-empty `USERS` turns login on:
+  `before_request` returns 401 for `/api/*` without a signed session, while `/`,
+  `/static/*` and `/api/{session,login,logout}` stay public. The UI shows a
+  sign-in form and offers Sign out and Change password. Routes: `GET
+  /api/session`, `POST /api/login`, `POST /api/logout`, `POST /api/password`.
+  Account admin is CLI-only (`--create-user`/`--list-users`); there is no users
+  tab in the UI.
 - `app/VERSION`, `app/CHANGES` (per-version "what's new" notes shown once per
   installed version) and `CHANGELOG.md` (Keep a Changelog); `README.md` /
   `TUTORIAL.md` and `docs/` (`actions-and-hooks.md`, `filters.md`, `tags.md`,

@@ -92,20 +92,20 @@ the loaded config, image loads, saves, tag writes, user actions / `after_success
 chains, hook runs, rescans and box edits. It also surfaces uncaught errors and
 unhandled promise rejections.
 
-On first run, while no users exist, the web page shows a **create the first
-account** form — anyone who can reach the app can create that first account.
-Once `users.json` (in your user folder) has at least one user, the app asks you
-to sign in before loading the dataset; the side panel has **Sign out** and
-**Change password** (the current password is required). Accounts can also be
-managed from the command line: `--create-user NAME` registers a user (or resets
-an existing password) and exits, prompting for the password twice with no echo so
-it never reaches the shell history or process list; `--list-users` prints the
-registered names.
+The app ships with a ready-to-use account so `ybe start` works with no extra
+setup: sign in as **`admin`** with password **`admin`**, then change the password
+from the side panel (the key button: **Change password**; the current password is
+required). **Sign out** ends the session. Accounts can also be managed from the
+command line: `--create-user NAME` registers a user (or resets an existing
+password) and exits, prompting for the password twice with no echo so it never
+reaches the shell history or process list; `--list-users` prints the registered
+names.
 
-Accounts are stored as salted hashes (never plaintext) and the file is
-owner-only. This is a convenience gate, **not strong security**: over plain
-`http://` the password is sent in clear text. Use it on localhost or a trusted
-network, or behind an HTTPS reverse proxy.
+Accounts are stored as salted hashes (never plaintext) in `users.json` in your
+user folder, and the file is owner-only. This is a convenience gate, **not strong
+security**: over plain `http://` the password is sent in clear text, and the
+default `admin` password is public until you change it. Use it on localhost or a
+trusted network, or behind an HTTPS reverse proxy.
 
 ## Changelog and releases
 

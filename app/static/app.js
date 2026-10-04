@@ -4386,7 +4386,7 @@ function initSettings() {
 }
 
 // ---------------------------------------------------------------------------
-// login / first-run setup / change password
+// login / change password
 // Accounts live in the server-side user store (managed with --create-user /
 // --list-users); the UI does sign in, sign out and password changes.
 // ---------------------------------------------------------------------------
@@ -4451,64 +4451,6 @@ async function submitLogin(e) {
   }
 }
 
-// First run: no users exist yet, so offer to create the first account.
-function showSetup(message) {
-  const overlay = el('setupOverlay');
-  if (!overlay) return;
-  setAccountControls(false);
-  overlay.classList.remove('hidden');
-  const err = el('setupError');
-  if (message) {
-    err.textContent = message;
-    err.classList.remove('hidden');
-  } else {
-    err.classList.add('hidden');
-  }
-  const user = el('setupUser');
-  if (user && !user.value) user.focus();
-}
-
-function hideSetup() {
-  el('setupOverlay').classList.add('hidden');
-  el('setupError').classList.add('hidden');
-  el('setupPass').value = '';
-  el('setupPass2').value = '';
-}
-
-async function submitSetup(e) {
-  if (e) e.preventDefault();
-  const pass = el('setupPass').value;
-  if (pass !== el('setupPass2').value) {
-    showSetup('Passwords do not match');
-    return;
-  }
-  const btn = el('setupBtn');
-  btn.disabled = true;
-  try {
-    const res = await fetch('/api/setup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: el('setupUser').value, password: pass }),
-    });
-    if (res.ok) {
-      hideSetup();
-      setAccountControls(true);
-      startApp();
-    } else {
-      let msg = 'Could not create the account';
-      try {
-        const d = await res.json();
-        if (d && d.error) msg = d.error;
-      } catch (err) { /* ignore */ }
-      showSetup(msg);
-    }
-  } catch (err) {
-    showSetup('Could not reach the server');
-  } finally {
-    btn.disabled = false;
-  }
-}
-
 async function logout() {
   try { await fetch('/api/logout', { method: 'POST' }); } catch (e) { /* ignore */ }
   location.reload();
@@ -4559,7 +4501,7 @@ async function savePassword() {
   }
 }
 
-// Build the app once, after setup / login has been satisfied.
+// Build the app once, after login has been satisfied.
 function startApp() {
   if (appStarted) return;
   appStarted = true;
@@ -4574,17 +4516,13 @@ function startApp() {
   UPDATE_POLL_MS.forEach((ms) => setTimeout(() => refreshUpdateInfo(), ms));
 }
 
-// Ask the server whether first-run setup or a login is needed before starting.
+// Ask the server whether a login is needed before starting the app.
 async function boot() {
   let info = null;
   try {
     const res = await fetch('/api/session');
     if (res.ok) info = await res.json();
   } catch (e) { /* offline: try to start anyway */ }
-  if (info && info.setup_required) {
-    showSetup();
-    return;
-  }
   if (info && info.auth_required && !info.authenticated) {
     showLogin();
     return;
@@ -4599,7 +4537,6 @@ window.addEventListener('error', (e) => dbgWarn('uncaught error', e.error || e.m
 window.addEventListener('unhandledrejection', (e) => dbgWarn('unhandled rejection', e.reason));
 
 el('loginForm').addEventListener('submit', submitLogin);
-el('setupForm').addEventListener('submit', submitSetup);
 el('logoutBtn').addEventListener('click', logout);
 el('changePwBtn').addEventListener('click', openPasswordModal);
 el('passwordModalClose').addEventListener('click', closePasswordModal);

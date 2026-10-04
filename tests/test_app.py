@@ -3144,7 +3144,6 @@ def test_auth_off_when_store_empty(clean_state):
     info = client.get("/api/session").get_json()
     assert info["auth_required"] is False
     assert info["authenticated"] is True
-    assert info["setup_required"] is True  # first run: offer to create an account
     assert client.get("/api/config").status_code == 200
 
 
@@ -3154,7 +3153,6 @@ def test_auth_on_when_store_has_user(clean_state):
     assert client.get("/api/config").status_code == 401
     info = client.get("/api/session").get_json()
     assert info["auth_required"] is True and info["authenticated"] is False
-    assert info["setup_required"] is False
     # The SPA shell loads so the login form can be rendered.
     assert client.get("/").status_code == 200
 
@@ -3237,34 +3235,16 @@ def test_login_is_noop_when_auth_off(clean_state):
     assert resp.get_json()["auth_required"] is False
 
 
-def test_setup_creates_first_user_and_signs_in(clean_state):
-    client = ybe.app.test_client()
-    assert client.get("/api/session").get_json()["setup_required"] is True
-    resp = client.post("/api/setup", json={"username": "alice", "password": "s3cret"})
-    assert resp.status_code == 200 and resp.get_json()["ok"] is True
-    # The new user is registered and this client is already signed in.
-    assert ybe.verify_user("alice", "s3cret")
-    assert client.get("/api/config").status_code == 200
-    info = client.get("/api/session").get_json()
-    assert info["setup_required"] is False
-    assert info["authenticated"] is True
+def test_ensure_default_admin_seeds_when_empty(clean_state):
+    assert ybe.ensure_default_admin() is True
+    assert ybe.verify_user("admin", "admin")
+    assert Path(ybe.USERS_FILE).is_file()
 
 
-def test_setup_rejected_when_users_exist(clean_state):
+def test_ensure_default_admin_keeps_existing_users(clean_state):
     ybe.set_user("alice", "s3cret")
-    resp = ybe.app.test_client().post(
-        "/api/setup", json={"username": "bob", "password": "pw"})
-    assert resp.status_code == 403
-    assert not ybe.verify_user("bob", "pw")
-
-
-def test_setup_rejects_empty_password_and_bad_username(clean_state):
-    client = ybe.app.test_client()
-    assert client.post(
-        "/api/setup", json={"username": "alice", "password": ""}).status_code == 400
-    assert client.post(
-        "/api/setup", json={"username": "a:b", "password": "x"}).status_code == 400
-    assert not ybe.USERS
+    assert ybe.ensure_default_admin() is False
+    assert not ybe.verify_user("admin", "admin")
 
 
 def test_change_password(clean_state):

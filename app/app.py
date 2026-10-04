@@ -100,8 +100,8 @@ VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")  # active split/filter pe
 SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")  # cross-browser UI prefs
 # Login accounts: {"version": 1, "users": {"name": "<password_hash>"}}. A
 # non-empty store turns login on; the file is owner-only (0600) because it holds
-# password hashes. Managed with --create-user / --list-users and the first-run
-# signup page.
+# password hashes. Managed with --create-user / --list-users and seeded with
+# admin/admin on first run (ensure_default_admin).
 USERS_FILE = os.path.join(YBX_HOME, "users.json")
 
 # Update check: compare the shipped VERSION with the newest GitHub one. A check
@@ -2602,9 +2602,13 @@ def _prune_clients(now=None):
 # --------------------------------------------------------------------------- #
 # Paths served without a session so the login page itself can load. Everything
 # else under /api/ answers 401 until the user signs in; the SPA shell and its
-# static assets are public so the login form can be rendered. /api/setup creates
-# the very first account and is a no-op (403) once any user exists.
-_AUTH_PUBLIC_PATHS = {"/api/login", "/api/session", "/api/logout", "/api/setup"}
+# static assets are public so the login form can be rendered.
+_AUTH_PUBLIC_PATHS = {"/api/login", "/api/session", "/api/logout"}
+
+# Shipped default account, created on first run so `ybe start` is usable with no
+# extra setup. Change it from the UI (Change password) or with --create-user.
+DEFAULT_ADMIN_USER = "admin"
+DEFAULT_ADMIN_PASSWORD = "admin"
 
 
 def _valid_username(username):
@@ -2657,6 +2661,14 @@ def set_user(username, password):
     if not _write_users():
         raise OSError(f"could not write {USERS_FILE}")
     return "updated" if existed else "created"
+
+
+def ensure_default_admin():
+    """Seed the shipped admin/admin account when no users exist; True if created."""
+    if USERS:
+        return False
+    set_user(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD)
+    return True
 
 
 def _prompt_password():
@@ -2736,29 +2748,8 @@ def api_session():
             "auth_required": auth_enabled(),
             "authenticated": _is_authenticated(),
             "username": username,
-            "setup_required": not USERS,
         }
     )
-
-
-@app.route("/api/setup", methods=["POST"])
-def api_setup():
-    """Create the very first account; only allowed while the store is empty."""
-    if USERS:
-        return jsonify({"ok": False, "error": "users already exist"}), 403
-    data = request.get_json(silent=True) or {}
-    username = str(data.get("username", ""))
-    password = str(data.get("password", ""))
-    if not _valid_username(username):
-        return jsonify({"ok": False, "error": "invalid username"}), 400
-    if not password:
-        return jsonify({"ok": False, "error": "password must not be empty"}), 400
-    try:
-        set_user(username, password)
-    except OSError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
-    session["ybe_user"] = username
-    return jsonify({"ok": True, "username": username})
 
 
 @app.route("/api/login", methods=["POST"])
@@ -3675,6 +3666,13 @@ def main():
     STATE["no_update_check"] = args.no_update_check
 
     load_users()
+    if ensure_default_admin():
+        log.warning(
+            "no users found: created the default account %r (password %r) — "
+            "change it from the UI or with --create-user",
+            DEFAULT_ADMIN_USER,
+            DEFAULT_ADMIN_PASSWORD,
+        )
 
     # Admin commands manage the user store and exit before the server starts.
     if args.list_users:

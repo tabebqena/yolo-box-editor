@@ -8,26 +8,27 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Login** with a persistent, multi-user account store. On first run, while no
-  users exist, the app shows a **create the first account** screen (open to
-  anyone who can reach the app); once at least one user exists, every `/api/*`
-  call returns `401` until signed in. The side panel has **Sign out** and
-  **Change password** (current password required). Accounts are managed from the
-  command line with `--create-user NAME`, which **prompts for the password
-  without echo** (so it never lands in the shell history or the process list),
-  and `--list-users`.
+- **Login** backed by a persistent, multi-user account store. The app ships with
+  a ready-to-use default account — **`admin` / `admin`** — created on first run,
+  so `ybe start` is usable immediately with no setup. Change the password from
+  the side panel (**Change password**; the current password is required) and use
+  **Sign out** to end the session. Every `/api/*` call returns `401` until signed
+  in. Accounts can also be managed from the command line with `--create-user
+  NAME`, which **prompts for the password without echo** (so it never lands in
+  the shell history or the process list), and `--list-users`.
 
   Accounts live in `users.json` in the user folder, stored as salted PBKDF2
   hashes (never plaintext) with owner-only (`0600`) permissions. New routes:
-  `GET /api/session`, `POST /api/setup`, `POST /api/login`, `POST /api/logout`,
-  `POST /api/password`; `/api/config` reports an `auth` object.
+  `GET /api/session`, `POST /api/login`, `POST /api/logout`, `POST /api/password`;
+  `/api/config` reports an `auth` object.
 
 ### Security
 
-- The login is a **convenience gate, not strong security**. Over plain `http://`
-  the password is sent in the request body (cleartext). Use it only on localhost
-  or a trusted network, or behind an HTTPS reverse proxy. The stored hashes
-  protect the file; passwords are never passed on the command line.
+- The shipped default password `admin` is public and must be changed. The login
+  is a **convenience gate, not strong security**: over plain `http://` the
+  password is sent in the request body (cleartext). Use it only on localhost or a
+  trusted network, or behind an HTTPS reverse proxy. The stored hashes protect
+  the file; passwords are never passed on the command line.
 
 ## [6.9.0] - 2026-10-03
 

@@ -3,9 +3,9 @@
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
 ## 7.0.0
-- Login for a shared or LAN instance. On first run the app asks you to create the first account; after that it asks you to sign in. The side panel has Sign out and Change password, and anyone who can open the app can create that first account while none exists.
-- Accounts live in `users.json` in your user folder, stored hashed (never as plain text) and owner-only. Admins can also manage them from the command line: `--create-user NAME` prompts for the password with no echo, and `--list-users` shows the names.
-- This is a convenience gate for a trusted network, not strong security: over plain http the password is sent in clear text.
+- The app now asks you to sign in. It ships with a ready-to-use account so `ybe start` works with no extra setup: username `admin`, password `admin`. Change the password from the side panel (the key button: Change password) after the first sign in.
+- Accounts live in `users.json` in your user folder, stored hashed (never as plain text) and owner-only. Admins can also manage them from the command line: `--create-user NAME` prompts for the password with no echo, and `--list-users` shows the names. The side panel also has Sign out.
+- This is a convenience gate for a trusted network, not strong security: over plain http the password is sent in clear text, and the default password is public until you change it.
 
 ## 6.9.0
 - Creating an action, hook or filter now looks like an editor: a titled header, grouped sections (Details, Steps, After success, Arguments) and a sticky Create / Clear footer. Command and argument fields are shown in monospace.
