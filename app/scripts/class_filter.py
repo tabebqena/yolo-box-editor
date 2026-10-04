@@ -97,15 +97,20 @@ def main(argv=None):
                         help="keep images that do NOT contain the class")
     args = parser.parse_args(argv)
 
+    # YOLO labels store class *ids*, so map the requested name to its position
+    # in `names:`.
     names = read_names(args.data_yaml)
     if args.class_name not in names:
         print(f"class '{args.class_name}' is not in {args.data_yaml}", file=sys.stderr)
         return 2
     target_id = names.index(args.class_name)
 
+    # Candidate images: one absolute path per line in the input pipe.
     with open(args.input_pipe, encoding="utf-8") as f:
         paths = [line.strip() for line in f if line.strip()]
 
+    # Keep an image when it *contains* the class (or, with --invert, when it does
+    # not); `!= args.invert` flips the test without a second branch.
     kept = [
         path for path in paths
         if (target_id in class_ids(label_path(path))) != args.invert

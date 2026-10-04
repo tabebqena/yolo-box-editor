@@ -79,13 +79,16 @@ def _write_config(cfg):
     """Write the config atomically (temp file + rename); never raises."""
     try:
         os.makedirs(os.path.dirname(config.CONFIG_FILE) or ".", exist_ok=True)
+        # Write a sibling temp file first, then rename it over the real one:
+        # os.replace is atomic on the same filesystem, so a crash mid-write can
+        # never leave a half-written config.json.
         tmp = config.CONFIG_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=2)
             f.write("\n")
         os.replace(tmp, config.CONFIG_FILE)
     except OSError:
-        pass
+        pass  # a failed save should not break the running app
 
 
 def _load_config_unlocked():
@@ -98,11 +101,15 @@ def _load_config_unlocked():
         with open(config.CONFIG_FILE, encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
+        # First run: pull in any of the old per-purpose files, save the merged
+        # config, then delete the legacy files so this only happens once.
         cfg = _migrate_legacy_config()
         _write_config(cfg)
         _remove_legacy_files()
         return cfg
     except (OSError, ValueError):
+        # Unreadable/corrupt: fall back in memory but leave the file on disk so
+        # the user can still fix it by hand.
         return _default_config()
     return _normalize_config(data)
 
@@ -113,7 +120,11 @@ def _load_config():
 
 
 def _update_config(mutate):
-    """Read-modify-write the config under the lock; returns the new config."""
+    """Read-modify-write the config under the lock; returns the new config.
+
+    `mutate` receives the loaded dict and edits it in place. The lock makes the
+    whole read-modify-write atomic for concurrent requests.
+    """
     with _CONFIG_LOCK:
         cfg = _load_config_unlocked()
         mutate(cfg)

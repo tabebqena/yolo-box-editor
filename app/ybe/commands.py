@@ -109,18 +109,24 @@ def _advance_execution(run):
         if kind == "app":  # frontend action: pause for the client
             return "client", value
         if kind == "bad":
+            # An unknown `app_*`/`backend_*`/`action_*` reference.
             return "error", value
         if kind == "action":
+            # A referenced action runs inline: expand it and splice its items
+            # into the front of the queue. `runs` caps runaway action chains.
             run["runs"] += 1
             if run["runs"] > config.MAX_CASCADE_DEPTH:
                 return "error", f"action cascade exceeded {config.MAX_CASCADE_DEPTH} levels"
             run["queue"][0:0] = _action_items(value)
             continue
         if kind == "backend":
+            # A server-side built-in runs immediately; a non-None result is an
+            # error message that aborts the run.
             error = BACKEND_ACTIONS[value]()
             if error:
                 return "error", error
             continue
+        # Anything else is a shell command.
         status = _run_command(run, build_command(value, run["values"]))
         if status != "ok":
             return status, None

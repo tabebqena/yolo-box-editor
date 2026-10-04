@@ -37,9 +37,11 @@ def main(argv=None):
         print("--every must be 1 or more", file=sys.stderr)
         return 2
 
+    # Read the candidate paths the previous filter (or the app) wrote.
     with open(args.input_pipe, encoding="utf-8") as f:
         paths = [line.strip() for line in f if line.strip()]
 
+    # Optionally reverse, then keep every N-th path.
     if args.reverse == "true":
         paths = paths[::-1]
     kept = paths[:: args.every]

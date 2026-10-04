@@ -1,8 +1,19 @@
 """User/shipped extension definitions: actions, hooks and filters.
 
-Parsing and loading the per-file YAML catalogs, validating filter arguments, and
-the hand-written writer used by the in-browser extension editor. Everything is
-read fresh from disk; nothing here executes a command.
+An "extension" is one YAML file: an action (`steps`, optional `after_success`), a
+hook (same shape, plus the event it fires on) or a filter (a command pipeline
+that narrows the image list, plus optional typed arguments). This module parses
+and loads those files, validates filter arguments, and provides the hand-written
+writer the in-browser editor uses.
+
+Two rules matter everywhere here:
+
+  - the shipped `app/actions|hooks|filters/` folder is read first and the user's
+    `<home>/...` folder second, so a user file with the same name wins;
+  - everything is read fresh from disk (there is no cache), so editing a file and
+    reloading is enough to see the change.
+
+No function here executes a command — loading only builds plain dicts.
 """
 
 import os
@@ -68,13 +79,17 @@ def _parse_action_file(text):
         "steps": [],
         "after_success": [],
     }
+    # `section` remembers which list a later `  - item` line belongs to. A new
+    # top-level key resets it, so only a `steps:`/`after_success:` header makes
+    # the following dash lines append to that list.
     section = None
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
-            continue
+            continue  # blank or whole-line comment
         indent = len(line) - len(line.lstrip(" "))
         if indent == 0 and ":" in stripped:
+            # A top-level `key: value` line (the only keys we understand).
             key, _, value = stripped.partition(":")
             key, value = key.strip(), value.strip()
             if key == "name":
@@ -95,7 +110,7 @@ def _parse_action_file(text):
             elif key in ("steps", "after_success"):
                 section = data[key]
                 if value and value != "[]":
-                    section.append(_yaml_scalar(value))
+                    section.append(_yaml_scalar(value))  # single value on the key line
             else:
                 section = None
         elif section is not None and stripped.startswith("- "):
@@ -288,6 +303,10 @@ def _parse_filter_file(text):
     """
     data = {"name": None, "description": None, "active": True,
             "api_version": None, "arguments": [], "steps": []}
+    # `mode` is the list we are currently filling ("steps" / "arguments"), reset
+    # by every top-level key. Within "arguments", `current` is the argument dict
+    # being built, and `options_pending` is True while a `- item` line should be
+    # collected as an option of that argument rather than start a new argument.
     mode, current, arg_indent, options_pending = None, None, None, False
     for line in text.splitlines():
         stripped = line.strip()
@@ -320,19 +339,21 @@ def _parse_filter_file(text):
             if stripped.startswith("- "):
                 data["steps"].append(_yaml_scalar(stripped[2:].strip()))
         elif mode == "arguments":
+            # A dash at the arguments' own indent level starts the next argument.
             if stripped.startswith("- ") and (arg_indent is None or indent <= arg_indent):
                 if arg_indent is None:
-                    arg_indent = indent
+                    arg_indent = indent  # remember the first argument's indent
                 current = {"name": None, "required": False,
                            "default": None, "options": None}
                 data["arguments"].append(current)
                 options_pending = False
                 rest = stripped[2:].strip()
-                if ":" in rest:
+                if ":" in rest:  # `- name: every`
                     field, _, value = rest.partition(":")
                     options_pending = _set_filter_arg_field(current, field.strip(), value.strip())
             elif current is not None:
                 if options_pending and stripped.startswith("- "):
+                    # block form:  options:  then  - "2"  /  - "3"
                     current["options"].append(_yaml_scalar(stripped[2:].strip()))
                 elif ":" in stripped:
                     field, _, value = stripped.partition(":")
@@ -598,10 +619,13 @@ def _bump_api_version_text(text, version=config.EXTENSION_API_VERSION):
     """
     lines = text.splitlines()
     pattern = re.compile(r"^api_version\s*:")
+    # Update the key in place when it exists (every other line is preserved).
     for i, line in enumerate(lines):
         if pattern.match(line):
             lines[i] = f"api_version: {version}"
             return "\n".join(lines) + "\n"
+    # Otherwise insert it after the leading comment/blank block, so the file's
+    # header comment stays at the very top.
     insert_at = 0
     while insert_at < len(lines):
         stripped = lines[insert_at].strip()

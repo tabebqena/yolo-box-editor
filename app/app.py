@@ -20,12 +20,23 @@ Expected data.yaml layout:
 For each split (train/val/test) the labels folder is the corresponding folder
 with the `images` path segment replaced by `labels`
 (e.g. `images/train` -> `labels/train`).
+
+This file is only the command-line entry point. It parses the flags, points the
+user folder at `--home`, loads the persistent secret key and the login store, and
+then hands control to the Flask app in `ybe.server`. All the actual HTTP routes
+live there.
+
+The `from ybe import ...` block below is deliberate: it re-exports the helpers
+that tests and any embedder reach through this module (`from app import ...`), so
+those names stay importable from `app.py` even though their code lives in the
+`ybe` package.
 """
 
 import argparse
 import os
 import sys
 
+# Re-exports only (see the note above): everything below is defined in `ybe`.
 from ybe.parsing import (
     _extract_yaml_block,
     _is_toplevel_list_item,
@@ -252,10 +263,14 @@ def main():
     )
     args = parser.parse_args()
 
+    # Resolve the user folder first: everything below reads/writes paths derived
+    # from it, and the folders must exist before the first read.
     if args.home:
         configure_home(args.home)
     ensure_user_dirs()
 
+    # The session key must be loaded before the first request; it is created once
+    # and then reused across restarts and app updates.
     app.secret_key = load_or_create_secret_key()
 
     log = setup_logging(args.log_file, args.debug)
@@ -263,12 +278,15 @@ def main():
         "yolo-box-editor %s | user dir: %s (override with --home)", read_version(), config.YBX_HOME
     )
 
+    # Copy the run-wide toggles into the shared state the routes read.
     state.STATE["readonly"] = args.readonly
     state.STATE["debug"] = args.debug
     state.STATE["keep_pipe"] = args.keep_pipe
     state.STATE["keep_filter_pipes"] = args.keep_filter_pipes
     state.STATE["no_update_check"] = args.no_update_check
 
+    # Load the login store; seed the default admin/admin on a brand-new install
+    # so `ybe start` is usable immediately.
     load_users()
     if ensure_default_admin():
         log.warning(
@@ -301,8 +319,11 @@ def main():
         print(f"{action} user {username!r} in {config.USERS_FILE}")
         return
 
+    # Background update check (a no-op with --no-update-check).
     start_update_checker()
 
+    # Open the requested dataset, else resume the most recent one (unless the
+    # user asked to start on the Settings screen).
     if args.data:
         _load_dataset(args.data)
         _push_recent(state.STATE["data_yaml"])
@@ -310,6 +331,8 @@ def main():
         _resume_last_dataset()
 
     log.info("serving on http://%s:%s", args.host, args.port)
+    # The Werkzeug reloader is handy in the foreground but must be off in daemon
+    # mode, where the launcher already manages the process.
     app.run(host=args.host, port=args.port, debug=True, use_reloader=not args.no_reload)
 
 

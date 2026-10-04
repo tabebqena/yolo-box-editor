@@ -62,7 +62,8 @@ def save_tags_yaml(tags):
     except OSError:
         lines = []
 
-    # Drop a pre-existing bare list; it is rewritten below.
+    # Drop a pre-existing bare list; it is rewritten below. Anything else in the
+    # file (comments, other keys) is kept so a hand-edited tags.yaml is not lost.
     lines = [ln for ln in lines if not _is_toplevel_list_item(ln)]
 
     out = []
@@ -71,6 +72,7 @@ def save_tags_yaml(tags):
     while i < len(lines):
         line = lines[i]
         if not replaced and _strip_comment(line.strip()).startswith("tags:"):
+            # Old `tags:` key form: emit the new list here and skip the old block.
             for t in tags:
                 out.append(f"- {t}\n")
             i += 1
@@ -83,8 +85,9 @@ def save_tags_yaml(tags):
         i += 1
 
     if not replaced:
+        # No `tags:` key existed: append the bare list at the end.
         if out and out[-1].strip():
-            out.append("\n")
+            out.append("\n")  # separate it from the previous content
         for t in tags:
             out.append(f"- {t}\n")
 

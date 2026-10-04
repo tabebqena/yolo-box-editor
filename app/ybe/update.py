@@ -144,6 +144,8 @@ def check_for_update(force=False, now=None):
     current = read_version()
     cache = _load_update_cache()
     checked_at = cache.get("checked_at")
+    # The cache is "fresh" when it was checked within the interval *and* against
+    # the same running version; otherwise (or when forced) hit the network.
     fresh = (
         isinstance(checked_at, (int, float))
         and now - checked_at < config.UPDATE_CHECK_INTERVAL

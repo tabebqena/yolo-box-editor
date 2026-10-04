@@ -1,7 +1,10 @@
 """Login accounts: a {username: password_hash} store in the user folder.
 
-Passwords are only ever stored hashed (werkzeug PBKDF2). An empty store means
-login is off; any entry turns it on. The Flask session wiring lives in `app.py`.
+`state.USERS` maps username -> password hash, loaded from `users.json` at
+startup. Passwords are only ever stored hashed (werkzeug PBKDF2); the file is
+owner-only (`0600`) because the hashes are the keys to the accounts. An empty
+store means login is off, any entry turns it on. The Flask session wiring (the
+cookie, the before_request gate) lives in `server.py`.
 """
 
 import getpass
@@ -51,9 +54,9 @@ def _write_users():
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump({"version": 1, "users": state.USERS}, f, indent=2, sort_keys=True)
             f.write("\n")
-        os.replace(tmp, config.USERS_FILE)
+        os.replace(tmp, config.USERS_FILE)  # atomic swap (temp file + rename)
         try:
-            os.chmod(config.USERS_FILE, 0o600)
+            os.chmod(config.USERS_FILE, 0o600)  # owner-only, like the key store
         except OSError:
             pass
         return True

@@ -21,6 +21,9 @@ def load_or_create_secret_key():
     failed write still returns an in-process key so the app keeps working.
     """
     path = config.SECRET_KEY_FILE
+
+    # Reuse the stored key when there is one; an empty/corrupt file falls through
+    # and is replaced.
     try:
         with open(path, encoding="utf-8") as f:
             key = f.read().strip()
@@ -29,16 +32,18 @@ def load_or_create_secret_key():
     except OSError:
         pass
 
+    # First run (or an unusable file): mint a new 256-bit key and store it.
     key = secrets.token_hex(_KEY_BYTES)
     try:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        # 0o600 is applied on creation; O_TRUNC rewrites a stale/empty file.
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(key + "\n")
         try:
-            os.chmod(path, 0o600)
+            os.chmod(path, 0o600)  # tighten perms if the file already existed
         except OSError:
             pass
     except OSError:
-        pass
+        pass  # unwritable home: keep the in-process key so the app still starts
     return key

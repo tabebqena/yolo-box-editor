@@ -28,6 +28,7 @@ def create_pipe():
     """
     try:
         os.makedirs(config.PIPE_DIR, exist_ok=True)
+        # mkstemp opens the file for us; we only need the path, so close the fd.
         fd, path = tempfile.mkstemp(prefix="pipe_", suffix=".txt", dir=config.PIPE_DIR)
     except OSError:
         return None
@@ -46,9 +47,11 @@ def is_pipe_path(path):
     base = os.path.abspath(config.PIPE_DIR)
     target = os.path.abspath(path)
     try:
+        # commonpath resolves `..`/symlink-free components, so a path that only
+        # appears to start with PIPE_DIR cannot slip through.
         return os.path.commonpath([base, target]) == base
     except ValueError:
-        return False
+        return False  # e.g. different drives on Windows
 
 
 def remove_pipe(path):

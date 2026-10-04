@@ -187,6 +187,7 @@ def run_filter_chain(chain, split):
         return {"ok": True, "images": [], "skipped": 0, "error": None,
                 "chain_dir": None}
 
+    # Each run gets a private scratch directory holding the input/output pipes.
     try:
         os.makedirs(config.FILTER_PIPES_DIR, exist_ok=True)
         chain_dir = tempfile.mkdtemp(prefix="chain_", dir=config.FILTER_PIPES_DIR)
@@ -195,6 +196,7 @@ def run_filter_chain(chain, split):
                 "chain_dir": None}
 
     filters, _ = load_filters()
+    # The first filter sees the active split's images (every image on "All").
     initial = [e for e in state.STATE["images"] if e["split"] == split] if split \
         else state.STATE["images"]
     in_path = os.path.join(chain_dir, "input_0.txt")
@@ -209,10 +211,13 @@ def run_filter_chain(chain, split):
             error = f'Filter "{item["name"]}" failed: {result["error"]}'
             entries = None
             break
+        # Map the paths the filter kept back to scanned entries, then feed that
+        # output into the next filter as its input.
         entries, skipped = _read_filter_output(out_path, known)
         in_path = out_path
 
     if not state.STATE["keep_filter_pipes"]:
+        # Scratch dirs are disposable unless --keep-filter-pipes was given.
         shutil.rmtree(chain_dir, ignore_errors=True)
         chain_dir = None
 

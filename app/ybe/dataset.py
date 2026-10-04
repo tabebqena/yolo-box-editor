@@ -1,8 +1,12 @@
 """Dataset scanning: data.yaml -> splits, image list, labels/tags paths.
 
-The dataset is held in `state.STATE`; these functions read and populate it.
-Resuming a previous dataset and the image rescan orchestration stay in `app.py`
-because they also touch user config and the filter chain.
+The live dataset is held in `state.STATE`; these functions read and populate it.
+By convention the labels/tags folders are found by replacing the last `images`
+path segment (`.../images/train` -> `.../labels/train`); `_replace_images_segment`
+is the single place that rule lives.
+
+Startup resume (`app.py`) and the post-run image rescan (`commands.py`) live one
+layer up because they also touch user config and the filter chain.
 """
 
 import os
@@ -52,12 +56,17 @@ def scan_splits():
     data = _parse_data_yaml(state.STATE["data_yaml"])
     data_yaml_dir = os.path.dirname(os.path.abspath(state.STATE["data_yaml"]))
 
+    # The dataset root comes from `path:` when present (resolved relative to the
+    # data.yaml file), else the folder holding data.yaml.
     base = data.get("path") or data_yaml_dir
     if not os.path.isabs(base):
         base = os.path.normpath(os.path.join(data_yaml_dir, base))
     state.STATE["dataset_path"] = os.path.abspath(base)
     state.STATE["classes"] = data.get("names") or []
 
+    # Each split is `train`/`val`/`test` -> an images folder (absolute or
+    # relative to the dataset root). A split whose folder does not exist is
+    # skipped, so a dataset with only `train` still works.
     for key in ("train", "val", "test"):
         rel = data.get(key)
         if not rel:

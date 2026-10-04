@@ -84,6 +84,9 @@ from ybe.userconfig import (
 )
 
 
+# The single Flask application object. Templates and static files live beside
+# app.py inside the shipped `app/` folder (config.BASE_DIR), so the path works
+# the same in a clone and in an install.
 app = Flask(
     __name__,
     template_folder=os.path.join(config.BASE_DIR, "templates"),
@@ -137,7 +140,13 @@ def _is_authenticated():
 
 @app.before_request
 def _require_login():
-    """Block API calls (and the SPA load) until the user has signed in."""
+    """Block API calls (and the SPA load) until the user has signed in.
+
+    Runs before every request. When no account exists, login is off and this is a
+    no-op. Otherwise the SPA shell, its static assets and the login/logout/
+    session endpoints stay open (the browser must be able to render the sign-in
+    form); everything else needs a valid session.
+    """
     if not auth_enabled():
         return None
     path = request.path
@@ -145,6 +154,7 @@ def _require_login():
         return None
     if _session_username():
         return None
+    # API callers get a JSON 401; a direct page load gets a plain 401.
     if path.startswith("/api/"):
         return jsonify({"ok": False, "error": "authentication required"}), 401
     abort(401)
@@ -212,6 +222,7 @@ def api_password():
     return jsonify({"ok": True})
 
 
+# --- app config, settings, shortcuts, presence ----------------------------- #
 @app.route("/api/config")
 def api_config():
     app_shortcuts, user_shortcuts, shortcut_errors = split_shortcuts(load_shortcuts())
@@ -417,6 +428,7 @@ def api_presence():
     return jsonify({"ok": True, "count": count, "others": max(0, count - 1)})
 
 
+# --- dataset, split and filter selection ----------------------------------- #
 @app.route("/api/data", methods=["POST"])
 def api_data():
     data = request.get_json(silent=True) or {}
@@ -530,6 +542,7 @@ def api_images_rescan():
     return jsonify(_images_payload())
 
 
+# --- actions and extension authoring --------------------------------------- #
 @app.route("/api/actions/run", methods=["POST"])
 def api_action_run():
     """Start (or resume) a user action execution for the current image.
@@ -893,6 +906,7 @@ def _save_extension_file():
     return jsonify(_extension_file_payload(extension_file_for(kind, data.get("name")) or found, text))
 
 
+# --- single image and its annotations -------------------------------------- #
 @app.route("/api/image")
 def api_image():
     entry = _request_entry()

@@ -57,20 +57,24 @@ def write_user_shortcuts(sets, resets):
     merged = load_shortcuts()
     lines = _read_text(config.USER_SHORTCUTS_FILE).splitlines()
 
+    # Walk the existing file line by line, preserving comments/blank lines
+    # exactly and only changing the lines we were asked to set or drop.
     out, written = [], set()
     for raw in lines:
         parsed = parse_shortcut_line(raw)
         if parsed is None:
-            out.append(raw)
+            out.append(raw)  # comment or blank line: keep as-is
             continue
         name, _shortcut, label = parsed
         if name in resets:
-            continue
+            continue  # drop this override, falling back to the shipped binding
         if name in sets:
             out.append(f"{name} <{sets[name]}> {label}".rstrip())
             written.add(name)
             continue
-        out.append(raw)
+        out.append(raw)  # untouched binding: keep the original line
+    # Append bindings that had no existing line (label reused from the shipped
+    # defaults when we know it, else blank).
     for name, shortcut in sets.items():
         if name in written:
             continue
