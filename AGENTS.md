@@ -2,13 +2,15 @@
 
 ## Project
 Flask app for labelling images in YOLO format. The shipped code lives in `app/`:
-`app/app.py` is the Flask routes + CLI entry (still the largest file) and
-`app/ybe/` is a plain package with the reusable pieces (`config`, `state`,
-`parsing`, `logging_setup`, and more as the refactor proceeds); the UI is plain
-`app/templates/index.html` + `app/static/app.js` (~4600 lines) +
-`app/static/style.css` with **no build step**. No database. The `data.yaml`
-reader is hand-rolled — no PyYAML at runtime. User files live in `YBX_HOME`
-(below). `ybx.sh` copies `app/` wholesale, so `app/ybe/` ships automatically.
+`app/app.py` is now just the CLI entrypoint (flag parsing, user folder, session
+secret key, then it runs the Flask app) and the implementation lives in the
+plain `app/ybe/` package — `server.py` holds the Flask app object and all
+routes, the rest are the reusable pieces (`config`, `state`, `parsing`, `auth`,
+`dataset`, `extensions`, …). The UI is plain `app/templates/index.html` +
+`app/static/app.js` (~4600 lines) + `app/static/style.css` with **no build
+step**. No database. The `data.yaml` reader is hand-rolled — no PyYAML at
+runtime. User files live in `YBX_HOME` (below). `ybx.sh` copies `app/`
+wholesale, so `app/ybe/` ships automatically.
 
 ## Commands
 - Run: `python app/app.py --data /path/to/data.yaml` (optional `--readonly` to
@@ -24,7 +26,7 @@ reader is hand-rolled — no PyYAML at runtime. User files live in `YBX_HOME`
   only `<dir>/app/` atomically and leaves user files and `.venv` alone.
   `app/launcher.sh.in` is the `ybe` launcher template (start/stop/restart/status/
   logs) that `ybx.sh` fills in. (Replaces the old `install.sh`.)
-- Tests (from repo root): `python -m pytest -q` (~288 tests); single test
+- Tests (from repo root): `python -m pytest -q` (~289 tests); single test
   `python -m pytest tests/test_app.py::test_name -q`. `pytest.ini` puts `app/`
   on `pythonpath`.
 - No lint / format / typecheck config exists.
@@ -32,23 +34,43 @@ reader is hand-rolled — no PyYAML at runtime. User files live in `YBX_HOME`
   Install Pillow (`pip install pillow`) or collection fails immediately.
 
 ## Layout / entrypoints
+- `app/app.py` — the command-line entrypoint only: parses flags, resolves
+  `YBX_HOME`, loads/creates the session secret key, seeds the default admin, then
+  runs the Flask app from `ybe.server`. It also re-exports every helper the tests
+  and embedders import (`from app import ...`), so those names stay available
+  here even though their code lives in `ybe`.
 - `app/ybe/` — the reusable package. Modules read shared values as
   `config.NAME` / `state.NAME` (never `from ybe.config import NAME`) so
   monkeypatching the owning module reaches every caller.
   - `config.py` — `BASE_DIR` (the shipped `app/` folder), `YBX_HOME` (the user
-    folder), `configure_home`/`ensure_user_dirs`, `setup_logging`'s constants,
-    the catalogs (`APP_ACTIONS`, `HOOK_EVENTS`, placeholders, `EXTENSION_API_VERSION`,
+    folder), `configure_home`/`ensure_user_dirs`, the catalogs
+    (`APP_ACTIONS`, `HOOK_EVENTS`, placeholders, `EXTENSION_API_VERSION`,
     timeouts, `MAX_RECENT`), and path constants: shipped `ACTIONS_DIR`,
     `HOOKS_DIR`, `FILTERS_DIR`, `APP_SCRIPT_DIR`, `SHORTCUTS_FILE`,
     `VERSION_FILE`, `CHANGES_FILE`; user `USER_ACTIONS_DIR`, `USER_HOOKS_DIR`,
     `USER_FILTERS_DIR`, `USER_SCRIPT_DIR`, `USER_SHORTCUTS_FILE`; state files
-    `RECENT_FILE`, `VIEW_FILE`, `SETTINGS_FILE`, `UPDATE_CHECK_FILE`,
-    `USERS_FILE` (the login accounts); and `FILTER_PIPES_DIR` (temp scratch).
+    `RECENT_FILE`, `VIEW_FILE`, `SETTINGS_FILE`, `CONFIG_FILE`,
+    `UPDATE_CHECK_FILE`, `USERS_FILE` (the login accounts), `SECRET_KEY_FILE`
+    (the session-signing key); and `FILTER_PIPES_DIR` (temp scratch).
   - `state.py` — the live containers: `STATE` (in-memory dataset state),
     `USERS` (`{username: password_hash}`, loaded from `USERS_FILE` at startup;
     a non-empty map turns login on), `EXECUTIONS`, `CLIENTS` + locks.
+  - `server.py` — the Flask `app` object and every HTTP route (auth gate,
+    config/settings, dataset/split/filter, actions and extension authoring,
+    image and annotations).
   - `parsing.py` — pure text/YAML/shortcut helpers (no globals).
+  - `dataset.py` — `data.yaml` loading, split/class scanning, label and tag paths.
+  - `tags.py` — `tags.yaml` and the per-image tag files.
+  - `filters.py` — the filter-chain contract and execution.
+  - `extensions.py` — action/hook/filter YAML parse, validate, load and author.
+  - `shortcuts.py`, `pipes.py` — the shortcut list and `{PIPE_PATH}` scratch files.
+  - `userconfig.py` — `config.json` (recent datasets, view, settings, disabled
+    extensions).
+  - `commands.py` — the action queue, backend actions and shell command runner.
+  - `auth.py` — the account store (`users.json`) and password hashing.
+  - `update.py` — the GitHub version check and cached status.
   - `logging_setup.py` — `setup_logging` and the presence access-log filter.
+  - `secret_key.py` — the persistent, owner-only session-signing key.
   There is deliberately no `SCRIPTS_DIR` symbol: scripts are reached relatively
   (`scripts/…`, since cwd is the home) or as `{APP_DIR}/scripts/…`.
 - `YBX_HOME` resolution: `--home <dir>` > `$YBX_HOME` > the parent of `app.py`.
@@ -98,7 +120,10 @@ reader is hand-rolled — no PyYAML at runtime. User files live in `YBX_HOME`
   sign-in form and offers Sign out and Change password. Routes: `GET
   /api/session`, `POST /api/login`, `POST /api/logout`, `POST /api/password`.
   Account admin is CLI-only (`--create-user`/`--list-users`); there is no users
-  tab in the UI.
+  tab in the UI. The session cookie is signed with `SECRET_KEY_FILE`
+  (`secret_key.py`): a random 256-bit key written `0600` on first run and reused
+  so sign-in survives restarts and updates (delete the file to invalidate every
+  session).
 - `app/VERSION`, `app/CHANGES` (per-version "what's new" notes shown once per
   installed version) and `CHANGELOG.md` (Keep a Changelog); `README.md` /
   `TUTORIAL.md` and `docs/` (`actions-and-hooks.md`, `filters.md`, `tags.md`,
