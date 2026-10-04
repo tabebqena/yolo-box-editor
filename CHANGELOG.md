@@ -4,6 +4,23 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.3.0] - 2026-10-04
+
+### Changed
+
+- **Flask's interactive debugger and auto-reloader are now off by default.** They
+  were enabled unconditionally, which meant that on an unhandled error anyone who
+  could reach the app got the Werkzeug debug console — arbitrary code execution
+  as the app's user. Development use now requires the new **`--flask-debug`**
+  flag; `--no-reload` only applies with it. `--debug` is unchanged and still only
+  controls verbose browser-console logging. Combining `--flask-debug` with a
+  non-localhost `--host` logs a warning.
+
+### Security
+
+- The debug console is never bound by default any more, closing an
+  easily-overlooked path to code execution (especially with `--host 0.0.0.0`).
+
 ## [7.2.0] - 2026-10-04
 
 ### Added

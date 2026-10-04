@@ -239,6 +239,12 @@ def main():
         help="log verbose messages to the browser console (see /api/config)",
     )
     parser.add_argument(
+        "--flask-debug",
+        action="store_true",
+        help="enable the Werkzeug interactive debugger and auto-reloader "
+        "(development only; never expose it on a public host)",
+    )
+    parser.add_argument(
         "--no-resume",
         action="store_true",
         help="start on the settings screen instead of reopening the last dataset",
@@ -265,7 +271,7 @@ def main():
     parser.add_argument(
         "--no-reload",
         action="store_true",
-        help="disable the Werkzeug auto-reloader (used by daemon mode)",
+        help="disable the auto-reloader (only relevant with --flask-debug)",
     )
     args = parser.parse_args()
 
@@ -297,6 +303,12 @@ def main():
     )
     if is_root:
         log.warning("running as root (--allow-root): files written will be owned by root")
+    if args.flask_debug and args.host not in ("127.0.0.1", "localhost", "::1"):
+        log.warning(
+            "--flask-debug is on with host %s: the interactive debugger can run "
+            "arbitrary code and must never be reachable from an untrusted network",
+            args.host,
+        )
 
     # Copy the run-wide toggles into the shared state the routes read.
     state.STATE["readonly"] = args.readonly
@@ -351,9 +363,14 @@ def main():
         _resume_last_dataset()
 
     log.info("serving on http://%s:%s", args.host, args.port)
-    # The Werkzeug reloader is handy in the foreground but must be off in daemon
-    # mode, where the launcher already manages the process.
-    app.run(host=args.host, port=args.port, debug=True, use_reloader=not args.no_reload)
+    # The interactive debugger can execute code with the app's privileges, so it
+    # stays off for normal use and only turns on with --flask-debug (development).
+    app.run(
+        host=args.host,
+        port=args.port,
+        debug=args.flask_debug,
+        use_reloader=args.flask_debug and not args.no_reload,
+    )
 
 
 if __name__ == "__main__":

@@ -75,7 +75,7 @@ python app/app.py --data /path/to/data.yaml --keep-pipe  # keep each run's {PIPE
 python app/app.py --data /path/to/data.yaml --keep-filter-pipes  # keep filter-chain pipe files
 python app/app.py --data /path/to/data.yaml --home ./my-user-files  # custom user folder
 python app/app.py --no-update-check                      # never check GitHub for updates
-python app/app.py --data /path/to/data.yaml --no-reload  # disable the auto-reloader
+python app/app.py --flask-debug                          # dev only: Werkzeug debugger + auto-reloader
 python app/app.py --data /path/to/data.yaml --log-file ./ybe.log  # log to a file
 ```
 

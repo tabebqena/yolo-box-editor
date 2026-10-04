@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.3.0
+- The developer debug console and auto-reloader are now off by default, so an error page can no longer run code for anyone who reaches the app. If you are developing, pass `--flask-debug`. The `--debug` flag is unchanged: it only adds verbose logging to the browser console.
+
 ## 7.2.0
 - Starting the app as the root user is now refused: it would make your files root-owned and run the debug server with root privileges. If you really need it (for example inside a container), pass `--allow-root`.
 
