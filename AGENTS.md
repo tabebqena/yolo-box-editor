@@ -2,11 +2,13 @@
 
 ## Project
 Flask app for labelling images in YOLO format. The shipped code lives in `app/`:
-`app/app.py` (~3700 lines) is the entire backend; the UI is plain
+`app/app.py` is the Flask routes + CLI entry (still the largest file) and
+`app/ybe/` is a plain package with the reusable pieces (`config`, `state`,
+`parsing`, `logging_setup`, and more as the refactor proceeds); the UI is plain
 `app/templates/index.html` + `app/static/app.js` (~4600 lines) +
-`app/static/style.css` with **no build step**. No package layout, no database.
-The `data.yaml` reader is hand-rolled — no PyYAML at runtime. User files live in
-`YBX_HOME` (below).
+`app/static/style.css` with **no build step**. No database. The `data.yaml`
+reader is hand-rolled — no PyYAML at runtime. User files live in `YBX_HOME`
+(below). `ybx.sh` copies `app/` wholesale, so `app/ybe/` ships automatically.
 
 ## Commands
 - Run: `python app/app.py --data /path/to/data.yaml` (optional `--readonly` to
@@ -30,16 +32,23 @@ The `data.yaml` reader is hand-rolled — no PyYAML at runtime. User files live 
   Install Pillow (`pip install pillow`) or collection fails immediately.
 
 ## Layout / entrypoints
-- `app/app.py` — CLI entry `main()`; module globals `BASE_DIR` (the shipped
-  `app/` folder), `YBX_HOME` (the user folder), `STATE` (in-memory dataset
-  state), and path constants: shipped `ACTIONS_DIR`, `HOOKS_DIR`, `FILTERS_DIR`,
-  `APP_SCRIPT_DIR`, `SHORTCUTS_FILE`, `VERSION_FILE`, `CHANGES_FILE`; user
-  `USER_ACTIONS_DIR`, `USER_HOOKS_DIR`, `USER_FILTERS_DIR`, `USER_SCRIPT_DIR`,
-  `USER_SHORTCUTS_FILE`; state files `RECENT_FILE`, `VIEW_FILE`,
-  `SETTINGS_FILE`, `UPDATE_CHECK_FILE`, `USERS_FILE` (the login accounts); and
-  `FILTER_PIPES_DIR` (temp scratch). Module global `USERS`
-  (`{username: password_hash}`) is loaded from `USERS_FILE` at startup; a
-  non-empty map turns login on.
+- `app/ybe/` — the reusable package. Modules read shared values as
+  `config.NAME` / `state.NAME` (never `from ybe.config import NAME`) so
+  monkeypatching the owning module reaches every caller.
+  - `config.py` — `BASE_DIR` (the shipped `app/` folder), `YBX_HOME` (the user
+    folder), `configure_home`/`ensure_user_dirs`, `setup_logging`'s constants,
+    the catalogs (`APP_ACTIONS`, `HOOK_EVENTS`, placeholders, `EXTENSION_API_VERSION`,
+    timeouts, `MAX_RECENT`), and path constants: shipped `ACTIONS_DIR`,
+    `HOOKS_DIR`, `FILTERS_DIR`, `APP_SCRIPT_DIR`, `SHORTCUTS_FILE`,
+    `VERSION_FILE`, `CHANGES_FILE`; user `USER_ACTIONS_DIR`, `USER_HOOKS_DIR`,
+    `USER_FILTERS_DIR`, `USER_SCRIPT_DIR`, `USER_SHORTCUTS_FILE`; state files
+    `RECENT_FILE`, `VIEW_FILE`, `SETTINGS_FILE`, `UPDATE_CHECK_FILE`,
+    `USERS_FILE` (the login accounts); and `FILTER_PIPES_DIR` (temp scratch).
+  - `state.py` — the live containers: `STATE` (in-memory dataset state),
+    `USERS` (`{username: password_hash}`, loaded from `USERS_FILE` at startup;
+    a non-empty map turns login on), `EXECUTIONS`, `CLIENTS` + locks.
+  - `parsing.py` — pure text/YAML/shortcut helpers (no globals).
+  - `logging_setup.py` — `setup_logging` and the presence access-log filter.
   There is deliberately no `SCRIPTS_DIR` symbol: scripts are reached relatively
   (`scripts/…`, since cwd is the home) or as `{APP_DIR}/scripts/…`.
 - `YBX_HOME` resolution: `--home <dir>` > `$YBX_HOME` > the parent of `app.py`.
@@ -96,24 +105,26 @@ The `data.yaml` reader is hand-rolled — no PyYAML at runtime. User files live 
   `dataset.md`, `install.md`) are user-facing docs.
 
 ## Cross-file invariants
-- Built-in actions are the `app_*` set in `APP_ACTIONS` (`app/app.py`) and are
-  implemented in `app/static/app.js`. Adding/renaming one requires editing both.
-  Server-side actions are named in `BACKEND_ACTION_NAMES` (only
+- Built-in actions are the `app_*` set in `APP_ACTIONS` (`app/ybe/config.py`) and
+  are implemented in `app/static/app.js`. Adding/renaming one requires editing
+  both. Server-side actions are named in `BACKEND_ACTION_NAMES` (only
   `backend_rescan_images`).
-- Hook events are `HOOK_EVENTS` (`app/app.py`), fired via `runHook('on_...')` in
-  `app/static/app.js`, and documented in `app/hooks/example.yaml` plus
-  `docs/actions-and-hooks.md` — keep all in sync.
+- Hook events are `HOOK_EVENTS` (`app/ybe/config.py`), fired via
+  `runHook('on_...')` in `app/static/app.js`, and documented in
+  `app/hooks/example.yaml` plus `docs/actions-and-hooks.md` — keep all in sync.
 - The extension YAML format is versioned by `EXTENSION_API_VERSION`
-  (`app/app.py`); bump it when the action/hook/filter file format changes. The UI
-  compares a file's `api_version:` against it.
+  (`app/ybe/config.py`); bump it when the action/hook/filter file format changes.
+  The UI compares a file's `api_version:` against it.
 - Read-only is enforced server-side (label, tag and extension writes return
   403), not only in the UI.
 
 ## Tests
-- `tests/test_app.py` monkeypatches the module-level path constants above
-  (shipped, `USER_*`, and the `*_FILE` state files) and resets `STATE`; keep
-  those names module-level so tests can patch them. `clean_state` also patches
-  `USERS_FILE` and resets `USERS = {}`.
+- `tests/test_app.py` imports `app` and monkeypatches the path constants on
+  `ybe.config` (shipped, `USER_*`, and the `*_FILE` state files), and resets
+  `ybe.state.STATE`; keep those names module-level so tests can patch them.
+  `clean_state` also patches `ybe.config.USERS_FILE` and resets
+  `ybe.state.USERS = {}`. Direct calls to helper functions go through the
+  `app` module (e.g. `ybe.load_filters()`), which re-exports them.
 - Fixtures create real JPEGs (Pillow) in `tmp_path`; tests never touch the repo's
   own `app/actions/`, `shortcuts.txt`, `.recent_data_yamls.json`,
   `.settings.json`, `.view_state.json` or `users.json`.
