@@ -21,7 +21,7 @@ const APP_JS = path.join(ROOT, 'app', 'static', 'app.js');
 // Load order must match app/templates/index.html: the classic-script modules
 // share one global lexical environment, then app.js (the entry point) runs.
 const MODULE_FILES = [
-  'core.js', 'canvas.js', 'navigation.js', 'extensions.js', 'shortcuts.js',
+  'core.js', 'api.js', 'canvas.js', 'navigation.js', 'extensions.js', 'shortcuts.js',
   'images.js', 'editing.js', 'appearance.js', 'events.js',
 ].map((f) => path.join(ROOT, 'app', 'static', 'js', f));
 

@@ -111,12 +111,9 @@ async function save(opts = {}) {
   }
   let ok = false;
   try {
-    const res = await fetch('/api/annotations' + keyQuery(images[currentIndex]), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ boxes, tags: imageTags }),
-    });
-    const data = await res.json();
+    const { res, data } = await apiPost(
+      '/api/annotations' + keyQuery(images[currentIndex]),
+      { boxes, tags: imageTags });
     if (res.ok && data.ok) {
       dirty = false;
       ok = true;
@@ -145,12 +142,7 @@ async function loadDataset(rawPath) {
     return;
   }
   try {
-    const res = await fetch('/api/data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data_yaml: yamlPath }),
-    });
-    const data = await res.json();
+    const { res, data } = await apiPost('/api/data', { data_yaml: yamlPath });
     if (res.ok && data.ok) {
       dbg('dataset loaded', { path: yamlPath });
       await loadConfig();
@@ -177,12 +169,7 @@ function loadDataFromModal() {
 
 async function setSplit(split) {
   try {
-    const res = await fetch('/api/split', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ split: split || null }),
-    });
-    const data = await res.json();
+    const { res, data } = await apiPost('/api/split', { split: split || null });
     if (res.ok && data.ok) {
       dbg('split changed', { split: split || null });
       // skip the view restore: the split just set is authoritative, otherwise a
@@ -203,12 +190,8 @@ async function setSplit(split) {
 async function setTagsDir() {
   const anchor = captureImageAnchor(false);
   try {
-    const res = await fetch('/api/tags-dir', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tags_dir: el('tagsDirInput').value.trim() }),
-    });
-    const data = await res.json();
+    const { res, data } = await apiPost('/api/tags-dir',
+      { tags_dir: el('tagsDirInput').value.trim() });
     if (res.ok && data.ok) {
       dbg('tags dir changed', { tags_dir: data.tags_dir });
       toast('Tags folder updated', { type: 'success' });
@@ -239,12 +222,7 @@ async function applyFilterChain(names) {
   const anchor = captureImageAnchor(false);
   setFilterApplying(true);
   try {
-    const res = await fetch('/api/filter', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filters: names || [] }),
-    });
-    const data = await res.json();
+    const { res, data } = await apiPost('/api/filter', { filters: names || [] });
     if (res.ok && data.ok) {
       dbg('filters changed', { filters: names || [],
         images: (data.images || []).length, filter_error: data.filter_error });

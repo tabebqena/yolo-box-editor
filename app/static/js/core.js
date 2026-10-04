@@ -205,12 +205,7 @@ function flushSettings() {
   if (!Object.keys(pendingSettings).length) return;
   const body = { settings: pendingSettings };
   pendingSettings = {};
-  fetch('/api/settings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    keepalive: true,
-  }).then((r) => r.json()).then((data) => {
+  apiPost('/api/settings', body, { keepalive: true }).then(({ data }) => {
     if (data && data.ok && data.settings) serverSettings = data.settings;
   }).catch(() => { /* offline: the local copy still wins */ });
 }
@@ -344,14 +339,9 @@ function renderUpdateStatus() {
 
 async function refreshUpdateInfo(force = false) {
   try {
-    const res = force
-      ? await fetch('/api/update-check', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ force: true }),
-        })
-      : await fetch('/api/update-check');
-    const data = await res.json();
+    const data = force
+      ? (await apiPost('/api/update-check', { force: true })).data
+      : await apiGet('/api/update-check');
     if (data && data.update) updateInfo = data.update;
   } catch (e) {
     dbgWarn('update check failed', e);

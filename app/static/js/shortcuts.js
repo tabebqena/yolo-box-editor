@@ -119,13 +119,7 @@ function renderPresenceWarning(count) {
 
 async function pingPresence(bye = false) {
   try {
-    const res = await fetch('/api/presence', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cid: CLIENT_ID, bye }),
-      keepalive: bye,
-    });
-    const data = await res.json();
+    const { data } = await apiPost('/api/presence', { cid: CLIENT_ID, bye }, { keepalive: bye });
     dbg('presence', { count: data.count, bye });
     if (!bye) renderPresenceWarning(data.count || 0);
   } catch (e) { /* presence is best-effort */ }
@@ -328,12 +322,7 @@ async function saveShortcuts() {
   const btn = el('shortcutSaveBtn');
   btn.disabled = true;
   try {
-    const res = await fetch('/api/shortcuts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ set, reset }),
-    });
-    const cfg = await res.json();
+    const { res, data: cfg } = await apiPost('/api/shortcuts', { set, reset });
     if (!res.ok || cfg.ok === false) {
       toast(cfg.error || 'Could not save shortcuts', { type: 'error' });
       return;

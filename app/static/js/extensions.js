@@ -445,21 +445,11 @@ function renderFilterBuilder() {
 }
 
 async function postExtension(url, body) {
-  let res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  let data = await res.json();
+  let { res, data } = await apiPost(url, body);
   if (res.status === 409) {
     if (!confirm((data.error || 'It already exists') + '. Overwrite it?')) return null;
     body.overwrite = true;
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    data = await res.json();
+    ({ res, data } = await apiPost(url, body));
   }
   if (!data.ok) {
     toast(data.error || 'Could not save', { type: 'error' });
@@ -528,9 +518,8 @@ async function setExtensionDisabled(kind, name, disabled) {
 async function openYamlEditor(kind, name) {
   let data;
   try {
-    const res = await fetch(
+    data = await apiGet(
       `/api/extensions/file?kind=${encodeURIComponent(kind)}&name=${encodeURIComponent(name)}`);
-    data = await res.json();
   } catch (e) {
     toast('Could not open the file', { type: 'error' });
     return;
@@ -566,17 +555,12 @@ async function saveYamlEditor() {
   const err = el('yamlEditorError');
   let data;
   try {
-    const res = await fetch('/api/extensions/file', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        kind: yamlEditor.kind,
-        name: yamlEditor.name,
-        text: el('yamlEditorText').value,
-        overwrite: true,
-      }),
-    });
-    data = await res.json();
+    ({ data } = await apiPost('/api/extensions/file', {
+      kind: yamlEditor.kind,
+      name: yamlEditor.name,
+      text: el('yamlEditorText').value,
+      overwrite: true,
+    }));
   } catch (e) {
     data = { ok: false, error: 'Network error' };
   }
@@ -598,7 +582,7 @@ async function saveYamlEditor() {
 
 async function refreshExtensions() {
   try {
-    const cfg = await (await fetch('/api/config')).json();
+    const cfg = await apiGet('/api/config');
     applyExtensionConfig(cfg);
   } catch (e) { /* the next config load will pick it up */ }
 }

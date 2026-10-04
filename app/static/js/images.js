@@ -27,7 +27,7 @@ function populateClasses() {
 }
 
 async function loadConfig(startIdx = 0, opts = {}) {
-  const cfg0 = await (await fetch('/api/config')).json();
+  const cfg0 = await apiGet('/api/config');
   console.log(`[ybe] yolo-box-editor v${cfg0.version || '?'}`);
   serverSettings = cfg0.settings || {};
   initSettings();
@@ -131,12 +131,7 @@ function clearSavedView() {
 }
 
 async function postJson(url, body) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return res.json();
+  return (await apiPost(url, body)).data;
 }
 
 // On load, re-apply the remembered split and/or filter when the server has none
@@ -200,8 +195,7 @@ function loadImage(i) {
     image: entry ? `${entry.split}/${entry.name}` : null });
 
   const q = keyQuery(entry);
-  fetch('/api/annotations' + q)
-    .then((r) => (r.ok ? r.json() : null))
+  apiGetOrNull('/api/annotations' + q)
     .then((data) => {
       if (requested !== currentIndex) return; // a newer loadImage superseded us
       boxes = Array.isArray(data && data.boxes) ? data.boxes : [];

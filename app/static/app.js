@@ -39,23 +39,16 @@ async function submitLogin(e) {
   const btn = el('loginBtn');
   btn.disabled = true;
   try {
-    const res = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: el('loginUser').value, password: el('loginPass').value }),
+    const { res, data } = await apiPost('/api/login', {
+      username: el('loginUser').value, password: el('loginPass').value,
     });
     if (res.ok) {
       hideLogin();
       setAccountControls(true);
       startApp();
     } else {
-      let msg = 'Sign in failed';
-      try {
-        const d = await res.json();
-        if (d && d.error) msg = d.error;
-      } catch (err) { /* ignore */ }
       el('loginPass').value = '';
-      showLogin(msg);
+      showLogin((data && data.error) || 'Sign in failed');
       el('loginPass').focus();
     }
   } catch (err) {
@@ -66,7 +59,7 @@ async function submitLogin(e) {
 }
 
 async function logout() {
-  try { await fetch('/api/logout', { method: 'POST' }); } catch (e) { /* ignore */ }
+  try { await apiPost('/api/logout', {}); } catch (e) { /* ignore */ }
   location.reload();
 }
 
@@ -92,21 +85,14 @@ async function savePassword() {
   const btn = el('passwordSave');
   btn.disabled = true;
   try {
-    const res = await fetch('/api/password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ current_password: el('pwCurrent').value, new_password: next }),
+    const { res, data } = await apiPost('/api/password', {
+      current_password: el('pwCurrent').value, new_password: next,
     });
     if (res.ok) {
       closePasswordModal();
       toast('Password changed');
     } else {
-      let msg = 'Could not change the password';
-      try {
-        const d = await res.json();
-        if (d && d.error) msg = d.error;
-      } catch (e) { /* ignore */ }
-      fail(msg);
+      fail((data && data.error) || 'Could not change the password');
     }
   } catch (e) {
     fail('Could not reach the server');
