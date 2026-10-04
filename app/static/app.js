@@ -922,10 +922,10 @@ function closeTipModal() {
 }
 
 function selectSettingsTab(name) {
-  document.querySelectorAll('.settings-tab').forEach((tab) => {
+  qsa('.settings-tab').forEach((tab) => {
     tab.classList.toggle('active', tab.dataset.tab === name);
   });
-  document.querySelectorAll('.settings-panel').forEach((panel) => {
+  qsa('.settings-panel').forEach((panel) => {
     panel.classList.toggle('active', panel.dataset.panel === name);
   });
 }
@@ -936,10 +936,10 @@ function selectSettingsTab(name) {
 // `.settings-panel` so the same names in other panels never clash.
 function selectSubTab(name, scope) {
   const root = scope || document;
-  root.querySelectorAll('.sub-tab').forEach((tab) => {
+  qsa('.sub-tab', root).forEach((tab) => {
     tab.classList.toggle('active', tab.dataset.sub === name);
   });
-  root.querySelectorAll('.sub-panel').forEach((sub) => {
+  qsa('.sub-panel', root).forEach((sub) => {
     sub.classList.toggle('active', sub.dataset.sub === name);
   });
 }
@@ -3101,36 +3101,36 @@ const WIDGETS = {
   tags: {
     frame: 'tagFloat', body: 'tagFloatBody',
     content: () => el('tagBar'),
-    parent: () => document.querySelector('#dockBottom .imagebar'),
+    parent: () => qs('#dockBottom .imagebar'),
     key: 'ybe_tags_dock', select: 'tagsDockSel',
     visibleKey: 'ybe_tags_visible', visibleSw: 'tagsVisibleSw',
   },
   boxes: {
     frame: 'boxFloat', body: 'boxFloatBody',
-    content: () => document.querySelector('.boxes-section'),
-    parent: () => document.querySelector('#sidebar .sidebar-body'),
+    content: () => qs('.boxes-section'),
+    parent: () => qs('#sidebar .sidebar-body'),
     key: 'ybe_boxes_dock', select: 'boxesDockSel',
     visibleKey: 'ybe_boxes_visible', visibleSw: 'boxesVisibleSw',
   },
   actions: {
     frame: 'actionsFloat', body: 'actionsFloatBody',
-    content: () => document.querySelector('.actionbox'),
-    parent: () => document.querySelector('#sidebar .sidebar-body'),
+    content: () => qs('.actionbox'),
+    parent: () => qs('#sidebar .sidebar-body'),
     anchor: () => el('actionsSep'),
     key: 'ybe_actions_dock', select: 'actionsDockSel',
     visibleKey: 'ybe_actions_visible', visibleSw: 'actionsVisibleSw',
   },
   nav: {
     frame: 'navFloat', body: 'navFloatBody',
-    content: () => document.querySelector('.imagebar-nav'),
-    parent: () => document.querySelector('#dockBottom .imagebar'),
+    content: () => qs('.imagebar-nav'),
+    parent: () => qs('#dockBottom .imagebar'),
     key: 'ybe_nav_dock', select: 'navDockSel',
     visibleKey: 'ybe_nav_visible', visibleSw: 'navVisibleSw',
   },
   save: {
     frame: 'saveFloat', body: 'saveFloatBody',
-    content: () => document.querySelector('.imagebar-right'),
-    parent: () => document.querySelector('#dockBottom .imagebar'),
+    content: () => qs('.imagebar-right'),
+    parent: () => qs('#dockBottom .imagebar'),
     key: 'ybe_save_dock', select: 'saveDockSel',
     visibleKey: 'ybe_save_visible', visibleSw: 'saveVisibleSw',
   },
@@ -3210,7 +3210,7 @@ function widgetContent(name) { return WIDGETS[name].content(); }
 function widgetDefaultParent(name) { return WIDGETS[name].parent(); }
 function widgetDockTarget(name, loc) {
   if (loc === 'bottom') return el('dockBottomBody');
-  if (loc === panelSide) return document.querySelector('#sidebar .sidebar-body');
+  if (loc === panelSide) return qs('#sidebar .sidebar-body');
   return el('dockSideBody');
 }
 
@@ -3227,7 +3227,7 @@ function updateDockPanels() {
 
   // the bottom panel itself disappears once nothing is left in it
   const bottom = el('dockBottom');
-  const imagebar = document.querySelector('#dockBottom .imagebar');
+  const imagebar = qs('#dockBottom .imagebar');
   if (bottom) bottom.classList.toggle('hidden', !hasChild(bottomBody) && !hasChild(imagebar));
 }
 
@@ -3830,10 +3830,10 @@ el('actionsExpandBtn').addEventListener('click', () => {
 el('settingsBtn').addEventListener('click', openSettingsModal);
 el('settingsModalClose').addEventListener('click', closeSettingsModal);
 bindModalBackdrop('settingsModal', closeSettingsModal);
-document.querySelectorAll('.settings-tab').forEach((tab) => {
+qsa('.settings-tab').forEach((tab) => {
   tab.addEventListener('click', () => selectSettingsTab(tab.dataset.tab));
 });
-document.querySelectorAll('.sub-tab').forEach((tab) => {
+qsa('.sub-tab').forEach((tab) => {
   tab.addEventListener('click', () => {
     selectSubTab(tab.dataset.sub, tab.closest('.settings-panel') || document);
   });
