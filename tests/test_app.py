@@ -28,23 +28,23 @@ import app as ybe
 # --------------------------------------------------------------------------- #
 def test_default_home_is_parent_of_app(monkeypatch):
     monkeypatch.delenv("YBX_HOME", raising=False)
-    assert ybe._resolve_home() == os.path.dirname(ybe.BASE_DIR)
+    assert ybe.config._resolve_home() == os.path.dirname(ybe.config.BASE_DIR)
 
 
 def test_home_env_overrides_default(monkeypatch, tmp_path):
     monkeypatch.setenv("YBX_HOME", str(tmp_path / "h"))
-    assert ybe._resolve_home() == str(tmp_path / "h")
+    assert ybe.config._resolve_home() == str(tmp_path / "h")
 
 
 def test_configure_home_repoints_user_dirs(clean_state, tmp_path):
     target = tmp_path / "elsewhere"
     ybe.configure_home(str(target))
-    assert ybe.YBX_HOME == str(target)
-    assert ybe.USER_ACTIONS_DIR == str(target / "actions")
-    assert ybe.USER_SCRIPT_DIR == str(target / "scripts")
-    assert ybe.CONFIG_FILE == str(target / "config.json")
-    assert ybe.RECENT_FILE == str(target / ".recent_data_yamls.json")
-    assert ybe.SETTINGS_FILE == str(target / ".settings.json")
+    assert ybe.config.YBX_HOME == str(target)
+    assert ybe.config.USER_ACTIONS_DIR == str(target / "actions")
+    assert ybe.config.USER_SCRIPT_DIR == str(target / "scripts")
+    assert ybe.config.CONFIG_FILE == str(target / "config.json")
+    assert ybe.config.RECENT_FILE == str(target / ".recent_data_yamls.json")
+    assert ybe.config.SETTINGS_FILE == str(target / ".settings.json")
 
 
 # --------------------------------------------------------------------------- #
@@ -83,32 +83,32 @@ def clean_state(tmp_path, monkeypatch):
     dirs, read last); the shipped `app-actions` etc. stay empty here so only the
     test's own files are loaded.
     """
-    monkeypatch.setattr(ybe, "YBX_HOME", str(tmp_path))
-    monkeypatch.setattr(ybe, "CONFIG_FILE", str(tmp_path / "config.json"))
-    monkeypatch.setattr(ybe, "RECENT_FILE", str(tmp_path / "recent.json"))
-    monkeypatch.setattr(ybe, "VIEW_FILE", str(tmp_path / "view.json"))
-    monkeypatch.setattr(ybe, "SETTINGS_FILE", str(tmp_path / "settings.json"))
-    monkeypatch.setattr(ybe, "UPDATE_CHECK_FILE", str(tmp_path / "update.json"))
-    monkeypatch.setattr(ybe, "VERSION_FILE", str(tmp_path / "VERSION"))
-    monkeypatch.setattr(ybe, "CHANGES_FILE", str(tmp_path / "CHANGES"))
-    monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "app-actions"))
-    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "actions"))
-    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "app-hooks"))
-    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "hooks"))
-    monkeypatch.setattr(ybe, "FILTERS_DIR", str(tmp_path / "app-filters"))
-    monkeypatch.setattr(ybe, "USER_FILTERS_DIR", str(tmp_path / "filters"))
-    monkeypatch.setattr(ybe, "APP_SCRIPT_DIR", str(tmp_path / "app-scripts"))
-    monkeypatch.setattr(ybe, "USER_SCRIPT_DIR", str(tmp_path / "scripts"))
-    monkeypatch.setattr(ybe, "SHORTCUTS_FILE", str(tmp_path / "app-shortcuts.txt"))
-    monkeypatch.setattr(ybe, "USER_SHORTCUTS_FILE", str(tmp_path / "shortcuts.txt"))
-    monkeypatch.setattr(ybe, "PIPE_DIR", str(tmp_path / "pipes"))
-    monkeypatch.setattr(ybe, "FILTER_PIPES_DIR", str(tmp_path / "filter-pipes"))
-    monkeypatch.setattr(ybe, "USERS_FILE", str(tmp_path / "users.json"))
-    monkeypatch.setattr(ybe, "USERS", {})
-    ybe.STATE.clear()
-    ybe.STATE.update(DEFAULT_STATE)
-    ybe.EXECUTIONS.clear()
-    ybe.CLIENTS.clear()
+    monkeypatch.setattr(ybe.config, "YBX_HOME", str(tmp_path))
+    monkeypatch.setattr(ybe.config, "CONFIG_FILE", str(tmp_path / "config.json"))
+    monkeypatch.setattr(ybe.config, "RECENT_FILE", str(tmp_path / "recent.json"))
+    monkeypatch.setattr(ybe.config, "VIEW_FILE", str(tmp_path / "view.json"))
+    monkeypatch.setattr(ybe.config, "SETTINGS_FILE", str(tmp_path / "settings.json"))
+    monkeypatch.setattr(ybe.config, "UPDATE_CHECK_FILE", str(tmp_path / "update.json"))
+    monkeypatch.setattr(ybe.config, "VERSION_FILE", str(tmp_path / "VERSION"))
+    monkeypatch.setattr(ybe.config, "CHANGES_FILE", str(tmp_path / "CHANGES"))
+    monkeypatch.setattr(ybe.config, "ACTIONS_DIR", str(tmp_path / "app-actions"))
+    monkeypatch.setattr(ybe.config, "USER_ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe.config, "HOOKS_DIR", str(tmp_path / "app-hooks"))
+    monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe.config, "FILTERS_DIR", str(tmp_path / "app-filters"))
+    monkeypatch.setattr(ybe.config, "USER_FILTERS_DIR", str(tmp_path / "filters"))
+    monkeypatch.setattr(ybe.config, "APP_SCRIPT_DIR", str(tmp_path / "app-scripts"))
+    monkeypatch.setattr(ybe.config, "USER_SCRIPT_DIR", str(tmp_path / "scripts"))
+    monkeypatch.setattr(ybe.config, "SHORTCUTS_FILE", str(tmp_path / "app-shortcuts.txt"))
+    monkeypatch.setattr(ybe.config, "USER_SHORTCUTS_FILE", str(tmp_path / "shortcuts.txt"))
+    monkeypatch.setattr(ybe.config, "PIPE_DIR", str(tmp_path / "pipes"))
+    monkeypatch.setattr(ybe.config, "FILTER_PIPES_DIR", str(tmp_path / "filter-pipes"))
+    monkeypatch.setattr(ybe.config, "USERS_FILE", str(tmp_path / "users.json"))
+    monkeypatch.setattr(ybe.state, "USERS", {})
+    ybe.state.STATE.clear()
+    ybe.state.STATE.update(DEFAULT_STATE)
+    ybe.state.EXECUTIONS.clear()
+    ybe.state.CLIENTS.clear()
     return tmp_path
 
 
@@ -170,16 +170,16 @@ def write_script(root, fname, body, subdir="scripts"):
 
 def load_into_state(root):
     """Activate `root`'s dataset in STATE without going through a client."""
-    ybe.STATE["data_yaml"] = str(Path(root) / "data.yaml")
-    ybe.STATE["dataset_path"] = str(root)
-    ybe.STATE["splits"] = ybe.scan_splits()
-    ybe.STATE["images"] = ybe.scan_images()
+    ybe.state.STATE["data_yaml"] = str(Path(root) / "data.yaml")
+    ybe.state.STATE["dataset_path"] = str(root)
+    ybe.state.STATE["splits"] = ybe.scan_splits()
+    ybe.state.STATE["images"] = ybe.scan_images()
 
 
 def read_config():
     """The unified config dict (missing/invalid file -> empty shape)."""
     try:
-        data = json.loads(Path(ybe.CONFIG_FILE).read_text(encoding="utf-8"))
+        data = json.loads(Path(ybe.config.CONFIG_FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {"recent": [], "views": {}, "settings": {}}
     return data
@@ -189,7 +189,7 @@ def write_config(**sections):
     """Write sections (recent/views/settings) into the unified config file."""
     cfg = {"recent": [], "views": {}, "settings": {}}
     cfg.update(sections)
-    Path(ybe.CONFIG_FILE).write_text(json.dumps(cfg), encoding="utf-8")
+    Path(ybe.config.CONFIG_FILE).write_text(json.dumps(cfg), encoding="utf-8")
 
 
 # Copies the input pipe to the output pipe unchanged (the identity filter).
@@ -410,8 +410,8 @@ def test_parse_action_file_unquotes_scalars():
 
 
 def test_load_actions_dir_one_file_per_action(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
-    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
+    monkeypatch.setattr(ybe.config, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe.config, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
     write_action(tmp_path, "Keep.yaml", "steps:\n  - echo one\n")
     write_action(
         tmp_path,
@@ -426,16 +426,16 @@ def test_load_actions_dir_one_file_per_action(tmp_path, monkeypatch):
 
 
 def test_load_actions_name_key_overrides_filename(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
-    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
+    monkeypatch.setattr(ybe.config, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe.config, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
     write_action(tmp_path, "whatever.yaml", "name: Custom\nsteps:\n  - echo hi\n")
     actions = {a["name"]: a for a in ybe.load_actions()}
     assert "Custom" in actions and "whatever" not in actions
 
 
 def test_load_actions_user_override_wins(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
-    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
+    monkeypatch.setattr(ybe.config, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe.config, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
     write_action(tmp_path, "Shared.yaml", "steps:\n  - echo repo\n")
     write_action(
         tmp_path, "Shared.yaml", "steps:\n  - echo user\n", subdir="user-actions"
@@ -445,8 +445,8 @@ def test_load_actions_user_override_wins(tmp_path, monkeypatch):
 
 
 def test_load_actions_override_targets_name_key(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
-    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
+    monkeypatch.setattr(ybe.config, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe.config, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
     write_action(tmp_path, "Shared.yaml", "steps:\n  - echo repo\n")
     write_action(
         tmp_path,
@@ -459,16 +459,16 @@ def test_load_actions_override_targets_name_key(tmp_path, monkeypatch):
 
 
 def test_load_actions_ignores_empty_entries_and_non_yaml(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
-    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
+    monkeypatch.setattr(ybe.config, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe.config, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
     write_action(tmp_path, "Empty.yaml", "name: Empty\nafter_success: []\n")
     write_action(tmp_path, "notes.txt", "steps:\n  - echo hi\n")
     assert ybe.load_actions() == []
 
 
 def test_load_actions_missing_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "nope"))
-    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "nope-user"))
+    monkeypatch.setattr(ybe.config, "ACTIONS_DIR", str(tmp_path / "nope"))
+    monkeypatch.setattr(ybe.config, "USER_ACTIONS_DIR", str(tmp_path / "nope-user"))
     assert ybe.load_actions() == []
 
 
@@ -494,8 +494,8 @@ def test_parse_action_file_reads_event_name_and_active():
 
 
 def test_load_hooks_event_from_filename(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
-    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
+    monkeypatch.setattr(ybe.config, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(tmp_path, "on_after_save.yaml", "steps:\n  - echo saved\n")
     hooks, errors = ybe.load_hooks()
     assert errors == []
@@ -505,10 +505,10 @@ def test_load_hooks_event_from_filename(tmp_path, monkeypatch):
 
 
 def test_load_hooks_before_navigation_events(tmp_path, monkeypatch):
-    assert "before_prev" in ybe.HOOK_EVENTS
-    assert "before_next" in ybe.HOOK_EVENTS
-    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
-    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
+    assert "before_prev" in ybe.config.HOOK_EVENTS
+    assert "before_next" in ybe.config.HOOK_EVENTS
+    monkeypatch.setattr(ybe.config, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(tmp_path, "on_before_prev.yaml", "steps:\n  - echo prev\n")
     write_hook(tmp_path, "on_before_next.yaml", "steps:\n  - echo next\n")
     hooks, errors = ybe.load_hooks()
@@ -518,8 +518,8 @@ def test_load_hooks_before_navigation_events(tmp_path, monkeypatch):
 
 
 def test_load_hooks_event_name_fallback(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
-    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
+    monkeypatch.setattr(ybe.config, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(
         tmp_path, "whatever.yaml", "event_name: after_save\nsteps:\n  - echo hi\n"
     )
@@ -529,8 +529,8 @@ def test_load_hooks_event_name_fallback(tmp_path, monkeypatch):
 
 
 def test_load_hooks_known_filename_wins_over_event_name(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
-    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
+    monkeypatch.setattr(ybe.config, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(
         tmp_path,
         "on_after_save.yaml",
@@ -541,16 +541,16 @@ def test_load_hooks_known_filename_wins_over_event_name(tmp_path, monkeypatch):
 
 
 def test_load_hooks_inactive_is_ignored(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
-    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
+    monkeypatch.setattr(ybe.config, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(tmp_path, "on_after_save.yaml", "active: false\nsteps:\n  - echo hi\n")
     hooks, errors = ybe.load_hooks()
     assert hooks == [] and errors == []
 
 
 def test_load_hooks_unknown_event_with_steps_reports_error(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
-    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
+    monkeypatch.setattr(ybe.config, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(tmp_path, "on_nope.yaml", "steps:\n  - echo hi\n")
     hooks, errors = ybe.load_hooks()
     assert hooks == []
@@ -558,16 +558,16 @@ def test_load_hooks_unknown_event_with_steps_reports_error(tmp_path, monkeypatch
 
 
 def test_load_hooks_empty_template_is_silent(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
-    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
+    monkeypatch.setattr(ybe.config, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(tmp_path, "example.yaml", "# comments only, no steps\n")
     hooks, errors = ybe.load_hooks()
     assert hooks == [] and errors == []
 
 
 def test_load_hooks_user_override_wins(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
-    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
+    monkeypatch.setattr(ybe.config, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_hook(tmp_path, "on_after_save.yaml", "steps:\n  - echo repo\n")
     write_hook(
         tmp_path,
@@ -580,14 +580,14 @@ def test_load_hooks_user_override_wins(tmp_path, monkeypatch):
 
 
 def test_load_hooks_missing_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "nope"))
-    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "nope-user"))
+    monkeypatch.setattr(ybe.config, "HOOKS_DIR", str(tmp_path / "nope"))
+    monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(tmp_path / "nope-user"))
     assert ybe.load_hooks() == ([], [])
 
 
 def test_load_shortcuts_merges_and_user_override_wins(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "SHORTCUTS_FILE", str(tmp_path / "s.txt"))
-    monkeypatch.setattr(ybe, "USER_SHORTCUTS_FILE", str(tmp_path / "s-user.txt"))
+    monkeypatch.setattr(ybe.config, "SHORTCUTS_FILE", str(tmp_path / "s.txt"))
+    monkeypatch.setattr(ybe.config, "USER_SHORTCUTS_FILE", str(tmp_path / "s-user.txt"))
     (tmp_path / "s.txt").write_text("app_next <D> repo\napp_undo <Z> undo\n",
                                     encoding="utf-8")
     (tmp_path / "s-user.txt").write_text("app_next <F> user\n", encoding="utf-8")
@@ -597,12 +597,12 @@ def test_load_shortcuts_merges_and_user_override_wins(tmp_path, monkeypatch):
 
 
 def test_modifier_only_shortcut_is_valid_app_binding(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "SHORTCUTS_FILE", str(tmp_path / "s.txt"))
-    monkeypatch.setattr(ybe, "USER_SHORTCUTS_FILE", str(tmp_path / "s-user.txt"))
-    monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
-    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
-    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
-    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
+    monkeypatch.setattr(ybe.config, "SHORTCUTS_FILE", str(tmp_path / "s.txt"))
+    monkeypatch.setattr(ybe.config, "USER_SHORTCUTS_FILE", str(tmp_path / "s-user.txt"))
+    monkeypatch.setattr(ybe.config, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe.config, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
+    monkeypatch.setattr(ybe.config, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     (tmp_path / "s.txt").write_text(
         "app_force_draw <Ctrl> hold + drag\napp_fix_box <F> fix\n",
         encoding="utf-8",
@@ -612,15 +612,15 @@ def test_modifier_only_shortcut_is_valid_app_binding(tmp_path, monkeypatch):
     assert user == {}
     assert app["app_force_draw"]["shortcut"] == "Ctrl"
     assert "app_fix_box" in app
-    assert "app_fix_box" in ybe.APP_ACTIONS
-    assert "app_force_draw" in ybe.APP_ACTIONS
+    assert "app_fix_box" in ybe.config.APP_ACTIONS
+    assert "app_force_draw" in ybe.config.APP_ACTIONS
 
 
 def test_split_shortcuts_partitions_and_reports_unknown(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "ACTIONS_DIR", str(tmp_path / "actions"))
-    monkeypatch.setattr(ybe, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
-    monkeypatch.setattr(ybe, "HOOKS_DIR", str(tmp_path / "hooks"))
-    monkeypatch.setattr(ybe, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
+    monkeypatch.setattr(ybe.config, "ACTIONS_DIR", str(tmp_path / "actions"))
+    monkeypatch.setattr(ybe.config, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))
+    monkeypatch.setattr(ybe.config, "HOOKS_DIR", str(tmp_path / "hooks"))
+    monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(tmp_path / "user-hooks"))
     write_action(tmp_path, "Mine.yaml", "steps:\n  - echo hi\n")
     shortcuts = {
         "app_next": {"shortcut": "ArrowRight", "label": "next"},
@@ -651,7 +651,7 @@ def test_load_shortcuts_from_reads_one_file(clean_state):
 
 
 def test_write_user_shortcuts_preserves_comments_and_upserts(clean_state):
-    path = Path(ybe.USER_SHORTCUTS_FILE)
+    path = Path(ybe.config.USER_SHORTCUTS_FILE)
     path.write_text("# my remaps\napp_next <D> next\n\napp_undo <U> undo\n",
                     encoding="utf-8")
     ybe.write_user_shortcuts({"app_next": "Ctrl+N"}, [])
@@ -663,7 +663,7 @@ def test_write_user_shortcuts_preserves_comments_and_upserts(clean_state):
 
 
 def test_write_user_shortcuts_appends_and_resets(clean_state):
-    path = Path(ybe.USER_SHORTCUTS_FILE)
+    path = Path(ybe.config.USER_SHORTCUTS_FILE)
     path.write_text("# keep\napp_next <D> next\n", encoding="utf-8")
     ybe.write_user_shortcuts({"app_save": "Ctrl+S"}, ["app_next"])
     text = path.read_text(encoding="utf-8")
@@ -674,7 +674,7 @@ def test_write_user_shortcuts_appends_and_resets(clean_state):
 
 
 def test_api_config_exposes_shortcut_defaults(clean_state):
-    Path(ybe.SHORTCUTS_FILE).write_text("app_next <ArrowRight> next\n",
+    Path(ybe.config.SHORTCUTS_FILE).write_text("app_next <ArrowRight> next\n",
                                         encoding="utf-8")
     cfg = ybe.app.test_client().get("/api/config").get_json()
     assert cfg["shortcut_defaults"]["app_next"]["shortcut"] == "ArrowRight"
@@ -689,7 +689,7 @@ def test_api_shortcuts_saves_override(clean_state):
     assert cfg["ok"] is True
     assert cfg["shortcuts"]["app_next"]["shortcut"] == "Ctrl+N"
     assert cfg["user_shortcut_names"] == ["app_next"]
-    assert "app_next <Ctrl+N>" in Path(ybe.USER_SHORTCUTS_FILE).read_text(
+    assert "app_next <Ctrl+N>" in Path(ybe.config.USER_SHORTCUTS_FILE).read_text(
         encoding="utf-8")
 
 
@@ -703,7 +703,7 @@ def test_api_shortcuts_resets_override(clean_state):
 
 
 def test_api_shortcuts_readonly_rejected(clean_state):
-    ybe.STATE["readonly"] = True
+    ybe.state.STATE["readonly"] = True
     client = ybe.app.test_client()
     resp = client.post("/api/shortcuts", json={"set": {"app_next": "N"}})
     assert resp.status_code == 403
@@ -727,7 +727,7 @@ def test_recent_cap_and_order(clean_state):
     for i in range(12):
         ybe._push_recent(f"/d/{i}.yaml")
     recents = ybe._load_recent()
-    assert len(recents) <= ybe.MAX_RECENT
+    assert len(recents) <= ybe.config.MAX_RECENT
     assert recents[0] == "/d/11.yaml"  # newest first
     assert len(set(recents)) == len(recents)
     ybe._push_recent("/d/5.yaml")
@@ -740,9 +740,9 @@ def test_recent_cap_and_order(clean_state):
 def test_load_dataset_sets_state(clean_state, tmp_path):
     root = make_dataset(tmp_path, names=("fire", "smoke"))
     assert ybe._load_dataset(str(root / "data.yaml")) is True
-    assert ybe.STATE["data_yaml"] == str(root / "data.yaml")
-    assert [s["name"] for s in ybe.STATE["splits"]] == ["train", "val", "test"]
-    assert ybe.STATE["images"]
+    assert ybe.state.STATE["data_yaml"] == str(root / "data.yaml")
+    assert [s["name"] for s in ybe.state.STATE["splits"]] == ["train", "val", "test"]
+    assert ybe.state.STATE["images"]
 
 
 def test_load_dataset_false_without_splits(clean_state, tmp_path):
@@ -757,7 +757,7 @@ def test_resume_last_dataset_opens_most_recent(clean_state, tmp_path):
     ybe._push_recent(str(second / "data.yaml"))
     resumed = ybe._resume_last_dataset()
     assert resumed == str(second / "data.yaml")
-    assert ybe.STATE["data_yaml"] == str(second / "data.yaml")
+    assert ybe.state.STATE["data_yaml"] == str(second / "data.yaml")
 
 
 def test_resume_last_dataset_skips_missing_files(clean_state, tmp_path):
@@ -768,13 +768,13 @@ def test_resume_last_dataset_skips_missing_files(clean_state, tmp_path):
 
 
 def test_resume_last_dataset_none_clears_state(clean_state):
-    ybe.STATE["data_yaml"] = "/stale/data.yaml"
-    ybe.STATE["splits"] = [{"name": "train"}]
-    ybe.STATE["images"] = [{"split": "train", "name": "a.jpg"}]
+    ybe.state.STATE["data_yaml"] = "/stale/data.yaml"
+    ybe.state.STATE["splits"] = [{"name": "train"}]
+    ybe.state.STATE["images"] = [{"split": "train", "name": "a.jpg"}]
     assert ybe._resume_last_dataset() is None
-    assert ybe.STATE["data_yaml"] is None
-    assert ybe.STATE["splits"] == []
-    assert ybe.STATE["images"] == []
+    assert ybe.state.STATE["data_yaml"] is None
+    assert ybe.state.STATE["splits"] == []
+    assert ybe.state.STATE["images"] == []
 
 
 
@@ -784,17 +784,17 @@ def test_resume_last_dataset_none_clears_state(clean_state):
 def test_scan_splits_builds_splits(clean_state, tmp_path):
     root = make_dataset(tmp_path, names=("fire", "smoke"))
     clean_state_path = str(root / "data.yaml")
-    ybe.STATE["data_yaml"] = clean_state_path
+    ybe.state.STATE["data_yaml"] = clean_state_path
     splits = ybe.scan_splits()
     assert [s["name"] for s in splits] == ["train", "val", "test"]
     assert splits[0]["images_dir"].endswith("images/train")
     assert splits[0]["labels_dir"].endswith("labels/train")
-    assert ybe.STATE["classes"] == ["fire", "smoke"]
+    assert ybe.state.STATE["classes"] == ["fire", "smoke"]
 
 
 def test_scan_splits_skips_missing_images_dir(clean_state, tmp_path):
     root = make_dataset(tmp_path, splits=("train",))
-    ybe.STATE["data_yaml"] = str(root / "data.yaml")
+    ybe.state.STATE["data_yaml"] = str(root / "data.yaml")
     splits = ybe.scan_splits()
     assert [s["name"] for s in splits] == ["train"]
 
@@ -805,8 +805,8 @@ def test_scan_splits_empty_without_data_yaml(clean_state):
 
 def test_scan_images_sorted_and_filtered(clean_state, tmp_path):
     root = make_dataset(tmp_path, splits=("train",), images=("b", "a"))
-    ybe.STATE["data_yaml"] = str(root / "data.yaml")
-    ybe.STATE["splits"] = ybe.scan_splits()
+    ybe.state.STATE["data_yaml"] = str(root / "data.yaml")
+    ybe.state.STATE["splits"] = ybe.scan_splits()
     images = ybe.scan_images()
     assert [e["name"] for e in images] == ["a.jpg", "b.jpg"]
     assert all(e["split"] == "train" for e in images)
@@ -817,9 +817,9 @@ def test_read_classes_fallback_from_label_files(clean_state, tmp_path):
     (root / "labels" / "train").mkdir(parents=True)
     (root / "labels" / "train" / "a.txt").write_text("3 0.5 0.5 0.2 0.2\n",
                                                      encoding="utf-8")
-    ybe.STATE["data_yaml"] = str(root / "data.yaml")
-    ybe.STATE["splits"] = ybe.scan_splits()
-    ybe.STATE["images"] = ybe.scan_images()
+    ybe.state.STATE["data_yaml"] = str(root / "data.yaml")
+    ybe.state.STATE["splits"] = ybe.scan_splits()
+    ybe.state.STATE["images"] = ybe.scan_images()
     assert ybe.read_classes() == ["class_0", "class_1", "class_2", "class_3"]
 
 
@@ -894,7 +894,7 @@ def test_api_config_includes_tips(clean_state):
 
 
 def test_api_config_includes_settings(clean_state):
-    Path(ybe.CONFIG_FILE).write_text(
+    Path(ybe.config.CONFIG_FILE).write_text(
         json.dumps({"settings": {"autoSave": "1", "ybe_panel_side": "left"}}),
         encoding="utf-8",
     )
@@ -947,33 +947,33 @@ def test_config_file_holds_recent_views_and_settings(clean_state, tmp_path):
     assert cfg["views"][str(root / "data.yaml")]["split"] == "train"
     assert cfg["settings"] == {"autoSave": "1"}
     # one file, and the legacy per-purpose files are not created
-    assert Path(ybe.CONFIG_FILE).is_file()
-    assert not Path(ybe.RECENT_FILE).exists()
-    assert not Path(ybe.VIEW_FILE).exists()
-    assert not Path(ybe.SETTINGS_FILE).exists()
+    assert Path(ybe.config.CONFIG_FILE).is_file()
+    assert not Path(ybe.config.RECENT_FILE).exists()
+    assert not Path(ybe.config.VIEW_FILE).exists()
+    assert not Path(ybe.config.SETTINGS_FILE).exists()
 
 
 def test_legacy_files_migrate_into_config(clean_state):
-    Path(ybe.RECENT_FILE).write_text(json.dumps(["/d/a.yaml"]), encoding="utf-8")
-    Path(ybe.VIEW_FILE).write_text(
+    Path(ybe.config.RECENT_FILE).write_text(json.dumps(["/d/a.yaml"]), encoding="utf-8")
+    Path(ybe.config.VIEW_FILE).write_text(
         json.dumps({"/d/a.yaml": {"split": "train"}}), encoding="utf-8"
     )
-    Path(ybe.SETTINGS_FILE).write_text(json.dumps({"autoSave": "1"}), encoding="utf-8")
+    Path(ybe.config.SETTINGS_FILE).write_text(json.dumps({"autoSave": "1"}), encoding="utf-8")
 
     assert ybe._load_recent() == ["/d/a.yaml"]
     assert ybe._load_views()["/d/a.yaml"]["split"] == "train"
     assert ybe._load_settings() == {"autoSave": "1"}
     assert read_config()["views"]["/d/a.yaml"]["split"] == "train"
     # the old files are removed once their contents are in config.json
-    assert not Path(ybe.RECENT_FILE).exists()
-    assert not Path(ybe.VIEW_FILE).exists()
-    assert not Path(ybe.SETTINGS_FILE).exists()
+    assert not Path(ybe.config.RECENT_FILE).exists()
+    assert not Path(ybe.config.VIEW_FILE).exists()
+    assert not Path(ybe.config.SETTINGS_FILE).exists()
 
 
 def test_corrupt_config_is_not_overwritten(clean_state):
-    Path(ybe.CONFIG_FILE).write_text("{ not json", encoding="utf-8")
+    Path(ybe.config.CONFIG_FILE).write_text("{ not json", encoding="utf-8")
     assert ybe._load_recent() == []
-    assert Path(ybe.CONFIG_FILE).read_text(encoding="utf-8") == "{ not json"
+    assert Path(ybe.config.CONFIG_FILE).read_text(encoding="utf-8") == "{ not json"
 
 
 def test_settings_mirror_last_image_cross_browser(clean_state):
@@ -990,7 +990,7 @@ def test_settings_mirror_last_image_cross_browser(clean_state):
 
 
 def test_api_config_reports_debug_flag(clean_state):
-    ybe.STATE["debug"] = True
+    ybe.state.STATE["debug"] = True
     cfg = ybe.app.test_client().get("/api/config").get_json()
     assert cfg["debug"] is True
 
@@ -1123,7 +1123,7 @@ def test_api_annotations_post_invalid_box(clean_state, tmp_path):
 
 
 def test_api_annotations_post_readonly_rejected(clean_state, tmp_path, monkeypatch):
-    ybe.STATE["readonly"] = True
+    ybe.state.STATE["readonly"] = True
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
     cfg = client.get("/api/config").get_json()
@@ -1212,7 +1212,7 @@ def test_tags_dir_fallback_sibling(clean_state):
 
 
 def test_tags_dir_override_uses_split_subfolder(clean_state):
-    ybe.STATE["tags_dir"] = "/custom/tags"
+    ybe.state.STATE["tags_dir"] = "/custom/tags"
     assert ybe._tags_dir_for("/d/images/train", "train") == "/custom/tags/train"
 
 
@@ -1226,12 +1226,12 @@ def test_api_tags_dir_sets_and_clears(clean_state, tmp_path):
     resp = client.post("/api/tags-dir", json={"tags_dir": str(custom)})
     assert resp.status_code == 200
     assert resp.get_json()["tags_dir"] == str(custom)
-    assert ybe.STATE["splits"][0]["tags_dir"] == str(custom / "train")
+    assert ybe.state.STATE["splits"][0]["tags_dir"] == str(custom / "train")
 
     resp = client.post("/api/tags-dir", json={"tags_dir": ""})
     assert resp.status_code == 200
     assert resp.get_json()["tags_dir"] is None
-    assert ybe.STATE["splits"][0]["tags_dir"] == str(root / "tags" / "train")
+    assert ybe.state.STATE["splits"][0]["tags_dir"] == str(root / "tags" / "train")
 
 
 def test_api_tags_dir_rejects_missing_folder(clean_state, tmp_path):
@@ -1251,9 +1251,9 @@ def test_tags_dir_persists_in_view_state(clean_state, tmp_path):
     client.post("/api/tags-dir", json={"tags_dir": str(custom)})
 
     # reloading the dataset re-applies the saved folder
-    ybe.STATE["tags_dir"] = None
+    ybe.state.STATE["tags_dir"] = None
     load_dataset(client, root)
-    assert ybe.STATE["tags_dir"] == str(custom)
+    assert ybe.state.STATE["tags_dir"] == str(custom)
 
 
 def test_normalize_tags_dedupes_and_cleans():
@@ -1269,7 +1269,7 @@ def test_read_tags_yaml_empty_without_dataset(clean_state, tmp_path):
 
 def test_read_tags_yaml_parses_plain_list(clean_state, tmp_path):
     (tmp_path / "data.yaml").write_text(f"nc: 1\nnames: [fire]\n", encoding="utf-8")
-    ybe.STATE["data_yaml"] = str(tmp_path / "data.yaml")
+    ybe.state.STATE["data_yaml"] = str(tmp_path / "data.yaml")
     assert ybe.read_tags_yaml() == []
     (tmp_path / "tags.yaml").write_text("- fire\n- smoke\n", encoding="utf-8")
     assert ybe.read_tags_yaml() == ["fire", "smoke"]
@@ -1277,7 +1277,7 @@ def test_read_tags_yaml_parses_plain_list(clean_state, tmp_path):
 
 def test_read_tags_yaml_ignores_nested_tags_key(clean_state, tmp_path):
     (tmp_path / "data.yaml").write_text("nc: 1\nnames: [fire]\n", encoding="utf-8")
-    ybe.STATE["data_yaml"] = str(tmp_path / "data.yaml")
+    ybe.state.STATE["data_yaml"] = str(tmp_path / "data.yaml")
     (tmp_path / "tags.yaml").write_text(
         "- fire\n- smoke\n\ntags:\n  - ignored\n", encoding="utf-8",
     )
@@ -1288,14 +1288,14 @@ def test_read_tags_yaml_ignores_nested_tags_key(clean_state, tmp_path):
 
 def test_read_tags_yaml_strips_repeated_markers(clean_state, tmp_path):
     (tmp_path / "data.yaml").write_text("nc: 1\nnames: [fire]\n", encoding="utf-8")
-    ybe.STATE["data_yaml"] = str(tmp_path / "data.yaml")
+    ybe.state.STATE["data_yaml"] = str(tmp_path / "data.yaml")
     (tmp_path / "tags.yaml").write_text("- - fire\n- smoke\n", encoding="utf-8")
     assert ybe.read_tags_yaml() == ["fire", "smoke"]
 
 
 def test_save_tags_yaml_writes_plain_list_when_missing(clean_state, tmp_path):
     (tmp_path / "data.yaml").write_text("nc: 1\nnames: [fire]\n", encoding="utf-8")
-    ybe.STATE["data_yaml"] = str(tmp_path / "data.yaml")
+    ybe.state.STATE["data_yaml"] = str(tmp_path / "data.yaml")
     path = ybe.save_tags_yaml(["fire", "smoke"])
     assert path == str(tmp_path / "tags.yaml")
     assert (tmp_path / "tags.yaml").read_text() == "- fire\n- smoke\n"
@@ -1303,7 +1303,7 @@ def test_save_tags_yaml_writes_plain_list_when_missing(clean_state, tmp_path):
 
 
 def test_save_tags_yaml_preserves_other_content(clean_state, tmp_path):
-    ybe.STATE["data_yaml"] = str(tmp_path / "data.yaml")
+    ybe.state.STATE["data_yaml"] = str(tmp_path / "data.yaml")
     (tmp_path / "tags.yaml").write_text(
         "version: 2\nnames:\n  - a\ntags:\n  - old\n", encoding="utf-8",
     )
@@ -1316,7 +1316,7 @@ def test_save_tags_yaml_preserves_other_content(clean_state, tmp_path):
 
 
 def test_save_tags_yaml_normalises_plain_list(clean_state, tmp_path):
-    ybe.STATE["data_yaml"] = str(tmp_path / "data.yaml")
+    ybe.state.STATE["data_yaml"] = str(tmp_path / "data.yaml")
     (tmp_path / "tags.yaml").write_text(
         "- fire\n- smoke\n- other\n", encoding="utf-8",
     )
@@ -1388,7 +1388,7 @@ def test_api_action_run_failure_surfaces_exit_code(clean_state, tmp_path):
 
 
 def test_api_action_run_timeout(clean_state, tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "ACTION_TIMEOUT", 0.2)
+    monkeypatch.setattr(ybe.config, "ACTION_TIMEOUT", 0.2)
     write_action(tmp_path, "Slow.yaml", "steps:\n  - sleep 5\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
@@ -1490,7 +1490,7 @@ def test_api_action_run_substitutes_app_dir(clean_state, tmp_path):
         "/api/actions/run", json={"action": "on_after_save", "target": "train/a.jpg"}
     ).get_json()
     assert payload["ok"] is True
-    assert ybe.BASE_DIR in payload["stdout"]
+    assert ybe.config.BASE_DIR in payload["stdout"]
 
 
 def test_api_action_run_sets_cwd_to_home(clean_state, tmp_path):
@@ -1526,15 +1526,15 @@ def test_api_action_run_substitutes_home_and_script_dirs(clean_state, tmp_path):
         "/api/actions/run", json={"action": "on_after_save", "target": "train/a.jpg"}
     ).get_json()
     assert payload["ok"] is True
-    assert ybe.YBX_HOME in payload["stdout"]
-    assert ybe.USER_SCRIPT_DIR in payload["stdout"]
-    assert ybe.APP_SCRIPT_DIR in payload["stdout"]
+    assert ybe.config.YBX_HOME in payload["stdout"]
+    assert ybe.config.USER_SCRIPT_DIR in payload["stdout"]
+    assert ybe.config.APP_SCRIPT_DIR in payload["stdout"]
 
 
 def test_run_command_logs_cwd(clean_state, capsys):
     state = {"stdout": [], "stderr": [], "commands": [], "exit_code": 0}
     ybe._run_command(state, "true")
-    assert f"cwd={ybe.YBX_HOME}" in capsys.readouterr().err
+    assert f"cwd={ybe.config.YBX_HOME}" in capsys.readouterr().err
 
 
 def test_api_action_run_pipe_path_is_deleted_when_done(clean_state, tmp_path):
@@ -1555,7 +1555,7 @@ def test_api_action_run_pipe_path_is_deleted_when_done(clean_state, tmp_path):
 
 
 def test_api_action_run_keep_pipe_keeps_file(clean_state, tmp_path):
-    ybe.STATE["keep_pipe"] = True
+    ybe.state.STATE["keep_pipe"] = True
     write_action(tmp_path, "Write.yaml", "steps:\n  - echo x > {PIPE_PATH}\n")
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
@@ -1588,7 +1588,7 @@ def test_api_action_run_pauses_at_client_action(clean_state, tmp_path):
     first = client.post("/api/actions/run", json={"action": "Root", "target": "train/a.jpg"}).get_json()
     assert first["ok"] is True
     assert first["client_action"] == "app_refresh_image"
-    assert first["uid"] in ybe.EXECUTIONS
+    assert first["uid"] in ybe.state.EXECUTIONS
     pipe = first["pipe_path"]
     assert Path(pipe).is_file()
     # the client reports back; the chain has no more entries, so it finishes
@@ -1597,7 +1597,7 @@ def test_api_action_run_pauses_at_client_action(clean_state, tmp_path):
     ).get_json()
     assert done["ok"] is True
     assert "client_action" not in done
-    assert first["uid"] not in ybe.EXECUTIONS
+    assert first["uid"] not in ybe.state.EXECUTIONS
     assert not Path(pipe).exists()
 
 
@@ -1697,7 +1697,7 @@ def test_api_action_run_client_action_failure_aborts(clean_state, tmp_path):
     ).get_json()
     assert payload["ok"] is False
     assert "boom" in payload["error"]
-    assert first["uid"] not in ybe.EXECUTIONS
+    assert first["uid"] not in ybe.state.EXECUTIONS
     assert not Path(pipe).exists()
 
 
@@ -1817,8 +1817,8 @@ def test_load_filters_ignores_non_yaml(clean_state):
 
 
 def test_load_filters_missing_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr(ybe, "FILTERS_DIR", str(tmp_path / "nope"))
-    monkeypatch.setattr(ybe, "USER_FILTERS_DIR", str(tmp_path / "nope-user"))
+    monkeypatch.setattr(ybe.config, "FILTERS_DIR", str(tmp_path / "nope"))
+    monkeypatch.setattr(ybe.config, "USER_FILTERS_DIR", str(tmp_path / "nope-user"))
     assert ybe.load_filters() == ({}, [])
 
 
@@ -1952,7 +1952,7 @@ def test_normalize_filter_chain_rejects_value_outside_options(clean_state):
     write_filter(clean_state, "ByClass.yaml",
                  filter_yaml("echo hi", name="ByClass",
                              arguments=[{"name": "c", "options": "[alpha, beta]"}]))
-    ybe.STATE["classes"] = ["alpha", "beta"]
+    ybe.state.STATE["classes"] = ["alpha", "beta"]
     _, error = ybe._normalize_filter_chain(
         [{"name": "ByClass", "arguments": {"c": "gamma"}}])
     assert "must be one of" in error
@@ -1962,8 +1962,8 @@ def test_normalize_filter_chain_rejects_value_outside_options(clean_state):
 
 
 def test_shipped_class_filters_use_class_token(monkeypatch):
-    monkeypatch.setattr(ybe, "FILTERS_DIR", str(Path(ybe.BASE_DIR) / "filters"))
-    monkeypatch.setattr(ybe, "USER_FILTERS_DIR", str(Path(ybe.BASE_DIR) / "nope"))
+    monkeypatch.setattr(ybe.config, "FILTERS_DIR", str(Path(ybe.config.BASE_DIR) / "filters"))
+    monkeypatch.setattr(ybe.config, "USER_FILTERS_DIR", str(Path(ybe.config.BASE_DIR) / "nope"))
     filters, errors = ybe.load_filters()
     assert errors == []
     for name in ("Contains class", "Does not contain class"):
@@ -1980,8 +1980,8 @@ def test_class_filter_script_contains_and_not_contains(clean_state, tmp_path, mo
     (labels / "a.txt").write_text("0 0.5 0.5 0.1 0.1\n", encoding="utf-8")
     (labels / "b.txt").write_text("1 0.5 0.5 0.1 0.1\n", encoding="utf-8")
     load_into_state(root)
-    ybe.STATE["classes"] = ["fire", "smoke"]
-    monkeypatch.setattr(ybe, "USER_SCRIPT_DIR", str(Path(ybe.BASE_DIR) / "scripts"))
+    ybe.state.STATE["classes"] = ["fire", "smoke"]
+    monkeypatch.setattr(ybe.config, "USER_SCRIPT_DIR", str(Path(ybe.config.BASE_DIR) / "scripts"))
 
     def class_step(extra):
         return (f'"{sys.executable}" {{USER_SCRIPT_DIR}}/class_filter.py '
@@ -2066,7 +2066,7 @@ def test_run_filter_nonzero_exit_reports_stderr(clean_state):
 
 
 def test_run_filter_timeout(clean_state, monkeypatch):
-    monkeypatch.setattr(ybe, "FILTER_TIMEOUT", 0.2)
+    monkeypatch.setattr(ybe.config, "FILTER_TIMEOUT", 0.2)
     write_script(clean_state, "slow.py", "import time\ntime.sleep(5)\n")
     write_filter(clean_state, "Slow.yaml", filter_yaml(py_step("slow.py"), name="Slow"))
     result = ybe.run_filter("Slow", "", "train", "in", "out")
@@ -2142,11 +2142,11 @@ def test_filter_chain_cleans_scratch_dir(clean_state, tmp_path):
     write_filter(clean_state, "Copy.yaml", filter_yaml(py_step("copy.py"), name="Copy"))
     result = ybe.run_filter_chain([{"name": "Copy"}], "train")
     assert result["ok"] is True and result["chain_dir"] is None
-    assert list(Path(ybe.FILTER_PIPES_DIR).glob("chain_*")) == []
+    assert list(Path(ybe.config.FILTER_PIPES_DIR).glob("chain_*")) == []
 
 
 def test_filter_chain_keeps_scratch_dir_when_asked(clean_state, tmp_path):
-    ybe.STATE["keep_filter_pipes"] = True
+    ybe.state.STATE["keep_filter_pipes"] = True
     root = make_dataset(tmp_path, splits=("train",), images=("a",))
     load_into_state(root)
     write_script(clean_state, "copy.py", FILTER_COPY)
@@ -2304,7 +2304,7 @@ def test_api_filter_reports_unknown_paths(clean_state, tmp_path):
 
 
 def test_api_filter_allowed_in_readonly(clean_state, tmp_path):
-    ybe.STATE["readonly"] = True
+    ybe.state.STATE["readonly"] = True
     root = make_dataset(tmp_path, splits=("train",), images=("a",))
     write_script(clean_state, "copy.py", FILTER_COPY)
     write_filter(clean_state, "Keep.yaml", filter_yaml(py_step("copy.py"), name="Keep"))
@@ -2322,9 +2322,9 @@ def test_api_data_clears_active_filters(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, root)
     client.post("/api/filter", json={"filters": [{"name": "Keep"}]})
-    assert ybe.STATE["active_filters"] == [{"name": "Keep", "arguments": {}}]
+    assert ybe.state.STATE["active_filters"] == [{"name": "Keep", "arguments": {}}]
     load_dataset(client, root)
-    assert ybe.STATE["active_filters"] == []
+    assert ybe.state.STATE["active_filters"] == []
 
 
 def test_api_split_reruns_active_chain(clean_state, tmp_path):
@@ -2357,8 +2357,8 @@ def test_api_split_filter_failure_keeps_state(clean_state, tmp_path):
     client.post("/api/filter", json={"filters": [{"name": "Pick"}]})
     resp = client.post("/api/split", json={"split": "val"})
     assert resp.status_code == 400
-    assert ybe.STATE["active_split"] is None  # unchanged
-    assert ybe.STATE["active_filters"] == [{"name": "Pick", "arguments": {}}]
+    assert ybe.state.STATE["active_split"] is None  # unchanged
+    assert ybe.state.STATE["active_filters"] == [{"name": "Pick", "arguments": {}}]
 
 
 def test_api_images_rescan_reruns_chain(clean_state, tmp_path):
@@ -2415,11 +2415,11 @@ def test_resume_restores_saved_view(clean_state, tmp_path):
     client.post("/api/filter", json={"filters": [{"name": "OnlyA"}]})
     # simulate a server restart: in-memory state resets, then resume reopens the
     # last dataset (RECENT_FILE persists) and must restore its split/filter chain
-    ybe.STATE.clear()
-    ybe.STATE.update(DEFAULT_STATE)
+    ybe.state.STATE.clear()
+    ybe.state.STATE.update(DEFAULT_STATE)
     assert ybe._resume_last_dataset() == str(root / "data.yaml")
-    assert ybe.STATE["active_split"] == "train"
-    assert ybe.STATE["active_filters"] == [{"name": "OnlyA", "arguments": {}}]
+    assert ybe.state.STATE["active_split"] == "train"
+    assert ybe.state.STATE["active_filters"] == [{"name": "OnlyA", "arguments": {}}]
 
 
 def test_restore_view_accepts_legacy_single_filter(clean_state, tmp_path):
@@ -2432,7 +2432,7 @@ def test_restore_view_accepts_legacy_single_filter(clean_state, tmp_path):
     views[str(root / "data.yaml")] = {"split": "train", "filter": "OnlyA"}
     write_config(views=views)
     ybe._restore_view(str(root / "data.yaml"))
-    assert ybe.STATE["active_filters"] == [{"name": "OnlyA", "arguments": {}}]
+    assert ybe.state.STATE["active_filters"] == [{"name": "OnlyA", "arguments": {}}]
 
 
 def test_restore_view_accepts_legacy_name_list(clean_state, tmp_path):
@@ -2445,7 +2445,7 @@ def test_restore_view_accepts_legacy_name_list(clean_state, tmp_path):
     views[str(root / "data.yaml")] = {"split": "train", "filters": ["OnlyA"]}
     write_config(views=views)
     ybe._restore_view(str(root / "data.yaml"))
-    assert ybe.STATE["active_filters"] == [{"name": "OnlyA", "arguments": {}}]
+    assert ybe.state.STATE["active_filters"] == [{"name": "OnlyA", "arguments": {}}]
 
 
 # --------------------------------------------------------------------------- #
@@ -2479,17 +2479,17 @@ def test_presence_bye_removes_client(clean_state):
     client.post("/api/presence", json={"cid": "b"})
     data = client.post("/api/presence", json={"cid": "a", "bye": True}).get_json()
     assert data["count"] == 1
-    assert "a" not in ybe.CLIENTS
-    assert "b" in ybe.CLIENTS
+    assert "a" not in ybe.state.CLIENTS
+    assert "b" in ybe.state.CLIENTS
 
 
 def test_presence_prunes_stale_clients(clean_state):
-    ybe.CLIENTS["old"] = time.monotonic() - (ybe.PRESENCE_TTL + 1)
+    ybe.state.CLIENTS["old"] = time.monotonic() - (ybe.state.PRESENCE_TTL + 1)
     client = ybe.app.test_client()
     data = client.post("/api/presence", json={"cid": "new"}).get_json()
     assert data["count"] == 1
-    assert "old" not in ybe.CLIENTS
-    assert "new" in ybe.CLIENTS
+    assert "old" not in ybe.state.CLIENTS
+    assert "new" in ybe.state.CLIENTS
 
 
 def test_presence_requires_client_id(clean_state):
@@ -2552,7 +2552,7 @@ def test_check_for_update_uses_fresh_cache(clean_state, monkeypatch):
         return "9.9.9"
 
     monkeypatch.setattr(ybe, "fetch_latest_version", fake)
-    info = ybe.check_for_update(now=1000 + ybe.UPDATE_CHECK_INTERVAL - 1)
+    info = ybe.check_for_update(now=1000 + ybe.config.UPDATE_CHECK_INTERVAL - 1)
     assert info["latest_version"] == "2.3.0"
     assert calls == []
 
@@ -2563,7 +2563,7 @@ def test_check_for_update_refetches_after_interval(clean_state, monkeypatch):
         "checked_at": 1000, "current_version": "2.2.0", "latest_version": "2.3.0",
     }), encoding="utf-8")
     monkeypatch.setattr(ybe, "fetch_latest_version", lambda timeout=None: "2.4.0")
-    info = ybe.check_for_update(now=1000 + ybe.UPDATE_CHECK_INTERVAL + 1)
+    info = ybe.check_for_update(now=1000 + ybe.config.UPDATE_CHECK_INTERVAL + 1)
     assert info["latest_version"] == "2.4.0"
 
 
@@ -2634,7 +2634,7 @@ def test_api_update_check_post_forces_refresh(clean_state, monkeypatch):
 def test_configure_home_repoints_update_file(clean_state, tmp_path):
     target = tmp_path / "elsewhere"
     ybe.configure_home(str(target))
-    assert ybe.UPDATE_CHECK_FILE == str(target / ".update_check.json")
+    assert ybe.config.UPDATE_CHECK_FILE == str(target / ".update_check.json")
 
 
 # --------------------------------------------------------------------------- #
@@ -2786,14 +2786,14 @@ def test_api_version_status():
     assert ybe.api_version_status(None) == "outdated"
     assert ybe.api_version_status("1") == "outdated"
     assert ybe.api_version_status(0) == "outdated"
-    assert ybe.api_version_status(ybe.EXTENSION_API_VERSION) == "current"
-    assert ybe.api_version_status(ybe.EXTENSION_API_VERSION + 1) == "newer"
+    assert ybe.api_version_status(ybe.config.EXTENSION_API_VERSION) == "current"
+    assert ybe.api_version_status(ybe.config.EXTENSION_API_VERSION + 1) == "newer"
 
 
 def test_dump_action_file_round_trips():
     text = ybe._dump_action_file(["rm {IMAGE_PATH}"], ["app_refresh_image"])
     parsed = ybe._parse_action_file(text)
-    assert parsed["api_version"] == ybe.EXTENSION_API_VERSION
+    assert parsed["api_version"] == ybe.config.EXTENSION_API_VERSION
     assert parsed["steps"] == ["rm {IMAGE_PATH}"]
     assert parsed["after_success"] == ["app_refresh_image"]
 
@@ -2807,7 +2807,7 @@ def test_dump_filter_file_round_trips():
         {"name": "reverse", "required": True, "default": None, "options": None},
     ], ["echo {EVERY}"])
     parsed = ybe._parse_filter_file(text)
-    assert parsed["api_version"] == ybe.EXTENSION_API_VERSION
+    assert parsed["api_version"] == ybe.config.EXTENSION_API_VERSION
     assert parsed["description"] == "demo: x"
     assert parsed["arguments"] == [
         {"name": "every", "required": False, "default": "2", "options": ["2", "3"]},
@@ -2825,9 +2825,9 @@ def test_safe_extension_name():
 
 def test_bump_api_version_text_preserves_comments():
     bumped = ybe._bump_api_version_text("# note\nname: x\nsteps:\n  - a\n")
-    assert bumped.startswith(f"# note\napi_version: {ybe.EXTENSION_API_VERSION}\n")
+    assert bumped.startswith(f"# note\napi_version: {ybe.config.EXTENSION_API_VERSION}\n")
     replaced = ybe._bump_api_version_text("api_version: 9\nsteps:\n  - a\n")
-    assert f"api_version: {ybe.EXTENSION_API_VERSION}" in replaced
+    assert f"api_version: {ybe.config.EXTENSION_API_VERSION}" in replaced
     assert "api_version: 9" not in replaced
 
 
@@ -2843,7 +2843,7 @@ def test_api_action_save_writes_user_file(clean_state):
     assert [a["name"] for a in ybe.load_actions()] == ["Remove box"]
     assert cfg["action_defs"][0]["source"] == "user"
     assert cfg["action_defs"][0]["status"] == "current"
-    assert f"api_version: {ybe.EXTENSION_API_VERSION}" in path.read_text(encoding="utf-8")
+    assert f"api_version: {ybe.config.EXTENSION_API_VERSION}" in path.read_text(encoding="utf-8")
 
 
 def test_api_action_save_rejects_bad_name_and_empty(clean_state):
@@ -2865,7 +2865,7 @@ def test_api_action_save_overwrite_conflict(clean_state):
 
 
 def test_api_action_save_readonly(clean_state):
-    ybe.STATE["readonly"] = True
+    ybe.state.STATE["readonly"] = True
     resp = ybe.app.test_client().post(
         "/api/actions/save", json={"name": "X", "steps": ["echo"]})
     assert resp.status_code == 403
@@ -3036,10 +3036,10 @@ def test_api_config_exposes_extension_builder_data(clean_state):
     write_hook(clean_state, "on_after_save.yaml", "steps:\n  - echo hi\n")
     write_filter(clean_state, "Odd.yaml", filter_yaml("echo hi", name="Odd"))
     cfg = ybe.app.test_client().get("/api/config").get_json()
-    assert cfg["extension_api_version"] == ybe.EXTENSION_API_VERSION
+    assert cfg["extension_api_version"] == ybe.config.EXTENSION_API_VERSION
     assert "IMAGE_PATH" in {p["name"] for p in cfg["placeholders"]["action"]}
     assert "INPUT_PIPE" in {p["name"] for p in cfg["placeholders"]["filter"]}
-    assert cfg["hook_events"] == list(ybe.HOOK_EVENTS)
+    assert cfg["hook_events"] == list(ybe.config.HOOK_EVENTS)
     assert "app_save" in cfg["app_actions"]
     assert "backend_rescan_images" in cfg["backend_actions"]
 
@@ -3079,10 +3079,10 @@ def test_api_extension_file_save_bumps_and_preserves_comments(clean_state):
         "kind": "action", "name": "Remove", "text": path.read_text(encoding="utf-8"),
     }).get_json()
     assert data["ok"] and data["status"] == "current"
-    assert data["api_version"] == ybe.EXTENSION_API_VERSION
+    assert data["api_version"] == ybe.config.EXTENSION_API_VERSION
     written = path.read_text(encoding="utf-8")
     assert "# keep me" in written
-    assert f"api_version: {ybe.EXTENSION_API_VERSION}" in written
+    assert f"api_version: {ybe.config.EXTENSION_API_VERSION}" in written
 
 
 def test_api_extension_file_save_shipped_creates_user_override(clean_state):
@@ -3103,7 +3103,7 @@ def test_api_extension_file_save_rejects_empty_and_newer(clean_state):
     }).status_code == 400
 
     write_action(clean_state, "Future.yaml",
-                 f"api_version: {ybe.EXTENSION_API_VERSION + 1}\nsteps:\n  - echo hi\n")
+                 f"api_version: {ybe.config.EXTENSION_API_VERSION + 1}\nsteps:\n  - echo hi\n")
     assert client.post("/api/extensions/file", json={
         "kind": "action", "name": "Future", "text": "steps:\n  - echo hi\n",
     }).status_code == 400
@@ -3112,7 +3112,7 @@ def test_api_extension_file_save_rejects_empty_and_newer(clean_state):
 
 
 def test_api_extension_file_save_readonly(clean_state):
-    ybe.STATE["readonly"] = True
+    ybe.state.STATE["readonly"] = True
     resp = ybe.app.test_client().post("/api/extensions/file", json={
         "kind": "action", "name": "X", "text": "steps:\n  - a\n"})
     assert resp.status_code == 403
@@ -3159,7 +3159,7 @@ def test_auth_on_when_store_has_user(clean_state):
 
 def test_password_is_stored_hashed(clean_state):
     ybe.set_user("alice", "s3cret")
-    raw = Path(ybe.USERS_FILE).read_text(encoding="utf-8")
+    raw = Path(ybe.config.USERS_FILE).read_text(encoding="utf-8")
     assert "s3cret" not in raw
     assert json.loads(raw)["users"]["alice"] != "s3cret"
     assert ybe.verify_user("alice", "s3cret")
@@ -3200,22 +3200,22 @@ def test_set_user_updates_password(clean_state):
 
 def test_users_persist_across_reload(clean_state):
     ybe.set_user("alice", "s3cret")
-    ybe.USERS = {}  # simulate a fresh process
+    ybe.state.USERS = {}  # simulate a fresh process
     ybe.load_users()
     assert ybe.auth_enabled()
     assert ybe.verify_user("alice", "s3cret")
 
 
 def test_load_users_tolerates_corrupt_file(clean_state):
-    Path(ybe.USERS_FILE).write_text("{ not json", encoding="utf-8")
-    ybe.USERS = {"stale": "x"}
+    Path(ybe.config.USERS_FILE).write_text("{ not json", encoding="utf-8")
+    ybe.state.USERS = {"stale": "x"}
     ybe.load_users()
-    assert ybe.USERS == {}
+    assert ybe.state.USERS == {}
 
 
 def test_users_file_is_owner_only(clean_state):
     ybe.set_user("alice", "s3cret")
-    assert os.stat(ybe.USERS_FILE).st_mode & 0o777 == 0o600
+    assert os.stat(ybe.config.USERS_FILE).st_mode & 0o777 == 0o600
 
 
 def test_session_invalid_after_user_removed(clean_state):
@@ -3224,7 +3224,7 @@ def test_session_invalid_after_user_removed(clean_state):
     client = ybe.app.test_client()
     client.post("/api/login", json={"username": "alice", "password": "s3cret"})
     assert client.get("/api/config").status_code == 200
-    del ybe.USERS["alice"]
+    del ybe.state.USERS["alice"]
     assert client.get("/api/config").status_code == 401
 
 
@@ -3238,7 +3238,7 @@ def test_login_is_noop_when_auth_off(clean_state):
 def test_ensure_default_admin_seeds_when_empty(clean_state):
     assert ybe.ensure_default_admin() is True
     assert ybe.verify_user("admin", "admin")
-    assert Path(ybe.USERS_FILE).is_file()
+    assert Path(ybe.config.USERS_FILE).is_file()
 
 
 def test_ensure_default_admin_keeps_existing_users(clean_state):

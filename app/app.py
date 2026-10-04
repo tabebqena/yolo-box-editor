@@ -25,7 +25,6 @@ with the `images` path segment replaced by `labels`
 import argparse
 import getpass
 import json
-import logging
 import os
 import re
 import secrets
@@ -71,277 +70,13 @@ from ybe.parsing import (
     parse_shortcut_line,
 )
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # the shipped app/ directory
-
-
-def _resolve_home():
-    """The user folder: `--home` (applied later) > $YBX_HOME > parent of app.py.
-
-    The parent of `app.py` is the user root in both an installed copy
-    (`<root>/app/app.py`) and a git clone (`<repo>/app/app.py`), so both behave
-    identically without extra flags.
-    """
-    env = os.environ.get("YBX_HOME")
-    if env:
-        return os.path.abspath(os.path.expanduser(env))
-    return os.path.dirname(BASE_DIR)
-
-
-YBX_HOME = _resolve_home()
-
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
-
-# Built-in, shipped files (inside app/); replaced wholesale on upgrade.
-ACTIONS_DIR = os.path.join(BASE_DIR, "actions")  # one YAML file per action
-HOOKS_DIR = os.path.join(BASE_DIR, "hooks")  # one YAML file per event hook
-FILTERS_DIR = os.path.join(BASE_DIR, "filters")  # one YAML file per filter
-APP_SCRIPT_DIR = os.path.join(BASE_DIR, "scripts")  # shipped helper programs
-SHORTCUTS_FILE = os.path.join(BASE_DIR, "shortcuts.txt")
-VERSION_FILE = os.path.join(BASE_DIR, "VERSION")  # shipped app version
-CHANGES_FILE = os.path.join(BASE_DIR, "CHANGES")  # per-version "what's new" notes
-
-# User files (inside YBX_HOME); read after the built-ins and win on a clash.
-USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
-USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
-USER_FILTERS_DIR = os.path.join(YBX_HOME, "filters")
-USER_SCRIPT_DIR = os.path.join(YBX_HOME, "scripts")
-USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
-# One JSON file holds all per-user config: recent datasets, per-dataset views
-# (split/filter/tags/disabled + last image) and cross-browser UI settings. It
-# sits in YBX_HOME, outside `app/`, so app updates never touch it.
-CONFIG_FILE = os.path.join(YBX_HOME, "config.json")
-# The update-check cache is a throwaway background result, so it stays its own
-# file; `_load_update_cache` / `check_for_update` own it.
-UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")
-# Legacy per-purpose files, read once to migrate into CONFIG_FILE and then
-# removed. Kept as module constants so tests can redirect them.
-RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
-VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")  # active split/filter per dataset
-SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")  # cross-browser UI prefs
-# Login accounts: {"version": 1, "users": {"name": "<password_hash>"}}. A
-# non-empty store turns login on; the file is owner-only (0600) because it holds
-# password hashes. Managed with --create-user / --list-users and seeded with
-# admin/admin on first run (ensure_default_admin).
-USERS_FILE = os.path.join(YBX_HOME, "users.json")
-
-# Update check: compare the shipped VERSION with the newest GitHub one. A check
-# is skipped while the cache is fresh (< UPDATE_CHECK_INTERVAL) and the running
-# version is unchanged; the start thread polls, so the network is only hit after
-# the interval has passed.
-UPDATE_REPO = "tabebqena/yolo-box-editor"
-UPDATE_API = f"https://api.github.com/repos/{UPDATE_REPO}"
-UPDATE_RAW = f"https://raw.githubusercontent.com/{UPDATE_REPO}"
-UPDATE_CHECK_INTERVAL = 7 * 24 * 60 * 60  # re-check at most once a week
-UPDATE_POLL_INTERVAL = 6 * 60 * 60  # how often the start thread wakes up
-UPDATE_CHECK_TIMEOUT = 5  # seconds per network request
-
-# Per-run {PIPE_PATH} files live in the system temp dir (never in the repo).
-PIPE_DIR = os.path.join(tempfile.gettempdir(), "yolo-box-editor-pipes")
-# Per-run filter-chain scratch dirs (input/output pipes) live here too.
-FILTER_PIPES_DIR = os.path.join(tempfile.gettempdir(), "yolo-box-editor-filter-pipes")
-
-
-def configure_home(path):
-    """Point the user folders at `path` (the `--home` override)."""
-    global YBX_HOME, USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR
-    global USER_SCRIPT_DIR, USER_SHORTCUTS_FILE, RECENT_FILE, VIEW_FILE
-    global SETTINGS_FILE, UPDATE_CHECK_FILE, CONFIG_FILE, USERS_FILE
-    YBX_HOME = os.path.abspath(os.path.expanduser(path))
-    USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
-    USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
-    USER_FILTERS_DIR = os.path.join(YBX_HOME, "filters")
-    USER_SCRIPT_DIR = os.path.join(YBX_HOME, "scripts")
-    USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
-    CONFIG_FILE = os.path.join(YBX_HOME, "config.json")
-    RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
-    VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")
-    SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")
-    UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")
-    USERS_FILE = os.path.join(YBX_HOME, "users.json")
-
-
-def ensure_user_dirs():
-    """Create the user folders when missing, so the home is usable right away."""
-    for dirpath in (USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR, USER_SCRIPT_DIR):
-        try:
-            os.makedirs(dirpath, exist_ok=True)
-        except OSError:
-            pass
-
-
-# --------------------------------------------------------------------------- #
-# logging (stderr by default; a file when daemonized with --log-file)
-# --------------------------------------------------------------------------- #
-class _SkipPresenceFilter(logging.Filter):
-    """Drop the frequent `/api/presence` access-log lines (client heartbeat)."""
-
-    def filter(self, record):
-        try:
-            message = record.getMessage()
-        except Exception:  # noqa: BLE001 - never let logging fail on formatting
-            return True
-        return "/api/presence" not in message
-
-
-def setup_logging(log_file=None, debug=False):
-    """Configure logging; with `log_file`, daemon-mode output goes to that file.
-
-    Returns the app logger. Werkzeug's access logger is routed through the same
-    handler, minus the `/api/presence` heartbeat.
-    """
-    level = logging.DEBUG if debug else logging.INFO
-    root = logging.getLogger()
-    root.setLevel(level)
-    for handler in list(root.handlers):
-        root.removeHandler(handler)
-    formatter = logging.Formatter(
-        "%(asctime)s %(levelname)-7s %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    handler = None
-    if log_file:
-        try:
-            os.makedirs(os.path.dirname(os.path.abspath(log_file)), exist_ok=True)
-            handler = logging.FileHandler(log_file, encoding="utf-8")
-        except OSError:
-            handler = None
-    if handler is None:
-        handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(formatter)
-    root.addHandler(handler)
-
-    werkzeug = logging.getLogger("werkzeug")
-    werkzeug.setLevel(level)
-    werkzeug.handlers = []  # use the root handler instead of its own console one
-    werkzeug.propagate = True
-    werkzeug.filters = [f for f in werkzeug.filters if not isinstance(f, _SkipPresenceFilter)]
-    werkzeug.addFilter(_SkipPresenceFilter())
-
-    return logging.getLogger("ybe")
-
-# Built-in app actions; may be rebound in shortcuts.txt but cannot be renamed.
-APP_ACTIONS = {
-    "app_prev",
-    "app_next",
-    "app_del",
-    "app_drop",
-    "app_save",
-    "app_undo",
-    "app_redo",
-    "app_ch_box",
-    "app_sel_box",
-    "app_sel_points",
-    "app_escape",
-    "app_show_hide",
-    "app_fix_box",
-    "app_force_draw",
-    "app_refresh_images_list",
-    "app_reload_images_list",
-    "app_refresh_image",
-}
-
-# Server-side built-in actions (name -> callable) usable as a `steps` /
-# `after_success` entry. They run inline on the backend, unlike `app_*` which
-# pauses for the UI, so an action can ask the server to change its own state
-# (e.g. re-scan the image folders) even when no browser is driving the run.
-# Defined here so `_resolve_entry` / `_advance_execution` can see it; the actual
-# callables are registered next to `_rescan_images` below.
-BACKEND_ACTION_NAMES = {"backend_rescan_images"}
-
-# Shipped "tip of the day" ideas, shown once per day (per browser). The browser
-# remembers which it has seen so a new one appears each day until they cycle.
-TIPS = [
-    "Draw a box by dragging on the image; press Esc to drop a box you just drew by mistake.",
-    "Select a box, then Tab cycles through its class and cx/cy/w/h fields; Esc leaves the row.",
-    "Shift selects the next box, resuming from the last one you had active.",
-    "Alt+1 … Alt+9 toggles the matching tag from tags.yaml — no mouse needed.",
-    "Right-click a tag badge? No — just click any badge to toggle it on or off.",
-    "Settings → Layout lets every widget (Tags, Boxes, Actions, Navigation, Save) float or dock to any panel.",
-    "Drag a floating window by its title bar; the L/T/R/B buttons dock it to an edge.",
-    "Resize the side, dock and bottom panels by dragging their divider — the size is remembered.",
-    "Filters (Settings → Filters) narrow the image list; stack up to eight of them top to bottom.",
-    "Actions and hooks live in your user folder; a hook runs on events like on_after_save.",
-    "Turn on Auto-save (Settings → General) so Prev/Next never asks you to save.",
-    "Read-only mode (--readonly) is a safe way to browse a dataset without changing labels.",
-    "Save (S) writes only when there are changes; Undo (Z) and Redo (Y) cover every edit.",
-    "After an external tool edits the current image, use app_refresh_image to reload it in place.",
-    "New tag names are added to tags.yaml when you save the image.",
-    "Paste the path to your data.yaml in Settings → Dataset, or use the Recent… dropdown.",
-    "Click a box on the image to select it; its row in the Boxes list becomes editable.",
-    "Type a number in the counter and press Enter to jump straight to that image.",
-    "The split dropdown switches between train / val / test, or shows all of them together.",
-    "Your last image is remembered per split, so switching back to a split returns you to it.",
-    "Read-only mode is a safe way to look around: it never writes labels or tags.",
-    "Every shortcut can be changed in shortcuts.txt — no code editing needed.",
-    "Settings → Updates checks GitHub and tells you when a newer version is available.",
-    "The ⚙ button opens Settings; Esc closes any dialog.",
-    "Your UI settings are saved on the server too, so a new browser starts with your layout.",
-    "Hooks run on events like on_after_save; see docs/actions-and-hooks.md for examples.",
-]
-
-MAX_RECENT = 10
-ACTION_TIMEOUT = 120  # seconds
-FILTER_TIMEOUT = 120  # seconds
-MAX_CASCADE_DEPTH = 8  # max actions run by one execution (root + after_success)
-# In a steps/after_success entry, another action is named `action_<Name>` so a
-# bare action name can never be confused with a shell command.
-ACTION_REF_PREFIX = "action_"
-
-# Event hooks live in the hooks/ folder and fire on app events (never from a
-# toolbar button or a shortcut). A hook file is named `on_<event>.yaml`; when the
-# file name does not resolve to a known event, its `event_name:` key is used.
-HOOK_PREFIX = "on_"
-HOOK_EVENTS = (
-    "images_list_loaded",
-    "image_loaded",
-    "before_prev",
-    "before_next",
-    "prev",
-    "next",
-    "before_save",
-    "after_save",
-    "box_created",
-    "box_deleted",
-    "box_edited",
-)
-
-# The extension YAML format version. Bump it only when the action/hook/filter
-# file format changes: the UI compares a file's `api_version:` against this to
-# flag files that predate (or postdate) the format it understands.
-EXTENSION_API_VERSION = 1
-
-# Placeholder catalogs offered by the UI's click-to-insert palette. Keep them in
-# sync with the values built in `api_action_run` and `_filter_placeholder_values`
-# (and with the tables in docs/actions-and-hooks.md and docs/filters.md).
-ACTION_PLACEHOLDERS = (
-    ("IMAGE_PATH", "path of the current image"),
-    ("LABEL_PATH", "path of the current image's label file (may not exist yet)"),
-    ("DATASET_PATH", "root path of the loaded dataset"),
-    ("DATA_YAML_PATH", "path of the loaded data.yaml"),
-    ("IMAGE_INDEX", "1-based position of the current image in the list"),
-    ("APP_DIR", "the shipped code folder (app/)"),
-    ("HOME_DIR", "your user folder (the working directory of every run)"),
-    ("APP_SCRIPT_DIR", "the shipped helper scripts (app/scripts/)"),
-    ("USER_SCRIPT_DIR", "your helper scripts (<home>/scripts/)"),
-    ("PYTHON", "the Python interpreter running the app"),
-    ("PIPE_PATH", "the per-run scratch file shared by the run's steps"),
-)
-FILTER_PLACEHOLDERS = (
-    ("DATA_YAML_PATH", "path of the loaded data.yaml"),
-    ("DATASET_PATH", "root path of the loaded dataset"),
-    ("SPLIT", "active split (train/val/test) or empty on All splits"),
-    ("INPUT_PIPE", "file with the candidate image paths (one per line)"),
-    ("OUTPUT_PIPE", "file to write the kept image paths to"),
-    ("APP_DIR", "the shipped code folder (app/)"),
-    ("HOME_DIR", "your user folder (the working directory of every run)"),
-    ("APP_SCRIPT_DIR", "the shipped helper scripts (app/scripts/)"),
-    ("USER_SCRIPT_DIR", "your helper scripts (<home>/scripts/)"),
-    ("PYTHON", "the Python interpreter running the app"),
-)
+from ybe import config, state
+from ybe.config import configure_home, ensure_user_dirs
+from ybe.logging_setup import _SkipPresenceFilter, setup_logging
 
 
 def _placeholder_payload(catalog):
-    """`ACTION_PLACEHOLDERS` -> the UI shape `{token, description}`."""
+    """`config.ACTION_PLACEHOLDERS` -> the UI shape `{token, description}`."""
     return [
         {"token": "{" + name + "}", "name": name, "description": desc}
         for name, desc in catalog
@@ -349,77 +84,41 @@ def _placeholder_payload(catalog):
 
 
 def api_version_status(version):
-    """Classify a file's `api_version` against `EXTENSION_API_VERSION`.
+    """Classify a file's `api_version` against `config.EXTENSION_API_VERSION`.
 
     Returns "current", "outdated" (missing or lower) or "newer" (higher); a
     non-integer value counts as outdated.
     """
     if not isinstance(version, int):
         return "outdated"
-    if version < EXTENSION_API_VERSION:
+    if version < config.EXTENSION_API_VERSION:
         return "outdated"
-    if version > EXTENSION_API_VERSION:
+    if version > config.EXTENSION_API_VERSION:
         return "newer"
     return "current"
 
 
 def is_hook_name(name):
     """True when `name` looks like a hook name (`on_*`)."""
-    return bool(name) and name.startswith(HOOK_PREFIX)
+    return bool(name) and name.startswith(config.HOOK_PREFIX)
 
 
 app = Flask(
     __name__,
-    template_folder=os.path.join(BASE_DIR, "templates"),
-    static_folder=os.path.join(BASE_DIR, "static"),
+    template_folder=os.path.join(config.BASE_DIR, "templates"),
+    static_folder=os.path.join(config.BASE_DIR, "static"),
 )
 # Signs the login session cookie. Random per process: a restart (or the debug
 # reloader) invalidates existing sessions, which is fine for a single instance.
 # Tests never rely on a stable key.
 app.secret_key = secrets.token_hex(32)
 
-# Persistent login accounts as a {username: password_hash} map, loaded from
-# USERS_FILE at startup. Empty (the default) means login is off; any entry turns
-# it on. Passwords are only ever stored hashed.
-USERS = {}
-
-STATE = {
-    "data_yaml": None,
-    "dataset_path": None,
-    "splits": [],   # [{"name": "train", "images_dir": ..., "labels_dir": ...}]
-    "images": [],   # flat navigation list: [{"split": "train", "name": "a.jpg"}]
-    "active_split": None,  # None = all splits; or a single split name
-    "active_filters": [],   # chain of {name, arguments} from filters/ ([] = none)
-    "filter_images": None,  # cached filter-chain result (list of {split, name})
-    "filter_error": None,   # last filter failure/notice message (shown in the UI)
-    "classes": [],  # resolved class names from data.yaml `names`
-    "tags_dir": None,  # per-dataset override for the tags folder (None = derive)
-    "readonly": False,
-    "debug": False,  # --debug: the UI logs verbose messages to the browser console
-    "keep_pipe": False,  # --keep-pipe: do not delete the {PIPE_PATH} file after a run
-    "keep_filter_pipes": False,  # --keep-filter-pipes: keep the filter scratch dir
-    "no_update_check": False,  # --no-update-check: never check GitHub for updates
-}
-
-# In-flight action executions, paused at a client-side (app_*) after_success
-# entry: uid -> execution state (see _begin_execution / _advance_execution). The
-# backend owns the whole chain, so it also owns the run's {PIPE_PATH} file.
-EXECUTIONS = {}
-
-# Connected clients, for the multi-tab / multi-client presence warning: a client
-# id (kept per browser tab by the UI) -> last-seen monotonic timestamp. A client
-# that stops pinging /api/presence for PRESENCE_TTL seconds is considered gone.
-# Presence is informational only: it never blocks or changes any other route.
-CLIENTS = {}
-CLIENTS_LOCK = threading.Lock()
-PRESENCE_TTL = 15  # seconds
-
 
 # --------------------------------------------------------------------------- #
 # helpers
 # --------------------------------------------------------------------------- #
 def is_image(name):
-    return os.path.splitext(name)[1].lower() in IMAGE_EXTS
+    return os.path.splitext(name)[1].lower() in config.IMAGE_EXTS
 
 
 # --------------------------------------------------------------------------- #
@@ -450,7 +149,7 @@ def _normalize_config(data):
         return cfg
     recent = data.get("recent")
     if isinstance(recent, list):
-        cfg["recent"] = [p for p in recent if isinstance(p, str)][:MAX_RECENT]
+        cfg["recent"] = [p for p in recent if isinstance(p, str)][:config.MAX_RECENT]
     views = data.get("views")
     if isinstance(views, dict):
         cfg["views"] = {k: v for k, v in views.items() if isinstance(v, dict)}
@@ -463,22 +162,22 @@ def _normalize_config(data):
 def _migrate_legacy_config():
     """Build a config from the old per-purpose files (read once)."""
     cfg = _default_config()
-    recent = _read_json_file(RECENT_FILE)
+    recent = _read_json_file(config.RECENT_FILE)
     if isinstance(recent, list):
-        cfg["recent"] = [p for p in recent if isinstance(p, str)][:MAX_RECENT]
-    views = _read_json_file(VIEW_FILE)
+        cfg["recent"] = [p for p in recent if isinstance(p, str)][:config.MAX_RECENT]
+    views = _read_json_file(config.VIEW_FILE)
     if isinstance(views, dict):
         cfg["views"] = {k: v for k, v in views.items() if isinstance(v, dict)}
-    settings = _read_json_file(SETTINGS_FILE)
+    settings = _read_json_file(config.SETTINGS_FILE)
     if isinstance(settings, dict):
         cfg["settings"] = dict(settings)
     return cfg
 
 
 def _remove_legacy_files():
-    """Delete the old files once their contents live in CONFIG_FILE."""
-    for path in (RECENT_FILE, VIEW_FILE, SETTINGS_FILE):
-        if path and path != CONFIG_FILE:
+    """Delete the old files once their contents live in config.CONFIG_FILE."""
+    for path in (config.RECENT_FILE, config.VIEW_FILE, config.SETTINGS_FILE):
+        if path and path != config.CONFIG_FILE:
             try:
                 os.remove(path)
             except OSError:
@@ -488,12 +187,12 @@ def _remove_legacy_files():
 def _write_config(cfg):
     """Write the config atomically (temp file + rename); never raises."""
     try:
-        os.makedirs(os.path.dirname(CONFIG_FILE) or ".", exist_ok=True)
-        tmp = CONFIG_FILE + ".tmp"
+        os.makedirs(os.path.dirname(config.CONFIG_FILE) or ".", exist_ok=True)
+        tmp = config.CONFIG_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=2)
             f.write("\n")
-        os.replace(tmp, CONFIG_FILE)
+        os.replace(tmp, config.CONFIG_FILE)
     except OSError:
         pass
 
@@ -505,7 +204,7 @@ def _load_config_unlocked():
     still be fixed by hand.
     """
     try:
-        with open(CONFIG_FILE, encoding="utf-8") as f:
+        with open(config.CONFIG_FILE, encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
         cfg = _migrate_legacy_config()
@@ -537,11 +236,11 @@ def _load_recent():
 
 
 def _push_recent(path):
-    """Record an opened data.yaml, newest first, capped at MAX_RECENT."""
+    """Record an opened data.yaml, newest first, capped at config.MAX_RECENT."""
     def mutate(cfg):
         recents = [p for p in cfg["recent"] if p != path]
         recents.insert(0, path)
-        cfg["recent"] = recents[:MAX_RECENT]
+        cfg["recent"] = recents[:config.MAX_RECENT]
 
     return _update_config(mutate)["recent"]
 
@@ -566,7 +265,7 @@ def _save_view(data_yaml, split, active_filters):
             entry = {}
         entry["split"] = split
         entry["filters"] = list(active_filters or [])
-        entry["tags_dir"] = STATE.get("tags_dir")
+        entry["tags_dir"] = state.STATE.get("tags_dir")
         cfg["views"][data_yaml] = entry
 
     _update_config(mutate)
@@ -585,7 +284,7 @@ def _disabled_extensions():
     Returns `{"action": set, "hook": set}`; empty when no dataset is loaded or
     nothing was disabled.
     """
-    data_yaml = STATE.get("data_yaml")
+    data_yaml = state.STATE.get("data_yaml")
     view = _load_views().get(data_yaml) if data_yaml else None
     disabled = view.get("disabled") if isinstance(view, dict) else None
     disabled = disabled if isinstance(disabled, dict) else {}
@@ -602,7 +301,7 @@ def _set_extension_disabled(kind, name, disabled):
     dataset is loaded. Read-only is not consulted: this is a view preference, not
     a dataset write.
     """
-    data_yaml = STATE.get("data_yaml")
+    data_yaml = state.STATE.get("data_yaml")
     if not data_yaml:
         return None
     key = DISABLED_KIND_KEYS[kind]
@@ -631,9 +330,9 @@ def _restore_tags_dir(data_yaml):
     """Apply a dataset's remembered tags folder and re-derive the split paths."""
     view = _load_views().get(data_yaml) if data_yaml else None
     tags_dir = view.get("tags_dir") if isinstance(view, dict) else None
-    STATE["tags_dir"] = tags_dir if tags_dir and os.path.isdir(tags_dir) else None
-    if STATE["splits"]:
-        STATE["splits"] = scan_splits()
+    state.STATE["tags_dir"] = tags_dir if tags_dir and os.path.isdir(tags_dir) else None
+    if state.STATE["splits"]:
+        state.STATE["splits"] = scan_splits()
 
 
 def _load_settings():
@@ -672,8 +371,8 @@ def _restore_view(data_yaml):
         return
     _restore_tags_dir(data_yaml)
     split = view.get("split")
-    if split in {s["name"] for s in STATE["splits"]}:
-        STATE["active_split"] = split
+    if split in {s["name"] for s in state.STATE["splits"]}:
+        state.STATE["active_split"] = split
     # `filters` is the current shape ({name, arguments}); `filter` was a
     # single-name (legacy) view and a list of names is the older chain shape.
     raw = view.get("filters")
@@ -699,7 +398,7 @@ _UPDATE_THREAD = None
 def read_version():
     """The shipped app version, from app/VERSION (never raises)."""
     try:
-        with open(VERSION_FILE, encoding="utf-8") as f:
+        with open(config.VERSION_FILE, encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     return line.strip()
@@ -708,14 +407,14 @@ def read_version():
     return "unknown"
 
 
-def _http_get_text(url, timeout=UPDATE_CHECK_TIMEOUT):
+def _http_get_text(url, timeout=config.UPDATE_CHECK_TIMEOUT):
     """GET a URL and return its body as text (GitHub needs a User-Agent)."""
     req = urllib.request.Request(url, headers={"User-Agent": f"yolo-box-editor/{read_version()}"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read().decode("utf-8", "replace")
 
 
-def fetch_latest_version(timeout=UPDATE_CHECK_TIMEOUT):
+def fetch_latest_version(timeout=config.UPDATE_CHECK_TIMEOUT):
     """Newest published version, or None when it cannot be determined.
 
     Considers the latest release **and** every tag and returns the highest
@@ -724,14 +423,14 @@ def fetch_latest_version(timeout=UPDATE_CHECK_TIMEOUT):
     """
     candidates = []
     try:
-        data = json.loads(_http_get_text(f"{UPDATE_API}/releases/latest", timeout))
+        data = json.loads(_http_get_text(f"{config.UPDATE_API}/releases/latest", timeout))
         tag = str(data.get("tag_name") or "").strip().lstrip("vV")
         if tag:
             candidates.append(tag)
     except (urllib.error.URLError, OSError, ValueError, AttributeError):
         pass
     try:
-        data = json.loads(_http_get_text(f"{UPDATE_API}/tags", timeout))
+        data = json.loads(_http_get_text(f"{config.UPDATE_API}/tags", timeout))
         if isinstance(data, list):
             for entry in data:
                 name = str((entry or {}).get("name") or "").strip().lstrip("vV")
@@ -744,7 +443,7 @@ def fetch_latest_version(timeout=UPDATE_CHECK_TIMEOUT):
     if parsed:
         return max(parsed)[1]
     try:
-        text = _http_get_text(f"{UPDATE_RAW}/main/app/VERSION", timeout).strip()
+        text = _http_get_text(f"{config.UPDATE_RAW}/main/app/VERSION", timeout).strip()
         if text:
             return text.splitlines()[0].strip()
     except (urllib.error.URLError, OSError):
@@ -774,7 +473,7 @@ def parse_changes(text):
 def load_changes():
     """The shipped CHANGES sections (empty on error)."""
     try:
-        with open(CHANGES_FILE, encoding="utf-8") as f:
+        with open(config.CHANGES_FILE, encoding="utf-8") as f:
             return parse_changes(f.read())
     except OSError:
         return {}
@@ -788,7 +487,7 @@ def changelog_for(version):
 def _load_update_cache():
     """The last update-check result, or {} when missing/invalid."""
     try:
-        with open(UPDATE_CHECK_FILE, encoding="utf-8") as f:
+        with open(config.UPDATE_CHECK_FILE, encoding="utf-8") as f:
             data = json.load(f)
         return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
@@ -816,7 +515,7 @@ def check_for_update(force=False, now=None):
     """Check for a newer version, using/storing the cache, and return its payload.
 
     A network request is made only when `force` is set, the cache is missing, it
-    is older than UPDATE_CHECK_INTERVAL, or the running version changed.
+    is older than config.UPDATE_CHECK_INTERVAL, or the running version changed.
     """
     now = time.time() if now is None else now
     current = read_version()
@@ -824,7 +523,7 @@ def check_for_update(force=False, now=None):
     checked_at = cache.get("checked_at")
     fresh = (
         isinstance(checked_at, (int, float))
-        and now - checked_at < UPDATE_CHECK_INTERVAL
+        and now - checked_at < config.UPDATE_CHECK_INTERVAL
         and cache.get("current_version") == current
     )
     if fresh and not force:
@@ -837,8 +536,8 @@ def check_for_update(force=False, now=None):
         "latest_version": latest,
     }
     try:
-        os.makedirs(os.path.dirname(UPDATE_CHECK_FILE), exist_ok=True)
-        with open(UPDATE_CHECK_FILE, "w", encoding="utf-8") as f:
+        os.makedirs(os.path.dirname(config.UPDATE_CHECK_FILE), exist_ok=True)
+        with open(config.UPDATE_CHECK_FILE, "w", encoding="utf-8") as f:
             json.dump(info, f, indent=2)
             f.write("\n")
     except OSError:
@@ -853,13 +552,13 @@ def _update_check_loop():
             check_for_update()
         except Exception:  # noqa: BLE001 - the checker must never crash the app
             pass
-        time.sleep(UPDATE_POLL_INTERVAL)
+        time.sleep(config.UPDATE_POLL_INTERVAL)
 
 
 def start_update_checker():
     """Start the background update checker once (no-op when disabled)."""
     global _UPDATE_THREAD
-    if STATE.get("no_update_check"):
+    if state.STATE.get("no_update_check"):
         return
     if _UPDATE_THREAD is not None and _UPDATE_THREAD.is_alive():
         return
@@ -958,7 +657,7 @@ def load_actions():
     is read first, the user's <home>/actions/ second (it wins on a name clash).
     """
     merged = {}
-    for source, dirpath in (("shipped", ACTIONS_DIR), ("user", USER_ACTIONS_DIR)):
+    for source, dirpath in (("shipped", config.ACTIONS_DIR), ("user", config.USER_ACTIONS_DIR)):
         for path in _action_files(dirpath):
             data = _parse_action_file(_read_text(path))
             name = _action_name(path, data["name"])
@@ -985,11 +684,11 @@ def _hook_event(path, data):
     fname = os.path.basename(path)
     stem = fname[: -len(".yaml")]
     if is_hook_name(stem):
-        event = stem[len(HOOK_PREFIX):]
-        if event in HOOK_EVENTS:
+        event = stem[len(config.HOOK_PREFIX):]
+        if event in config.HOOK_EVENTS:
             return event
     key_event = (data.get("event_name") or "").strip()
-    if key_event in HOOK_EVENTS:
+    if key_event in config.HOOK_EVENTS:
         return key_event
     return None
 
@@ -1007,7 +706,7 @@ def load_hooks():
     """
     merged = {}
     errors = []
-    for source, dirpath in (("shipped", HOOKS_DIR), ("user", USER_HOOKS_DIR)):
+    for source, dirpath in (("shipped", config.HOOKS_DIR), ("user", config.USER_HOOKS_DIR)):
         for path in _action_files(dirpath):
             data = _parse_action_file(_read_text(path))
             event = _hook_event(path, data)
@@ -1017,12 +716,12 @@ def load_hooks():
                     errors.append(
                         f"'hooks/{os.path.basename(path)}': no app event — name it "
                         f"on_<event>.yaml or set event_name: (known: "
-                        f"{', '.join(HOOK_EVENTS)})"
+                        f"{', '.join(config.HOOK_EVENTS)})"
                     )
                 continue
             if not data["active"] or not has_body:
                 continue
-            name = HOOK_PREFIX + event
+            name = config.HOOK_PREFIX + event
             merged[name] = {
                 "name": name,
                 "event": event,
@@ -1050,8 +749,8 @@ def create_pipe():
     actions in its `after_success` chain) can read/write it to pass data on.
     """
     try:
-        os.makedirs(PIPE_DIR, exist_ok=True)
-        fd, path = tempfile.mkstemp(prefix="pipe_", suffix=".txt", dir=PIPE_DIR)
+        os.makedirs(config.PIPE_DIR, exist_ok=True)
+        fd, path = tempfile.mkstemp(prefix="pipe_", suffix=".txt", dir=config.PIPE_DIR)
     except OSError:
         return None
     os.close(fd)
@@ -1061,12 +760,12 @@ def create_pipe():
 def is_pipe_path(path):
     """True when `path` is a pipe file the app may delete.
 
-    Only paths inside PIPE_DIR qualify, so a stray path can never make the app
+    Only paths inside config.PIPE_DIR qualify, so a stray path can never make the app
     remove an unrelated file.
     """
     if not path:
         return False
-    base = os.path.abspath(PIPE_DIR)
+    base = os.path.abspath(config.PIPE_DIR)
     target = os.path.abspath(path)
     try:
         return os.path.commonpath([base, target]) == base
@@ -1095,45 +794,45 @@ def remove_pipe(path):
 def _subprocess_env():
     """Environment handed to every command/filter: the resolved user paths."""
     env = os.environ.copy()
-    env["YBE_HOME"] = YBX_HOME
-    env["YBE_APP_DIR"] = BASE_DIR
-    env["YBE_APP_SCRIPT_DIR"] = APP_SCRIPT_DIR
-    env["YBE_USER_SCRIPT_DIR"] = USER_SCRIPT_DIR
+    env["YBE_HOME"] = config.YBX_HOME
+    env["YBE_APP_DIR"] = config.BASE_DIR
+    env["YBE_APP_SCRIPT_DIR"] = config.APP_SCRIPT_DIR
+    env["YBE_USER_SCRIPT_DIR"] = config.USER_SCRIPT_DIR
     return env
 
 
-def _run_command(state, command):
-    """Run one shell command, accumulating output in `state`.
+def _run_command(run, command):
+    """Run one shell command, accumulating output in `run`.
 
-    Returns "ok", "failed", "timeout" or "error"; `state["exit_code"]` holds the
-    failing command's code on "failed". Runs with cwd=YBX_HOME (logged), so
+    Returns "ok", "failed", "timeout" or "error"; `run["exit_code"]` holds the
+    failing command's code on "failed". Runs with cwd=config.YBX_HOME (logged), so
     relative paths land in the user folder (`scripts/…` is yours); reach shipped
     helpers with {APP_DIR}/scripts/… explicitly.
     """
-    print(f"[ybe] command: cwd={YBX_HOME} cmd={command}", file=sys.stderr)
+    print(f"[ybe] command: cwd={config.YBX_HOME} cmd={command}", file=sys.stderr)
     try:
         proc = subprocess.run(
             command,
             shell=True,
             capture_output=True,
             text=True,
-            timeout=ACTION_TIMEOUT,
-            cwd=YBX_HOME,
+            timeout=config.ACTION_TIMEOUT,
+            cwd=config.YBX_HOME,
             env=_subprocess_env(),
         )
     except subprocess.TimeoutExpired:
-        state["stderr"].append(f"$ {command}\ntimed out")
+        run["stderr"].append(f"$ {command}\ntimed out")
         return "timeout"
     except OSError as exc:
-        state["stderr"].append(f"$ {command}\n{exc}")
+        run["stderr"].append(f"$ {command}\n{exc}")
         return "error"
-    state["commands"].append(command)
+    run["commands"].append(command)
     if proc.stdout.strip():
-        state["stdout"].append(f"$ {command}\n{proc.stdout.rstrip()}")
+        run["stdout"].append(f"$ {command}\n{proc.stdout.rstrip()}")
     if proc.stderr.strip():
-        state["stderr"].append(f"$ {command}\n{proc.stderr.rstrip()}")
+        run["stderr"].append(f"$ {command}\n{proc.stderr.rstrip()}")
     if proc.returncode != 0:
-        state["exit_code"] = proc.returncode
+        run["exit_code"] = proc.returncode
         return "failed"
     return "ok"
 
@@ -1149,16 +848,16 @@ def _resolve_entry(entry, actions_by_name):
     An unknown `app_*`, `backend_*` or `action_*` name becomes a
     ("bad", message) item.
     """
-    if entry in APP_ACTIONS:
+    if entry in config.APP_ACTIONS:
         return ("app", entry)
     if entry.startswith("app_"):
         return ("bad", f"unknown app action: {entry}")
-    if entry in BACKEND_ACTION_NAMES:
+    if entry in config.BACKEND_ACTION_NAMES:
         return ("backend", entry)
     if entry.startswith("backend_"):
         return ("bad", f"unknown backend action: {entry}")
-    if entry.startswith(ACTION_REF_PREFIX):
-        name = entry[len(ACTION_REF_PREFIX):]
+    if entry.startswith(config.ACTION_REF_PREFIX):
+        name = entry[len(config.ACTION_REF_PREFIX):]
         if name in actions_by_name:
             return ("action", actions_by_name[name])
         return ("bad", f"unknown action: {name}")
@@ -1179,34 +878,34 @@ def _action_items(action):
     return [_resolve_entry(entry, actions_by_name) for entry in entries]
 
 
-def _advance_execution(state):
+def _advance_execution(run):
     """Process the queue until a frontend action is reached or the run ends.
 
     Returns (status, detail):
         ("client", name)  the named app action must run in the UI next
         ("done", None)    the whole chain finished successfully
-        ("failed", None)  a command failed (see state["exit_code"])
+        ("failed", None)  a command failed (see run["exit_code"])
         ("timeout", None) a command timed out
         ("error", msg)    an unknown action / bad after_success / cascade limit
     """
-    while state["queue"]:
-        kind, value = state["queue"].pop(0)
+    while run["queue"]:
+        kind, value = run["queue"].pop(0)
         if kind == "app":  # frontend action: pause for the client
             return "client", value
         if kind == "bad":
             return "error", value
         if kind == "action":
-            state["runs"] += 1
-            if state["runs"] > MAX_CASCADE_DEPTH:
-                return "error", f"action cascade exceeded {MAX_CASCADE_DEPTH} levels"
-            state["queue"][0:0] = _action_items(value)
+            run["runs"] += 1
+            if run["runs"] > config.MAX_CASCADE_DEPTH:
+                return "error", f"action cascade exceeded {config.MAX_CASCADE_DEPTH} levels"
+            run["queue"][0:0] = _action_items(value)
             continue
         if kind == "backend":
             error = BACKEND_ACTIONS[value]()
             if error:
                 return "error", error
             continue
-        status = _run_command(state, build_command(value, state["values"]))
+        status = _run_command(run, build_command(value, run["values"]))
         if status != "ok":
             return status, None
     return "done", None
@@ -1215,13 +914,13 @@ def _advance_execution(state):
 def begin_execution(action, action_name, values, pipe_path):
     """Start a run: queue the action's steps + after_success, then advance it.
 
-    Returns (state, status, detail) as `_advance_execution` does.
+    Returns (run, status, detail) as `_advance_execution` does.
     """
-    state = {
+    run = {
         "action": action_name,
         "values": values,
         "pipe_path": pipe_path,
-        "cwd": YBX_HOME,
+        "cwd": config.YBX_HOME,
         "queue": _action_items(action),
         "stdout": [],
         "stderr": [],
@@ -1229,17 +928,17 @@ def begin_execution(action, action_name, values, pipe_path):
         "exit_code": 0,
         "runs": 1,
     }
-    status, detail = _advance_execution(state)
-    return state, status, detail
+    status, detail = _advance_execution(run)
+    return run, status, detail
 
 
-def finish_execution(state):
+def finish_execution(run):
     """Delete the run's pipe file (unless --keep-pipe) and forget the run."""
-    uid = state.get("uid")
+    uid = run.get("uid")
     if uid:
-        EXECUTIONS.pop(uid, None)
-    if not STATE["keep_pipe"]:
-        remove_pipe(state.get("pipe_path"))
+        state.EXECUTIONS.pop(uid, None)
+    if not state.STATE["keep_pipe"]:
+        remove_pipe(run.get("pipe_path"))
 
 
 def load_shortcuts_from(path):
@@ -1256,14 +955,14 @@ def load_shortcuts_from(path):
 
 def load_shortcuts():
     """Parse the shipped + user shortcuts.txt into {name: {shortcut, label}} (read fresh)."""
-    shortcuts = load_shortcuts_from(SHORTCUTS_FILE)
-    shortcuts.update(load_shortcuts_from(USER_SHORTCUTS_FILE))
+    shortcuts = load_shortcuts_from(config.SHORTCUTS_FILE)
+    shortcuts.update(load_shortcuts_from(config.USER_SHORTCUTS_FILE))
     return shortcuts
 
 
 def user_shortcut_names():
     """Names the user's shortcuts.txt overrides (read fresh)."""
-    return set(load_shortcuts_from(USER_SHORTCUTS_FILE))
+    return set(load_shortcuts_from(config.USER_SHORTCUTS_FILE))
 
 
 def _valid_shortcut(value):
@@ -1286,7 +985,7 @@ def write_user_shortcuts(sets, resets):
     sets = dict(sets or {})
     resets = set(resets or [])
     merged = load_shortcuts()
-    lines = _read_text(USER_SHORTCUTS_FILE).splitlines()
+    lines = _read_text(config.USER_SHORTCUTS_FILE).splitlines()
 
     out, written = [], set()
     for raw in lines:
@@ -1311,10 +1010,10 @@ def write_user_shortcuts(sets, resets):
     text = "\n".join(out)
     if text:
         text += "\n"
-    os.makedirs(os.path.dirname(USER_SHORTCUTS_FILE) or ".", exist_ok=True)
-    with open(USER_SHORTCUTS_FILE, "w", encoding="utf-8") as f:
+    os.makedirs(os.path.dirname(config.USER_SHORTCUTS_FILE) or ".", exist_ok=True)
+    with open(config.USER_SHORTCUTS_FILE, "w", encoding="utf-8") as f:
         f.write(text)
-    return USER_SHORTCUTS_FILE
+    return config.USER_SHORTCUTS_FILE
 
 
 def split_shortcuts(shortcuts):
@@ -1323,7 +1022,7 @@ def split_shortcuts(shortcuts):
     hook_names = {h["name"] for h in load_hooks()[0]}
     app, user, errors = {}, {}, []
     for name, info in shortcuts.items():
-        if name in APP_ACTIONS:
+        if name in config.APP_ACTIONS:
             app[name] = info
         elif name in hook_names:
             errors.append(
@@ -1528,7 +1227,7 @@ def load_filters():
     <home>/filters/ second (it wins on a name clash).
     """
     merged, errors = {}, []
-    for source, dirpath in (("shipped", FILTERS_DIR), ("user", USER_FILTERS_DIR)):
+    for source, dirpath in (("shipped", config.FILTERS_DIR), ("user", config.USER_FILTERS_DIR)):
         for path in _filter_files(dirpath):
             data = _parse_filter_file(_read_text(path))
             fname = os.path.basename(path)
@@ -1663,7 +1362,7 @@ def _clean_filter_arguments(raw):
 
 
 def _dump_action_file(steps, after_success, active=True,
-                      api_version=EXTENSION_API_VERSION):
+                      api_version=config.EXTENSION_API_VERSION):
     """Serialize a `steps`/`after_success` file in the parser's own format."""
     lines = [f"api_version: {api_version}"]
     if not active:
@@ -1676,7 +1375,7 @@ def _dump_action_file(steps, after_success, active=True,
 
 
 def _dump_filter_file(description, active, arguments, steps,
-                      api_version=EXTENSION_API_VERSION):
+                      api_version=config.EXTENSION_API_VERSION):
     """Serialize a filter file in the parser's own format."""
     lines = [f"api_version: {api_version}"]
     if description:
@@ -1702,7 +1401,7 @@ def _dump_filter_file(description, active, arguments, steps,
     return "\n".join(lines) + "\n"
 
 
-def _bump_api_version_text(text, version=EXTENSION_API_VERSION):
+def _bump_api_version_text(text, version=config.EXTENSION_API_VERSION):
     """Return `text` with its top-level `api_version:` set to `version`.
 
     Comments and every other line are preserved; when the key is absent it is
@@ -1734,9 +1433,9 @@ def _parse_extension_text(kind, text):
 def _extension_user_dir(kind):
     """The user folder a kind is written to (None for an unknown kind)."""
     return {
-        "action": USER_ACTIONS_DIR,
-        "hook": USER_HOOKS_DIR,
-        "filter": USER_FILTERS_DIR,
+        "action": config.USER_ACTIONS_DIR,
+        "hook": config.USER_HOOKS_DIR,
+        "filter": config.USER_FILTERS_DIR,
     }.get(kind)
 
 
@@ -1774,7 +1473,7 @@ def _extension_file_payload(found, text):
         "path": found["path"],
         "api_version": found["api_version"],
         "status": api_version_status(found["api_version"]),
-        "writable": found["source"] == "user" and not STATE["readonly"],
+        "writable": found["source"] == "user" and not state.STATE["readonly"],
         "text": text,
     }
 
@@ -1791,7 +1490,7 @@ def _entry_path(entry):
 def _known_image_paths():
     """Map every scanned image's absolute path to its `{split, name}` entry."""
     known = {}
-    for entry in STATE["images"]:
+    for entry in state.STATE["images"]:
         path = _entry_path(entry)
         if path:
             known[path] = entry
@@ -1858,12 +1557,12 @@ def effective_filter_arguments(flt, arguments):
 def _filter_placeholder_values(flt, data_yaml, split, input_pipe, output_pipe, arguments):
     """Substitution values for a filter's steps (shared paths + pipes + args)."""
     values = {
-        "DATASET_PATH": STATE["dataset_path"] or "",
+        "DATASET_PATH": state.STATE["dataset_path"] or "",
         "DATA_YAML_PATH": data_yaml or "",
-        "APP_DIR": BASE_DIR,
-        "HOME_DIR": YBX_HOME,
-        "APP_SCRIPT_DIR": APP_SCRIPT_DIR,
-        "USER_SCRIPT_DIR": USER_SCRIPT_DIR,
+        "APP_DIR": config.BASE_DIR,
+        "HOME_DIR": config.YBX_HOME,
+        "APP_SCRIPT_DIR": config.APP_SCRIPT_DIR,
+        "USER_SCRIPT_DIR": config.USER_SCRIPT_DIR,
         "PYTHON": sys.executable,
         "SPLIT": split or "",
         "INPUT_PIPE": input_pipe,
@@ -1895,15 +1594,15 @@ def run_filter(name, data_yaml, split, input_pipe, output_pipe, arguments=None,
     values = _filter_placeholder_values(flt, data_yaml, split, input_pipe, output_pipe, arguments)
     for step in flt["steps"]:
         command = build_command(step, values)
-        print(f"[ybe] filter: cwd={YBX_HOME} cmd={command}", file=sys.stderr)
+        print(f"[ybe] filter: cwd={config.YBX_HOME} cmd={command}", file=sys.stderr)
         try:
             proc = subprocess.run(
                 command,
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=FILTER_TIMEOUT,
-                cwd=YBX_HOME,
+                timeout=config.FILTER_TIMEOUT,
+                cwd=config.YBX_HOME,
                 env=_subprocess_env(),
             )
         except subprocess.TimeoutExpired:
@@ -1963,22 +1662,22 @@ def run_filter_chain(chain, split):
                 "chain_dir": None}
 
     try:
-        os.makedirs(FILTER_PIPES_DIR, exist_ok=True)
-        chain_dir = tempfile.mkdtemp(prefix="chain_", dir=FILTER_PIPES_DIR)
+        os.makedirs(config.FILTER_PIPES_DIR, exist_ok=True)
+        chain_dir = tempfile.mkdtemp(prefix="chain_", dir=config.FILTER_PIPES_DIR)
     except OSError as exc:
         return {"ok": False, "error": f"could not create filter pipes: {exc}",
                 "chain_dir": None}
 
     filters, _ = load_filters()
-    initial = [e for e in STATE["images"] if e["split"] == split] if split \
-        else STATE["images"]
+    initial = [e for e in state.STATE["images"] if e["split"] == split] if split \
+        else state.STATE["images"]
     in_path = os.path.join(chain_dir, "input_0.txt")
     _write_filter_input(in_path, initial)
 
     entries, skipped, error = initial, 0, None
     for i, item in enumerate(chain):
         out_path = os.path.join(chain_dir, f"output_{i}.txt")
-        result = run_filter(item["name"], STATE["data_yaml"], split, in_path,
+        result = run_filter(item["name"], state.STATE["data_yaml"], split, in_path,
                             out_path, item.get("arguments"), filters)
         if not result["ok"]:
             error = f'Filter "{item["name"]}" failed: {result["error"]}'
@@ -1987,7 +1686,7 @@ def run_filter_chain(chain, split):
         entries, skipped = _read_filter_output(out_path, known)
         in_path = out_path
 
-    if not STATE["keep_filter_pipes"]:
+    if not state.STATE["keep_filter_pipes"]:
         shutil.rmtree(chain_dir, ignore_errors=True)
         chain_dir = None
 
@@ -1998,13 +1697,13 @@ def run_filter_chain(chain, split):
 
 
 def _clear_filter():
-    STATE["active_filters"] = []
-    STATE["filter_images"] = None
-    STATE["filter_error"] = None
+    state.STATE["active_filters"] = []
+    state.STATE["filter_images"] = None
+    state.STATE["filter_error"] = None
 
 
 def apply_filters(items):
-    """Run the filter chain for the current split and cache it in STATE.
+    """Run the filter chain for the current split and cache it in state.STATE.
 
     `items` is a list of `{name, arguments}` (strings are accepted as legacy;
     [] clears). Returns an error message on failure (state untouched), or None on
@@ -2016,14 +1715,14 @@ def apply_filters(items):
     if not chain:
         _clear_filter()
         return None
-    result = run_filter_chain(chain, STATE["active_split"])
+    result = run_filter_chain(chain, state.STATE["active_split"])
     if not result["ok"]:
         return result["error"]
-    STATE["active_filters"] = chain
-    STATE["filter_images"] = result["images"]
-    if STATE["keep_filter_pipes"] and result["chain_dir"]:
+    state.STATE["active_filters"] = chain
+    state.STATE["filter_images"] = result["images"]
+    if state.STATE["keep_filter_pipes"] and result["chain_dir"]:
         print(f"[ybe] kept filter pipes: {result['chain_dir']}", file=sys.stderr)
-    STATE["filter_error"] = (
+    state.STATE["filter_error"] = (
         f"{result['skipped']} filter line(s) ignored" if result["skipped"] else None
     )
     return None
@@ -2051,7 +1750,7 @@ def _tags_dir_for(images_dir, split_name=None):
     An override is a base folder; each split keeps its own subfolder
     (`<override>/<split>`), matching the default `tags/<split>` layout.
     """
-    override = STATE.get("tags_dir")
+    override = state.STATE.get("tags_dir")
     if override:
         return os.path.join(override, split_name) if split_name else override
     return _replace_images_segment(images_dir, "tags")
@@ -2060,23 +1759,23 @@ def _tags_dir_for(images_dir, split_name=None):
 def scan_splits():
     """Parse data.yaml and build the list of {name, images_dir, labels_dir} splits."""
     splits = []
-    if not STATE["data_yaml"] or not os.path.isfile(STATE["data_yaml"]):
+    if not state.STATE["data_yaml"] or not os.path.isfile(state.STATE["data_yaml"]):
         return splits
 
-    data = _parse_data_yaml(STATE["data_yaml"])
-    data_yaml_dir = os.path.dirname(os.path.abspath(STATE["data_yaml"]))
+    data = _parse_data_yaml(state.STATE["data_yaml"])
+    data_yaml_dir = os.path.dirname(os.path.abspath(state.STATE["data_yaml"]))
 
     base = data.get("path") or data_yaml_dir
     if not os.path.isabs(base):
         base = os.path.normpath(os.path.join(data_yaml_dir, base))
-    STATE["dataset_path"] = os.path.abspath(base)
-    STATE["classes"] = data.get("names") or []
+    state.STATE["dataset_path"] = os.path.abspath(base)
+    state.STATE["classes"] = data.get("names") or []
 
     for key in ("train", "val", "test"):
         rel = data.get(key)
         if not rel:
             continue
-        images_dir = rel if os.path.isabs(rel) else os.path.join(STATE["dataset_path"], rel)
+        images_dir = rel if os.path.isabs(rel) else os.path.join(state.STATE["dataset_path"], rel)
         images_dir = os.path.normpath(images_dir)
         if not os.path.isdir(images_dir):
             continue
@@ -2093,7 +1792,7 @@ def scan_splits():
 
 def scan_images():
     flat = []
-    for split in STATE["splits"]:
+    for split in state.STATE["splits"]:
         d = split["images_dir"]
         if not os.path.isdir(d):
             continue
@@ -2104,11 +1803,11 @@ def scan_images():
 
 
 def _load_dataset(path):
-    """Activate the dataset at `path` in STATE. True when it has usable splits."""
-    STATE["data_yaml"] = os.path.abspath(path)
-    STATE["splits"] = scan_splits()
-    STATE["images"] = scan_images()
-    return bool(STATE["splits"])
+    """Activate the dataset at `path` in state.STATE. True when it has usable splits."""
+    state.STATE["data_yaml"] = os.path.abspath(path)
+    state.STATE["splits"] = scan_splits()
+    state.STATE["images"] = scan_images()
+    return bool(state.STATE["splits"])
 
 
 def _resume_last_dataset():
@@ -2119,11 +1818,11 @@ def _resume_last_dataset():
     """
     for path in _load_recent():
         if os.path.isfile(path) and _load_dataset(path):
-            _restore_view(STATE["data_yaml"])
+            _restore_view(state.STATE["data_yaml"])
             return path
-    STATE["data_yaml"] = None
-    STATE["splits"] = []
-    STATE["images"] = []
+    state.STATE["data_yaml"] = None
+    state.STATE["splits"] = []
+    state.STATE["images"] = []
     return None
 
 
@@ -2134,11 +1833,11 @@ def _current_images():
     already received the active split as its input); otherwise the list is
     filtered to the active split.
     """
-    if STATE["active_filters"]:
-        return STATE["filter_images"] or []
-    if not STATE["active_split"]:
-        return STATE["images"]
-    return [e for e in STATE["images"] if e["split"] == STATE["active_split"]]
+    if state.STATE["active_filters"]:
+        return state.STATE["filter_images"] or []
+    if not state.STATE["active_split"]:
+        return state.STATE["images"]
+    return [e for e in state.STATE["images"] if e["split"] == state.STATE["active_split"]]
 
 
 def _rescan_images():
@@ -2149,20 +1848,20 @@ def _rescan_images():
     that depends on the files (e.g. tags) is re-run; an active split that no
     longer has any image is cleared.
     """
-    STATE["images"] = scan_images()
-    if STATE["active_split"] and not any(
-        e["split"] == STATE["active_split"] for e in STATE["images"]
+    state.STATE["images"] = scan_images()
+    if state.STATE["active_split"] and not any(
+        e["split"] == state.STATE["active_split"] for e in state.STATE["images"]
     ):
-        STATE["active_split"] = None
+        state.STATE["active_split"] = None
     # the flat list changed: an active filter chain must be re-evaluated
-    if STATE["active_filters"]:
-        error = apply_filters(STATE["active_filters"])
+    if state.STATE["active_filters"]:
+        error = apply_filters(state.STATE["active_filters"])
         if error:
             _clear_filter()
-            STATE["filter_error"] = error
+            state.STATE["filter_error"] = error
 
 
-# Server-side built-in action callables (see BACKEND_ACTION_NAMES). Each returns
+# Server-side built-in action callables (see config.BACKEND_ACTION_NAMES). Each returns
 # None on success or an error message that stops the run.
 BACKEND_ACTIONS = {
     "backend_rescan_images": _rescan_images,
@@ -2170,7 +1869,7 @@ BACKEND_ACTIONS = {
 
 
 def _split_by_name(name):
-    for s in STATE["splits"]:
+    for s in state.STATE["splits"]:
         if s["name"] == name:
             return s
     return None
@@ -2195,9 +1894,9 @@ def tag_path(entry):
 
 def tags_yaml_path():
     """Path of the dataset's tags.yaml (beside data.yaml), or None."""
-    if not STATE["data_yaml"]:
+    if not state.STATE["data_yaml"]:
         return None
-    return os.path.join(os.path.dirname(os.path.abspath(STATE["data_yaml"])), "tags.yaml")
+    return os.path.join(os.path.dirname(os.path.abspath(state.STATE["data_yaml"])), "tags.yaml")
 
 
 def read_tags_yaml():
@@ -2334,11 +2033,11 @@ def _parse_label_file(path):
 
 
 def read_classes():
-    if STATE["classes"]:
-        return STATE["classes"]
+    if state.STATE["classes"]:
+        return state.STATE["classes"]
     # fallback: derive max class id from existing label files
     max_cls = -1
-    for entry in STATE["images"]:
+    for entry in state.STATE["images"]:
         p = label_path(entry)
         if p is None:
             continue
@@ -2361,7 +2060,7 @@ def _entry_by_key(key):
     if not key or "/" not in key:
         return None
     split, name = key.split("/", 1)
-    for entry in STATE["images"]:
+    for entry in state.STATE["images"]:
         if entry["split"] == split and entry["name"] == name:
             return entry
     return None
@@ -2385,11 +2084,11 @@ def _request_entry():
 
 
 def _prune_clients(now=None):
-    """Forget clients that have not pinged `/api/presence` within PRESENCE_TTL."""
+    """Forget clients that have not pinged `/api/presence` within state.PRESENCE_TTL."""
     now = time.monotonic() if now is None else now
-    for cid in [c for c, seen in CLIENTS.items() if now - seen > PRESENCE_TTL]:
-        CLIENTS.pop(cid, None)
-    return len(CLIENTS)
+    for cid in [c for c, seen in state.CLIENTS.items() if now - seen > state.PRESENCE_TTL]:
+        state.CLIENTS.pop(cid, None)
+    return len(state.CLIENTS)
 
 
 # --------------------------------------------------------------------------- #
@@ -2414,34 +2113,33 @@ def _valid_username(username):
 
 
 def load_users():
-    """Load USERS_FILE into the USERS map; missing/corrupt file means none."""
-    global USERS
+    """Load config.USERS_FILE into the state.USERS map; missing/corrupt file means none."""
     try:
-        with open(USERS_FILE, encoding="utf-8") as f:
+        with open(config.USERS_FILE, encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError):
-        USERS = {}
-        return USERS
+        state.USERS = {}
+        return state.USERS
     raw = data.get("users") if isinstance(data, dict) else None
-    USERS = (
+    state.USERS = (
         {str(name): str(hash_) for name, hash_ in raw.items()}
         if isinstance(raw, dict)
         else {}
     )
-    return USERS
+    return state.USERS
 
 
 def _write_users():
-    """Persist USERS atomically and owner-only; returns False on failure."""
+    """Persist state.USERS atomically and owner-only; returns False on failure."""
     try:
-        os.makedirs(os.path.dirname(USERS_FILE) or ".", exist_ok=True)
-        tmp = USERS_FILE + ".tmp"
+        os.makedirs(os.path.dirname(config.USERS_FILE) or ".", exist_ok=True)
+        tmp = config.USERS_FILE + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"version": 1, "users": USERS}, f, indent=2, sort_keys=True)
+            json.dump({"version": 1, "users": state.USERS}, f, indent=2, sort_keys=True)
             f.write("\n")
-        os.replace(tmp, USERS_FILE)
+        os.replace(tmp, config.USERS_FILE)
         try:
-            os.chmod(USERS_FILE, 0o600)
+            os.chmod(config.USERS_FILE, 0o600)
         except OSError:
             pass
         return True
@@ -2451,16 +2149,16 @@ def _write_users():
 
 def set_user(username, password):
     """Create or update a user; returns "created" or "updated"."""
-    existed = username in USERS
-    USERS[username] = generate_password_hash(password)
+    existed = username in state.USERS
+    state.USERS[username] = generate_password_hash(password)
     if not _write_users():
-        raise OSError(f"could not write {USERS_FILE}")
+        raise OSError(f"could not write {config.USERS_FILE}")
     return "updated" if existed else "created"
 
 
 def ensure_default_admin():
     """Seed the shipped admin/admin account when no users exist; True if created."""
-    if USERS:
+    if state.USERS:
         return False
     set_user(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD)
     return True
@@ -2489,7 +2187,7 @@ def _prompt_password():
 
 def verify_user(username, password):
     """Constant-time check of a submitted password against the store."""
-    hashed = USERS.get(str(username))
+    hashed = state.USERS.get(str(username))
     if not hashed:
         return False
     return check_password_hash(hashed, str(password))
@@ -2497,13 +2195,13 @@ def verify_user(username, password):
 
 def auth_enabled():
     """True when at least one user is registered and a login is required."""
-    return bool(USERS)
+    return bool(state.USERS)
 
 
 def _session_username():
     """The signed-in username, if it still exists in the store."""
     user = session.get("ybe_user")
-    return user if user in USERS else None
+    return user if user in state.USERS else None
 
 
 def _is_authenticated():
@@ -2649,41 +2347,41 @@ def api_config():
     ]
     return jsonify(
         {
-            "data_yaml": STATE["data_yaml"],
-            "dataset_path": STATE["dataset_path"],
+            "data_yaml": state.STATE["data_yaml"],
+            "dataset_path": state.STATE["dataset_path"],
             "classes": classes,
             "tags": read_tags_yaml(),
             "images": _current_images(),
-            "active_split": STATE["active_split"],
+            "active_split": state.STATE["active_split"],
             "filters": filter_catalog,
             "filter_defs": filter_defs,
-            "active_filters": STATE["active_filters"],
-            "filter_error": STATE["filter_error"],
+            "active_filters": state.STATE["active_filters"],
+            "filter_error": state.STATE["filter_error"],
             "filter_errors": filter_errors,
             "recent_data_yamls": _load_recent(),
             "settings": _load_settings(),
-            "tags_dir": STATE.get("tags_dir"),
-            "tips": TIPS,
+            "tags_dir": state.STATE.get("tags_dir"),
+            "tips": config.TIPS,
             "actions": [a["name"] for a in actions if a["name"] not in disabled["action"]],
             "action_defs": action_defs,
             "hooks": [h["name"] for h in hooks if h["name"] not in disabled["hook"]],
             "hook_defs": hook_defs,
             "hook_errors": hook_errors,
-            "app_actions": sorted(APP_ACTIONS),
-            "backend_actions": sorted(BACKEND_ACTION_NAMES),
-            "hook_events": list(HOOK_EVENTS),
-            "extension_api_version": EXTENSION_API_VERSION,
+            "app_actions": sorted(config.APP_ACTIONS),
+            "backend_actions": sorted(config.BACKEND_ACTION_NAMES),
+            "hook_events": list(config.HOOK_EVENTS),
+            "extension_api_version": config.EXTENSION_API_VERSION,
             "placeholders": {
-                "action": _placeholder_payload(ACTION_PLACEHOLDERS),
-                "filter": _placeholder_payload(FILTER_PLACEHOLDERS),
+                "action": _placeholder_payload(config.ACTION_PLACEHOLDERS),
+                "filter": _placeholder_payload(config.FILTER_PLACEHOLDERS),
             },
             "shortcuts": app_shortcuts,
             "action_shortcuts": user_shortcuts,
             "shortcut_errors": shortcut_errors,
-            "shortcut_defaults": load_shortcuts_from(SHORTCUTS_FILE),
+            "shortcut_defaults": load_shortcuts_from(config.SHORTCUTS_FILE),
             "user_shortcut_names": sorted(user_shortcut_names()),
-            "readonly": STATE["readonly"],
-            "debug": STATE["debug"],
+            "readonly": state.STATE["readonly"],
+            "debug": state.STATE["debug"],
             "auth": {
                 "required": auth_enabled(),
                 "username": _session_username() if auth_enabled() else None,
@@ -2698,7 +2396,7 @@ def api_config():
                     "labels_dir": s["labels_dir"],
                     "tags_dir": s["tags_dir"],
                 }
-                for s in STATE["splits"]
+                for s in state.STATE["splits"]
             ],
         }
     )
@@ -2744,7 +2442,7 @@ def api_shortcuts():
     override, `reset` drops it so the shipped binding applies again. Names must
     be app actions or actions from the actions/ folders; read-only is refused.
     """
-    if STATE["readonly"]:
+    if state.STATE["readonly"]:
         return jsonify({"ok": False, "error": "read-only mode"}), 403
 
     data = request.get_json(silent=True) or {}
@@ -2753,7 +2451,7 @@ def api_shortcuts():
     if not isinstance(sets, dict) or not isinstance(resets, list):
         return jsonify({"ok": False, "error": "set must be an object and reset a list"}), 400
 
-    known = set(APP_ACTIONS) | {a["name"] for a in load_actions()}
+    known = set(config.APP_ACTIONS) | {a["name"] for a in load_actions()}
     clean_sets = {}
     for name, value in sets.items():
         if name not in known:
@@ -2775,7 +2473,7 @@ def api_presence():
 
     Body `{cid}` registers or refreshes a client; `{cid, "bye": true}` removes it
     (sent via `navigator.sendBeacon` when a page unloads). `count` is the number
-    of clients seen within PRESENCE_TTL seconds; the UI warns while it is > 1.
+    of clients seen within state.PRESENCE_TTL seconds; the UI warns while it is > 1.
     Presence never blocks any other request.
     """
     data = request.get_json(silent=True) or {}
@@ -2784,11 +2482,11 @@ def api_presence():
         return jsonify({"ok": False, "error": "client id is required"}), 400
 
     now = time.monotonic()
-    with CLIENTS_LOCK:
+    with state.CLIENTS_LOCK:
         if data.get("bye"):
-            CLIENTS.pop(cid, None)
+            state.CLIENTS.pop(cid, None)
         else:
-            CLIENTS[cid] = now
+            state.CLIENTS[cid] = now
         count = _prune_clients(now)
     return jsonify({"ok": True, "count": count, "others": max(0, count - 1)})
 
@@ -2804,13 +2502,13 @@ def api_data():
         return jsonify({"ok": False, "error": f"not a file: {path}"}), 400
 
     _load_dataset(path)
-    _restore_tags_dir(STATE["data_yaml"])  # re-apply this dataset's tags folder
+    _restore_tags_dir(state.STATE["data_yaml"])  # re-apply this dataset's tags folder
     _clear_filter()  # a filter belongs to the dataset that was active
-    names = {s["name"] for s in STATE["splits"]}
-    if STATE["active_split"] not in names:
-        STATE["active_split"] = None
+    names = {s["name"] for s in state.STATE["splits"]}
+    if state.STATE["active_split"] not in names:
+        state.STATE["active_split"] = None
 
-    if not STATE["splits"]:
+    if not state.STATE["splits"]:
         return (
             jsonify(
                 {
@@ -2821,7 +2519,7 @@ def api_data():
             400,
         )
 
-    _push_recent(STATE["data_yaml"])
+    _push_recent(state.STATE["data_yaml"])
 
     cfg = api_config().get_json()
     cfg["ok"] = True
@@ -2833,20 +2531,20 @@ def api_split():
     """Restrict navigation to a single split (or all splits when `split` is empty/null)."""
     data = request.get_json(silent=True) or {}
     split = (data.get("split") or "").strip() or None
-    names = {s["name"] for s in STATE["splits"]}
+    names = {s["name"] for s in state.STATE["splits"]}
     if split is not None and split not in names:
         return jsonify({"ok": False, "error": f"unknown split: {split}"}), 400
 
-    previous = STATE["active_split"]
-    STATE["active_split"] = split
+    previous = state.STATE["active_split"]
+    state.STATE["active_split"] = split
     # The chain's first filter receives the split, so an active one must re-run.
-    if STATE["active_filters"]:
-        error = apply_filters(STATE["active_filters"])
+    if state.STATE["active_filters"]:
+        error = apply_filters(state.STATE["active_filters"])
         if error:
-            STATE["active_split"] = previous  # keep split + filter consistent
+            state.STATE["active_split"] = previous  # keep split + filter consistent
             return jsonify({"ok": False, "error": error}), 400
 
-    _save_view(STATE["data_yaml"], STATE["active_split"], STATE["active_filters"])
+    _save_view(state.STATE["data_yaml"], state.STATE["active_split"], state.STATE["active_filters"])
     cfg = api_config().get_json()
     cfg["ok"] = True
     return jsonify(cfg)
@@ -2860,7 +2558,7 @@ def api_filter():
     empty/missing list clears it. A list of names and `{filter: name}` (or
     `null`) are accepted for older clients.
     """
-    if not STATE["splits"]:
+    if not state.STATE["splits"]:
         return jsonify({"ok": False, "error": "no dataset loaded"}), 400
 
     data = request.get_json(silent=True) or {}
@@ -2876,7 +2574,7 @@ def api_filter():
     if error:
         return jsonify({"ok": False, "error": error}), 400
 
-    _save_view(STATE["data_yaml"], STATE["active_split"], STATE["active_filters"])
+    _save_view(state.STATE["data_yaml"], state.STATE["active_split"], state.STATE["active_filters"])
     cfg = api_config().get_json()
     cfg["ok"] = True
     return jsonify(cfg)
@@ -2887,9 +2585,9 @@ def _images_payload():
     return {
         "ok": True,
         "images": _current_images(),
-        "active_split": STATE["active_split"],
-        "active_filters": STATE["active_filters"],
-        "filter_error": STATE["filter_error"],
+        "active_split": state.STATE["active_split"],
+        "active_filters": state.STATE["active_filters"],
+        "filter_error": state.STATE["filter_error"],
     }
 
 
@@ -2958,59 +2656,59 @@ def api_action_run():
     values = {
         "IMAGE_PATH": os.path.join(split["images_dir"], entry["name"]),
         "LABEL_PATH": label_path(entry),
-        "DATASET_PATH": STATE["dataset_path"] or "",
-        "DATA_YAML_PATH": STATE["data_yaml"] or "",
+        "DATASET_PATH": state.STATE["dataset_path"] or "",
+        "DATA_YAML_PATH": state.STATE["data_yaml"] or "",
         "IMAGE_INDEX": str(position or 0),
         # the folder holding app.py (shipped files); script folders are exposed
         # both explicitly and relatively (cwd is HOME_DIR, so scripts/… works)
-        "APP_DIR": BASE_DIR,
-        "HOME_DIR": YBX_HOME,
-        "APP_SCRIPT_DIR": APP_SCRIPT_DIR,
-        "USER_SCRIPT_DIR": USER_SCRIPT_DIR,
+        "APP_DIR": config.BASE_DIR,
+        "HOME_DIR": config.YBX_HOME,
+        "APP_SCRIPT_DIR": config.APP_SCRIPT_DIR,
+        "USER_SCRIPT_DIR": config.USER_SCRIPT_DIR,
         # the interpreter running the app; use {PYTHON} so steps work even when
         # `python` is not on PATH
         "PYTHON": sys.executable,
         # scratch file shared by every step and after_success action of this run
         "PIPE_PATH": pipe_path or "",
     }
-    state, status, detail = begin_execution(action, name, values, pipe_path)
-    return _execution_response(state, status, detail)
+    run, status, detail = begin_execution(action, name, values, pipe_path)
+    return _execution_response(run, status, detail)
 
 
 def _resume_execution(uid, data):
     """Resume a paused execution after the UI ran its `client_action`."""
-    state = EXECUTIONS.get(uid)
-    if state is None:
+    run = state.EXECUTIONS.get(uid)
+    if run is None:
         return jsonify({"ok": False, "error": "unknown or expired execution"}), 400
 
     result = data.get("result") or {}
     if not result.get("ok", True):
-        failed = state.get("pending") or "after_success"
+        failed = run.get("pending") or "after_success"
         error = result.get("error") or "app action failed"
-        finish_execution(state)
-        payload = _execution_payload(state)
+        finish_execution(run)
+        payload = _execution_payload(run)
         payload["ok"] = False
         payload["error"] = f'after_success "{failed}" failed: {error}'
         return jsonify(payload), 200
 
-    state["pending"] = None
-    status, detail = _advance_execution(state)
-    return _execution_response(state, status, detail)
+    run["pending"] = None
+    status, detail = _advance_execution(run)
+    return _execution_response(run, status, detail)
 
 
-def _execution_response(state, status, detail):
+def _execution_response(run, status, detail):
     """Reply for a start/advance result: pause at a client action, or finish."""
     if status == "client":
         uid = uuid.uuid4().hex
-        state["uid"] = uid
-        state["pending"] = detail
-        EXECUTIONS[uid] = state
+        run["uid"] = uid
+        run["pending"] = detail
+        state.EXECUTIONS[uid] = run
         payload = {"ok": True, "uid": uid, "client_action": detail}
-        payload.update(_execution_payload(state))
+        payload.update(_execution_payload(run))
         return jsonify(payload)
 
-    finish_execution(state)
-    payload = _execution_payload(state)
+    finish_execution(run)
+    payload = _execution_payload(run)
     if status == "done":
         payload["ok"] = True
         return jsonify(payload)
@@ -3024,16 +2722,16 @@ def _execution_response(state, status, detail):
     return jsonify(payload), 400
 
 
-def _execution_payload(state):
+def _execution_payload(run):
     """The user-visible result shared by the paused and final replies."""
     return {
-        "action": state["action"],
-        "command": " && ".join(state["commands"]),
-        "exit_code": state["exit_code"],
-        "stdout": "\n".join(state["stdout"]),
-        "stderr": "\n".join(state["stderr"]),
-        "pipe_path": state["pipe_path"],
-        "cwd": state.get("cwd"),
+        "action": run["action"],
+        "command": " && ".join(run["commands"]),
+        "exit_code": run["exit_code"],
+        "stdout": "\n".join(run["stdout"]),
+        "stderr": "\n".join(run["stderr"]),
+        "pipe_path": run["pipe_path"],
+        "cwd": run.get("cwd"),
     }
 
 
@@ -3045,7 +2743,7 @@ def api_action_save():
     user actions/ folder as `<name>.yaml`; an existing user file needs
     `overwrite: true`. Read-only is refused.
     """
-    if STATE["readonly"]:
+    if state.STATE["readonly"]:
         return jsonify({"ok": False, "error": "read-only mode"}), 403
     data = request.get_json(silent=True) or {}
     name = _safe_extension_name(data.get("name"))
@@ -3060,8 +2758,8 @@ def api_action_save():
     if not steps and not after:
         return jsonify({"ok": False, "error": "add at least one step"}), 400
 
-    os.makedirs(USER_ACTIONS_DIR, exist_ok=True)
-    target = os.path.join(USER_ACTIONS_DIR, name + ".yaml")
+    os.makedirs(config.USER_ACTIONS_DIR, exist_ok=True)
+    target = os.path.join(config.USER_ACTIONS_DIR, name + ".yaml")
     if os.path.exists(target) and not data.get("overwrite"):
         return jsonify({"ok": False, "error": f"a user action '{name}' already exists"}), 409
     try:
@@ -3082,11 +2780,11 @@ def api_hook_save():
     Body `{event, steps, after_success, active, overwrite}`. The file is
     `<user hooks>/on_<event>.yaml`; existing needs `overwrite: true`.
     """
-    if STATE["readonly"]:
+    if state.STATE["readonly"]:
         return jsonify({"ok": False, "error": "read-only mode"}), 403
     data = request.get_json(silent=True) or {}
     event = str(data.get("event") or "").strip()
-    if event not in HOOK_EVENTS:
+    if event not in config.HOOK_EVENTS:
         return jsonify({"ok": False, "error": f"unknown hook event: {event}"}), 400
     steps, error = _clean_extension_entries(data.get("steps"))
     if error:
@@ -3097,8 +2795,8 @@ def api_hook_save():
     if not steps and not after:
         return jsonify({"ok": False, "error": "add at least one step"}), 400
 
-    os.makedirs(USER_HOOKS_DIR, exist_ok=True)
-    target = os.path.join(USER_HOOKS_DIR, HOOK_PREFIX + event + ".yaml")
+    os.makedirs(config.USER_HOOKS_DIR, exist_ok=True)
+    target = os.path.join(config.USER_HOOKS_DIR, config.HOOK_PREFIX + event + ".yaml")
     if os.path.exists(target) and not data.get("overwrite"):
         return jsonify({"ok": False, "error": f"a hook for {event} already exists"}), 409
     try:
@@ -3119,7 +2817,7 @@ def api_filter_save():
     Body `{name, description, active, arguments, steps, overwrite}`. The file is
     written to the user filters/ folder as `<name>.yaml`.
     """
-    if STATE["readonly"]:
+    if state.STATE["readonly"]:
         return jsonify({"ok": False, "error": "read-only mode"}), 403
     data = request.get_json(silent=True) or {}
     name = _safe_extension_name(data.get("name"))
@@ -3137,8 +2835,8 @@ def api_filter_save():
     if not steps:
         return jsonify({"ok": False, "error": "add at least one step"}), 400
 
-    os.makedirs(USER_FILTERS_DIR, exist_ok=True)
-    target = os.path.join(USER_FILTERS_DIR, name + ".yaml")
+    os.makedirs(config.USER_FILTERS_DIR, exist_ok=True)
+    target = os.path.join(config.USER_FILTERS_DIR, name + ".yaml")
     if os.path.exists(target) and not data.get("overwrite"):
         return jsonify({"ok": False, "error": f"a user filter '{name}' already exists"}), 409
     try:
@@ -3168,7 +2866,7 @@ def api_extension_disabled():
     name = str(data.get("name") or "").strip()
     if extension_file_for(kind, name) is None:
         return jsonify({"ok": False, "error": "unknown extension"}), 404
-    if not STATE["data_yaml"]:
+    if not state.STATE["data_yaml"]:
         return jsonify({"ok": False, "error": "load a dataset first"}), 400
     _set_extension_disabled(kind, name, bool(data.get("disabled")))
 
@@ -3180,7 +2878,7 @@ def api_extension_disabled():
 @app.route("/api/extensions/delete", methods=["POST"])
 def api_extension_delete():
     """Delete one of the user's extension files (never a shipped one)."""
-    if STATE["readonly"]:
+    if state.STATE["readonly"]:
         return jsonify({"ok": False, "error": "read-only mode"}), 403
     data = request.get_json(silent=True) or {}
     found = extension_file_for(data.get("kind"), data.get("name"))
@@ -3225,7 +2923,7 @@ def api_extension_file():
 
 def _save_extension_file():
     """Save raw editor text (the POST half of `/api/extensions/file`)."""
-    if STATE["readonly"]:
+    if state.STATE["readonly"]:
         return jsonify({"ok": False, "error": "read-only mode"}), 403
     data = request.get_json(silent=True) or {}
     kind = data.get("kind")
@@ -3306,7 +3004,7 @@ def api_annotations():
             }
         )
 
-    if STATE["readonly"]:
+    if state.STATE["readonly"]:
         return jsonify({"ok": False, "error": "read-only mode"}), 403
 
     data = request.get_json(silent=True) or {}
@@ -3357,9 +3055,9 @@ def api_tags_dir():
     `<folder>/<split>`); an empty value restores the default `images` -> `tags`
     derivation. Saved with the dataset's view state.
     """
-    if not STATE["splits"]:
+    if not state.STATE["splits"]:
         return jsonify({"ok": False, "error": "no dataset loaded"}), 400
-    if STATE["readonly"]:
+    if state.STATE["readonly"]:
         return jsonify({"ok": False, "error": "read-only mode"}), 403
 
     data = request.get_json(silent=True) or {}
@@ -3368,13 +3066,13 @@ def api_tags_dir():
     if path and not os.path.isdir(path):
         return jsonify({"ok": False, "error": f"not a folder: {path}"}), 400
 
-    STATE["tags_dir"] = path
-    STATE["splits"] = scan_splits()
-    if STATE["active_filters"]:
-        error = apply_filters(STATE["active_filters"])
+    state.STATE["tags_dir"] = path
+    state.STATE["splits"] = scan_splits()
+    if state.STATE["active_filters"]:
+        error = apply_filters(state.STATE["active_filters"])
         if error:
-            STATE["filter_error"] = error
-    _save_view(STATE["data_yaml"], STATE["active_split"], STATE["active_filters"])
+            state.STATE["filter_error"] = error
+    _save_view(state.STATE["data_yaml"], state.STATE["active_split"], state.STATE["active_filters"])
     cfg = api_config().get_json()
     cfg["ok"] = True
     return jsonify(cfg)
@@ -3451,14 +3149,14 @@ def main():
 
     log = setup_logging(args.log_file, args.debug)
     log.info(
-        "yolo-box-editor %s | user dir: %s (override with --home)", read_version(), YBX_HOME
+        "yolo-box-editor %s | user dir: %s (override with --home)", read_version(), config.YBX_HOME
     )
 
-    STATE["readonly"] = args.readonly
-    STATE["debug"] = args.debug
-    STATE["keep_pipe"] = args.keep_pipe
-    STATE["keep_filter_pipes"] = args.keep_filter_pipes
-    STATE["no_update_check"] = args.no_update_check
+    state.STATE["readonly"] = args.readonly
+    state.STATE["debug"] = args.debug
+    state.STATE["keep_pipe"] = args.keep_pipe
+    state.STATE["keep_filter_pipes"] = args.keep_filter_pipes
+    state.STATE["no_update_check"] = args.no_update_check
 
     load_users()
     if ensure_default_admin():
@@ -3471,10 +3169,10 @@ def main():
 
     # Admin commands manage the user store and exit before the server starts.
     if args.list_users:
-        for name in sorted(USERS):
+        for name in sorted(state.USERS):
             print(name)
-        if not USERS:
-            print(f"(no users registered in {USERS_FILE})")
+        if not state.USERS:
+            print(f"(no users registered in {config.USERS_FILE})")
         return
 
     if args.create_user:
@@ -3489,14 +3187,14 @@ def main():
         except OSError as exc:
             print(f"error: {exc}", file=sys.stderr)
             sys.exit(1)
-        print(f"{action} user {username!r} in {USERS_FILE}")
+        print(f"{action} user {username!r} in {config.USERS_FILE}")
         return
 
     start_update_checker()
 
     if args.data:
         _load_dataset(args.data)
-        _push_recent(STATE["data_yaml"])
+        _push_recent(state.STATE["data_yaml"])
     elif not args.no_resume:
         _resume_last_dataset()
 
