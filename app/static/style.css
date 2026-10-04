@@ -279,6 +279,25 @@ body.panel-left .notif-panel { left: 10px; right: auto; }
 .splitbox { flex-direction: row; align-items: center; gap: 6px; }
 .splitbox label { color: var(--muted); font-size: 13px; white-space: nowrap; }
 .splitbox select { flex: 1; min-width: 0; }
+/* small reload control beside the split select */
+.splitbox .split-reload {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+}
+.splitbox .split-reload:hover { color: var(--text); }
+/* spinner shown while a split change / image reload is in flight */
+.split-spinner {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: ybe-spin 0.7s linear infinite;
+}
 
 .actionbox { gap: 6px; }
 .action-row { display: flex; align-items: center; gap: 6px; min-width: 0; }

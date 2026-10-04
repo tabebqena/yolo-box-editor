@@ -552,6 +552,7 @@ function wireNavigation() {
   el('prevBtn').addEventListener('click', () => go(-1));
   el('nextBtn').addEventListener('click', () => go(1));
   el('splitSelect').addEventListener('change', () => setSplit(el('splitSelect').value));
+  el('splitReloadBtn').addEventListener('click', reloadSplitImages);
   el('recentSelect').addEventListener('change', () => {
     const val = el('recentSelect').value;
     if (!val) return;

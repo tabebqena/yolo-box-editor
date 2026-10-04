@@ -217,10 +217,42 @@ function loadDataFromModal() {
 }
 
 /**
+ * Busy state for the split controls: show a spinner and block the select and
+ * the reload button while a split change (which may re-run the active filter
+ * chain) or a manual image reload is in flight.
+ * @param {boolean} on - Whether a split-list request is running.
+ */
+function setSplitBusy(on) {
+  const spinner = el('splitSpinner');
+  if (spinner) spinner.classList.toggle('hidden', !on);
+  const sel = el('splitSelect');
+  if (sel) sel.disabled = on;
+  const reload = el('splitReloadBtn');
+  if (reload) reload.disabled = on;
+}
+
+/**
+ * Re-fetch the image list for the active split and filter chain. Re-scans the
+ * image folders and re-runs the chain (POST /api/images/rescan), then keeps the
+ * current image by path.
+ * @returns {Promise<void>}
+ */
+async function reloadSplitImages() {
+  setSplitBusy(true);
+  try {
+    await reloadImagesList('/api/images/rescan', { method: 'POST' },
+      'split_reload', 'reload');
+  } finally {
+    setSplitBusy(false);
+  }
+}
+
+/**
  * Switch to a dataset split (or all splits) on the server.
  * @param {string|null} split - Split name, or null for all splits.
  */
 async function setSplit(split) {
+  setSplitBusy(true);
   try {
     const { res, data } = await apiPost('/api/split', { split: split || null });
     if (res.ok && data.ok) {
@@ -232,10 +264,14 @@ async function setSplit(split) {
     } else {
       dbgWarn('split switch failed', { status: res.status, error: data.error });
       toast(data.error || 'Split switch failed', { type: 'error' });
+      populateSplitSelect(); // revert the select to the server's active split
     }
   } catch (err) {
     dbgWarn('split switch error', err);
     toast('Error: ' + err.message, { type: 'error' });
+    populateSplitSelect();
+  } finally {
+    setSplitBusy(false);
   }
 }
 

@@ -2,6 +2,10 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.10.0
+- A reload button (↻) now sits beside the Split selector. It re-scans the image folders and re-runs the active filter chain for the selected split, keeping you on the same image.
+- Changing the split now shows a spinner at the Split control and briefly blocks the selector and reload button while the list (and filter chain) updates.
+
 ## 7.9.0
 - Two new built-in filters: Has tag and Does not have tag. Pick the tag from a dropdown filled from your tags.yaml (options: {DATASET_TAG_NAMES}); filters honour a custom tags folder via {TAGS_DIR}.
 - Fixed: the tag_image.py helper no longer mangles paths that merely contain "images" (e.g. images_backup) and can write to a custom tags folder; actions get a {TAGS_DIR} placeholder.

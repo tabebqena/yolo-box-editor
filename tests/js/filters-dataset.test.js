@@ -108,6 +108,52 @@ test('setSplit posts the split and reloads the config', async () => {
   assert.equal(posted.split, 'val');
 });
 
+test('setSplit shows the spinner and blocks the controls while in flight', async () => {
+  app.fetchMock.on('/api/split', () => ({ body: { ok: true } }));
+  app.fetchMock.on('/api/config', () => ({ body: CONFIG }));
+  const pending = app.api.setSplit('val');
+  assert.equal(app.$('splitSpinner').classList.contains('hidden'), false);
+  assert.equal(app.$('splitSelect').disabled, true);
+  assert.equal(app.$('splitReloadBtn').disabled, true);
+  await pending;
+  await app.flush();
+  assert.equal(app.$('splitSpinner').classList.contains('hidden'), true);
+  assert.equal(app.$('splitSelect').disabled, false);
+  assert.equal(app.$('splitReloadBtn').disabled, false);
+});
+
+test('setSplit reverts the select when the server rejects the split', async () => {
+  app.set({ splits: [{ name: 'train' }, { name: 'val' }], activeSplit: 'train' });
+  app.api.populateSplitSelect();
+  app.fetchMock.on('/api/split', () => ({ status: 400, body: { ok: false, error: 'nope' } }));
+  await app.api.setSplit('val');
+  await app.flush();
+  assert.equal(app.$('splitSelect').value, 'train');
+  assert.match(app.$('toasts').textContent, /nope/);
+});
+
+test('reloadSplitImages rescans and applies the selected split payload', async () => {
+  let method = null;
+  app.fetchMock.on('/api/images/rescan', (url, m) => {
+    method = m;
+    return {
+      body: {
+        ok: true,
+        images: [{ split: 'train', name: 'a.jpg' }],
+        active_split: 'train',
+        active_filters: [],
+      },
+    };
+  });
+  await app.api.reloadSplitImages();
+  await app.flush();
+  assert.equal(method, 'POST');
+  assert.equal(app.state().images.length, 1);
+  assert.equal(app.state().activeSplit, 'train');
+  assert.equal(app.$('splitReloadBtn').disabled, false);
+});
+
+
 test('setTagsDir posts the tag folder', async () => {
   app.$('tagsDirInput').value = '/data/tags';
   let posted = null;

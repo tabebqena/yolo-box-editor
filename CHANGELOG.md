@@ -4,6 +4,20 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.10.0] - 2026-10-05
+
+### Added
+
+- **A reload button beside the Split selector.** It re-scans the image folders
+  and re-runs the active filter chain for the selected split, then keeps you on
+  the same image. Handy when images or filter results changed on disk.
+
+### Changed
+
+- **Switching split now shows a spinner at the Split control** and temporarily
+  blocks the selector and reload button. Changing split can re-run the filter
+  chain, so the busy feedback makes it clear the list is still updating.
+
 ## [7.9.0] - 2026-10-04
 
 ### Added
