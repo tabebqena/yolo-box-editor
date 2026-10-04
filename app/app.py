@@ -27,10 +27,8 @@ import getpass
 import json
 import os
 import secrets
-import shutil
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 import urllib.error
@@ -70,6 +68,31 @@ from ybe.parsing import (
 
 from ybe import config, state
 from ybe.config import configure_home, ensure_user_dirs
+from ybe.dataset import (
+    _current_images,
+    _entry_by_key,
+    _image_index,
+    _labels_dir_for,
+    _load_dataset,
+    _parse_label_file,
+    _split_by_name,
+    _tags_dir_for,
+    is_image,
+    label_path,
+    read_classes,
+    scan_images,
+    scan_splits,
+    tag_path,
+)
+from ybe.filters import (
+    _clear_filter,
+    _known_image_paths,
+    _normalize_filter_chain,
+    _parse_filter_output,
+    apply_filters,
+    run_filter,
+    run_filter_chain,
+)
 from ybe.extensions import (
     FILTER_CLASS_NAMES_TOKEN,
     _bump_api_version_text,
@@ -110,6 +133,13 @@ from ybe.shortcuts import (
     user_shortcut_names,
     write_user_shortcuts,
 )
+from ybe.tags import (
+    read_tags_yaml,
+    register_available_tags,
+    save_tags_yaml,
+    tags_yaml_path,
+    write_image_tags,
+)
 
 
 app = Flask(
@@ -122,13 +152,6 @@ app = Flask(
 # key from `config.SECRET_KEY_FILE`, so a real run keeps sessions across
 # restarts and app updates.
 app.secret_key = secrets.token_hex(32)
-
-
-# --------------------------------------------------------------------------- #
-# helpers
-# --------------------------------------------------------------------------- #
-def is_image(name):
-    return os.path.splitext(name)[1].lower() in config.IMAGE_EXTS
 
 
 # --------------------------------------------------------------------------- #
@@ -726,323 +749,8 @@ def finish_execution(run):
 
 
 # --------------------------------------------------------------------------- #
-# filter-chain runtime: run a filter chain and cache its result in STATE
+# dataset resume + backend (server-side) action registry
 # --------------------------------------------------------------------------- #
-def _entry_path(entry):
-    """Absolute path of a scanned `{split, name}` entry (or None)."""
-    split = _split_by_name(entry["split"])
-    if split is None:
-        return None
-    return os.path.abspath(os.path.join(split["images_dir"], entry["name"]))
-
-
-def _known_image_paths():
-    """Map every scanned image's absolute path to its `{split, name}` entry."""
-    known = {}
-    for entry in state.STATE["images"]:
-        path = _entry_path(entry)
-        if path:
-            known[path] = entry
-    return known
-
-
-def _write_filter_input(path, entries):
-    """Write one absolute image path per line (a filter's input pipe)."""
-    with open(path, "w", encoding="utf-8") as f:
-        for entry in entries:
-            abs_path = _entry_path(entry)
-            if abs_path:
-                f.write(abs_path + "\n")
-
-
-def _parse_filter_output(text, known):
-    """Map absolute image paths to entries, keeping only known images.
-
-    Order is preserved and duplicates dropped. Returns (entries, skipped),
-    where `skipped` counts non-blank lines that map to no scanned image.
-    """
-    entries, seen, skipped = [], set(), 0
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-        entry = known.get(os.path.abspath(line))
-        if entry is None:
-            skipped += 1
-            continue
-        pair = (entry["split"], entry["name"])
-        if pair in seen:
-            continue
-        seen.add(pair)
-        entries.append(entry)
-    return entries, skipped
-
-
-def _read_filter_output(path, known):
-    """Read a filter's output pipe; missing/unreadable means an empty result."""
-    try:
-        with open(path, encoding="utf-8") as f:
-            return _parse_filter_output(f.read(), known)
-    except OSError:
-        return [], 0
-
-
-def _filter_placeholder_values(flt, data_yaml, split, input_pipe, output_pipe, arguments):
-    """Substitution values for a filter's steps (shared paths + pipes + args)."""
-    values = {
-        "DATASET_PATH": state.STATE["dataset_path"] or "",
-        "DATA_YAML_PATH": data_yaml or "",
-        "APP_DIR": config.BASE_DIR,
-        "HOME_DIR": config.YBX_HOME,
-        "APP_SCRIPT_DIR": config.APP_SCRIPT_DIR,
-        "USER_SCRIPT_DIR": config.USER_SCRIPT_DIR,
-        "PYTHON": sys.executable,
-        "SPLIT": split or "",
-        "INPUT_PIPE": input_pipe,
-        "OUTPUT_PIPE": output_pipe,
-    }
-    effective = effective_filter_arguments(flt, arguments)
-    for arg in flt["arguments"]:
-        key = arg["name"].upper()
-        if key not in values:
-            values[key] = effective.get(arg["name"], "")
-    return values
-
-
-def run_filter(name, data_yaml, split, input_pipe, output_pipe, arguments=None,
-               filters=None):
-    """Run filter `name` once; return {ok, error}.
-
-    Every `steps` entry is a shell command; the app substitutes the shared
-    placeholders, the pipe paths and each argument (as `{<NAME>}`) before it
-    runs. The filter reads candidate image paths from `input_pipe` and writes the
-    kept ones to `output_pipe`; the caller validates the output.
-    """
-    if filters is None:
-        filters = load_filters()[0]
-    flt = filters.get(name)
-    if flt is None:
-        return {"ok": False, "error": f"unknown filter: {name}"}
-
-    values = _filter_placeholder_values(flt, data_yaml, split, input_pipe, output_pipe, arguments)
-    for step in flt["steps"]:
-        command = build_command(step, values)
-        print(f"[ybe] filter: cwd={config.YBX_HOME} cmd={command}", file=sys.stderr)
-        try:
-            proc = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=config.FILTER_TIMEOUT,
-                cwd=config.YBX_HOME,
-                env=_subprocess_env(),
-            )
-        except subprocess.TimeoutExpired:
-            return {"ok": False, "error": "filter timed out"}
-        except OSError as exc:
-            return {"ok": False, "error": f"could not run filter: {exc}"}
-        if proc.returncode != 0:
-            detail = proc.stderr.strip() or f"exit code {proc.returncode}"
-            return {"ok": False, "error": detail}
-    return {"ok": True}
-
-
-def _normalize_filter_chain(items):
-    """Validate an active filter chain; return (chain, error).
-
-    `items` may be strings (legacy) or `{name, arguments}` dicts. The returned
-    chain fills each argument with its value/default and checks `required`.
-    """
-    filters, _ = load_filters()
-    chain = []
-    for item in items or []:
-        if isinstance(item, str):
-            item = {"name": item}
-        if not isinstance(item, dict):
-            return None, "invalid filter entry"
-        name = str(item.get("name") or "").strip()
-        if not name:
-            continue
-        flt = filters.get(name)
-        if flt is None:
-            return None, f"unknown filter: {name}"
-        effective = effective_filter_arguments(flt, item.get("arguments"))
-        for arg in flt["arguments"]:
-            value = effective.get(arg["name"], "")
-            if arg["required"] and not value.strip():
-                return None, f'Filter "{name}": argument "{arg["name"]}" is required'
-            options = resolve_filter_options(arg.get("options"), read_classes())
-            if options and value and value not in options:
-                return None, (
-                    f'Filter "{name}": argument "{arg["name"]}" must be one of: '
-                    f'{", ".join(options)}')
-        chain.append({"name": name, "arguments": effective})
-    return chain, None
-
-
-def run_filter_chain(chain, split):
-    """Run `chain` in order, piping each result into the next.
-
-    Each item is `{name, arguments}`. `split` selects the first filter's input
-    (its images, or every scanned image when it is empty/"All"). Returns
-    {ok, images, skipped, error, chain_dir}; `chain_dir` is the scratch directory
-    (kept only with --keep-filter-pipes).
-    """
-    known = _known_image_paths()
-    if not chain:
-        return {"ok": True, "images": [], "skipped": 0, "error": None,
-                "chain_dir": None}
-
-    try:
-        os.makedirs(config.FILTER_PIPES_DIR, exist_ok=True)
-        chain_dir = tempfile.mkdtemp(prefix="chain_", dir=config.FILTER_PIPES_DIR)
-    except OSError as exc:
-        return {"ok": False, "error": f"could not create filter pipes: {exc}",
-                "chain_dir": None}
-
-    filters, _ = load_filters()
-    initial = [e for e in state.STATE["images"] if e["split"] == split] if split \
-        else state.STATE["images"]
-    in_path = os.path.join(chain_dir, "input_0.txt")
-    _write_filter_input(in_path, initial)
-
-    entries, skipped, error = initial, 0, None
-    for i, item in enumerate(chain):
-        out_path = os.path.join(chain_dir, f"output_{i}.txt")
-        result = run_filter(item["name"], state.STATE["data_yaml"], split, in_path,
-                            out_path, item.get("arguments"), filters)
-        if not result["ok"]:
-            error = f'Filter "{item["name"]}" failed: {result["error"]}'
-            entries = None
-            break
-        entries, skipped = _read_filter_output(out_path, known)
-        in_path = out_path
-
-    if not state.STATE["keep_filter_pipes"]:
-        shutil.rmtree(chain_dir, ignore_errors=True)
-        chain_dir = None
-
-    if error:
-        return {"ok": False, "error": error, "chain_dir": chain_dir}
-    return {"ok": True, "images": entries, "skipped": skipped, "error": None,
-            "chain_dir": chain_dir}
-
-
-def _clear_filter():
-    state.STATE["active_filters"] = []
-    state.STATE["filter_images"] = None
-    state.STATE["filter_error"] = None
-
-
-def apply_filters(items):
-    """Run the filter chain for the current split and cache it in state.STATE.
-
-    `items` is a list of `{name, arguments}` (strings are accepted as legacy;
-    [] clears). Returns an error message on failure (state untouched), or None on
-    success.
-    """
-    chain, error = _normalize_filter_chain(items)
-    if error:
-        return error
-    if not chain:
-        _clear_filter()
-        return None
-    result = run_filter_chain(chain, state.STATE["active_split"])
-    if not result["ok"]:
-        return result["error"]
-    state.STATE["active_filters"] = chain
-    state.STATE["filter_images"] = result["images"]
-    if state.STATE["keep_filter_pipes"] and result["chain_dir"]:
-        print(f"[ybe] kept filter pipes: {result['chain_dir']}", file=sys.stderr)
-    state.STATE["filter_error"] = (
-        f"{result['skipped']} filter line(s) ignored" if result["skipped"] else None
-    )
-    return None
-
-
-def _replace_images_segment(images_dir, component):
-    """Replace the last `images` path segment with `component` (labels/tags)."""
-    parts = images_dir.replace("\\", "/").rstrip("/").split("/")
-    for i in range(len(parts) - 1, -1, -1):
-        if parts[i] == "images":
-            parts[i] = component
-            return "/".join(parts)
-    # fallback: sibling `component` folder next to the images dir
-    return os.path.normpath(os.path.join(images_dir, "..", component, os.path.basename(images_dir)))
-
-
-def _labels_dir_for(images_dir):
-    """Derive the labels dir by replacing the last `images` segment with `labels`."""
-    return _replace_images_segment(images_dir, "labels")
-
-
-def _tags_dir_for(images_dir, split_name=None):
-    """The tags dir: the per-dataset override, else `images` -> `tags`.
-
-    An override is a base folder; each split keeps its own subfolder
-    (`<override>/<split>`), matching the default `tags/<split>` layout.
-    """
-    override = state.STATE.get("tags_dir")
-    if override:
-        return os.path.join(override, split_name) if split_name else override
-    return _replace_images_segment(images_dir, "tags")
-
-
-def scan_splits():
-    """Parse data.yaml and build the list of {name, images_dir, labels_dir} splits."""
-    splits = []
-    if not state.STATE["data_yaml"] or not os.path.isfile(state.STATE["data_yaml"]):
-        return splits
-
-    data = _parse_data_yaml(state.STATE["data_yaml"])
-    data_yaml_dir = os.path.dirname(os.path.abspath(state.STATE["data_yaml"]))
-
-    base = data.get("path") or data_yaml_dir
-    if not os.path.isabs(base):
-        base = os.path.normpath(os.path.join(data_yaml_dir, base))
-    state.STATE["dataset_path"] = os.path.abspath(base)
-    state.STATE["classes"] = data.get("names") or []
-
-    for key in ("train", "val", "test"):
-        rel = data.get(key)
-        if not rel:
-            continue
-        images_dir = rel if os.path.isabs(rel) else os.path.join(state.STATE["dataset_path"], rel)
-        images_dir = os.path.normpath(images_dir)
-        if not os.path.isdir(images_dir):
-            continue
-        splits.append(
-            {
-                "name": key,
-                "images_dir": images_dir,
-                "labels_dir": _labels_dir_for(images_dir),
-                "tags_dir": _tags_dir_for(images_dir, key),
-            }
-        )
-    return splits
-
-
-def scan_images():
-    flat = []
-    for split in state.STATE["splits"]:
-        d = split["images_dir"]
-        if not os.path.isdir(d):
-            continue
-        for f in sorted(os.listdir(d)):
-            if os.path.isfile(os.path.join(d, f)) and is_image(f):
-                flat.append({"split": split["name"], "name": f})
-    return flat
-
-
-def _load_dataset(path):
-    """Activate the dataset at `path` in state.STATE. True when it has usable splits."""
-    state.STATE["data_yaml"] = os.path.abspath(path)
-    state.STATE["splits"] = scan_splits()
-    state.STATE["images"] = scan_images()
-    return bool(state.STATE["splits"])
-
-
 def _resume_last_dataset():
     """Activate the most recent still-existing data.yaml; None when there is none.
 
@@ -1057,20 +765,6 @@ def _resume_last_dataset():
     state.STATE["splits"] = []
     state.STATE["images"] = []
     return None
-
-
-def _current_images():
-    """The images visible to the UI.
-
-    A filter chain narrows the list to its own result (the chain's first filter
-    already received the active split as its input); otherwise the list is
-    filtered to the active split.
-    """
-    if state.STATE["active_filters"]:
-        return state.STATE["filter_images"] or []
-    if not state.STATE["active_split"]:
-        return state.STATE["images"]
-    return [e for e in state.STATE["images"] if e["split"] == state.STATE["active_split"]]
 
 
 def _rescan_images():
@@ -1099,213 +793,6 @@ def _rescan_images():
 BACKEND_ACTIONS = {
     "backend_rescan_images": _rescan_images,
 }
-
-
-def _split_by_name(name):
-    for s in state.STATE["splits"]:
-        if s["name"] == name:
-            return s
-    return None
-
-
-def label_path(entry):
-    split = _split_by_name(entry["split"])
-    if split is None:
-        return None
-    stem = os.path.splitext(entry["name"])[0]
-    return os.path.join(split["labels_dir"], stem + ".txt")
-
-
-def tag_path(entry):
-    """Per-image tag file: same stem as the image, stored under the split's tags dir."""
-    split = _split_by_name(entry["split"])
-    if split is None:
-        return None
-    stem = os.path.splitext(entry["name"])[0]
-    return os.path.join(split["tags_dir"], stem + ".txt")
-
-
-def tags_yaml_path():
-    """Path of the dataset's tags.yaml (beside data.yaml), or None."""
-    if not state.STATE["data_yaml"]:
-        return None
-    return os.path.join(os.path.dirname(os.path.abspath(state.STATE["data_yaml"])), "tags.yaml")
-
-
-def read_tags_yaml():
-    """Read the available-tags list from the dataset's tags.yaml ([] if absent).
-
-    The list is a bare YAML list; a nested `tags:` key is ignored.
-    """
-    path = tags_yaml_path()
-    if not path:
-        return []
-    try:
-        with open(path, encoding="utf-8") as f:
-            lines = f.readlines()
-    except OSError:
-        return []
-    return _normalize_tags(_toplevel_list_names(lines))
-
-
-def save_tags_yaml(tags):
-    """Write `tags` to the dataset's tags.yaml as a plain list, one per row.
-
-    The canonical shape is a bare top-level list, one tag per line, each
-    prefixed by ``- ``:
-
-        - fire
-        - smoke
-
-    Any other content is preserved: an old `tags:` key (with its block) is
-    replaced in place, and a pre-existing bare list is rewritten. Returns the
-    written path, or None when no dataset is loaded.
-    """
-    path = tags_yaml_path()
-    if not path:
-        return None
-    tags = _normalize_tags(tags)
-    try:
-        with open(path, encoding="utf-8") as f:
-            lines = f.readlines()
-    except OSError:
-        lines = []
-
-    # Drop a pre-existing bare list; it is rewritten below.
-    lines = [ln for ln in lines if not _is_toplevel_list_item(ln)]
-
-    out = []
-    replaced = False
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        if not replaced and _strip_comment(line.strip()).startswith("tags:"):
-            for t in tags:
-                out.append(f"- {t}\n")
-            i += 1
-            # skip the old tag block (list items only; stop at anything else)
-            while i < len(lines) and _strip_comment(lines[i].strip()).startswith("-"):
-                i += 1
-            replaced = True
-            continue
-        out.append(line)
-        i += 1
-
-    if not replaced:
-        if out and out[-1].strip():
-            out.append("\n")
-        for t in tags:
-            out.append(f"- {t}\n")
-
-    text = "".join(out)
-    if not text.endswith("\n"):
-        text += "\n"
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
-    return path
-
-
-def write_image_tags(entry, tags):
-    """Write one image's tag file (normalized, one tag per line).
-
-    Creates the split's tags folder when needed. Returns the written path, or
-    None when the split is unknown.
-    """
-    split = _split_by_name(entry["split"])
-    path = tag_path(entry)
-    if split is None or path is None:
-        return None
-    tags = _normalize_tags(tags)
-    os.makedirs(split["tags_dir"], exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write("\n".join(tags))
-        if tags:
-            f.write("\n")
-    return path
-
-
-def register_available_tags(tags):
-    """Add tag names not yet in tags.yaml, preserving order.
-
-    `tags.yaml` is rewritten only when there is at least one new name; when
-    every name is already known the file is left untouched. Returns the
-    resulting available-tags list ([] when no dataset is loaded).
-    """
-    available = read_tags_yaml()
-    if tags_yaml_path() is None:
-        return available
-    fresh = [t for t in _normalize_tags(tags) if t not in available]
-    if not fresh:
-        return available
-    available = available + fresh
-    save_tags_yaml(available)
-    return available
-
-
-def _parse_label_file(path):
-    """Return a list of (class, cx, cy, w, h) tuples from a YOLO label file."""
-    boxes = []
-    try:
-        with open(path, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                parts = line.split()
-                if len(parts) < 5:
-                    continue
-                try:
-                    cls = int(float(parts[0]))
-                    cx, cy, w, h = (float(x) for x in parts[1:5])
-                except ValueError:
-                    continue
-                boxes.append((cls, cx, cy, w, h))
-    except OSError:
-        pass
-    return boxes
-
-
-def read_classes():
-    if state.STATE["classes"]:
-        return state.STATE["classes"]
-    # fallback: derive max class id from existing label files
-    max_cls = -1
-    for entry in state.STATE["images"]:
-        p = label_path(entry)
-        if p is None:
-            continue
-        if not os.path.isfile(p):
-            continue
-        for cls, *_ in _parse_label_file(p):
-            max_cls = max(max_cls, cls)
-    if max_cls >= 0:
-        return [f"class_{i}" for i in range(max_cls + 1)]
-    return ["class_0"]
-
-
-def _entry_by_key(key):
-    """Resolve a `split/name` key to a known image entry, or None.
-
-    Identity (not position) is the stable way to name an image: the active
-    filter/split can rebuild the list at any time, so an index may point at a
-    different file than the client is showing.
-    """
-    if not key or "/" not in key:
-        return None
-    split, name = key.split("/", 1)
-    for entry in state.STATE["images"]:
-        if entry["split"] == split and entry["name"] == name:
-            return entry
-    return None
-
-
-def _image_index(entry):
-    """The 1-based position of `entry` in the visible list, else None."""
-    visible = _current_images()
-    for i, e in enumerate(visible):
-        if e["split"] == entry["split"] and e["name"] == entry["name"]:
-            return i + 1
-    return None
 
 
 def _request_entry():
