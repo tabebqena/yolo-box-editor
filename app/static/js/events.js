@@ -14,9 +14,10 @@ const ESCAPE_CLOSERS = [
 ];
 
 // ------------------------------------------------------------------------- //
-// events
+// canvas interaction (draw / move / resize)
 // ------------------------------------------------------------------------- //
-canvas.addEventListener('mousedown', (e) => {
+
+function onCanvasMouseDown(e) {
   closeClassPicker();
   if (!imgW || !imgH || readonly) return;
   const p = canvasPos(e);
@@ -89,11 +90,11 @@ canvas.addEventListener('mousedown', (e) => {
   syncClassSelect(selected);
   dirty = true;
   draw();
-});
+}
 
 // Listen on window (not just the canvas) so a drag that leaves the image still
 // tracks the cursor and completes on release instead of losing the box.
-window.addEventListener('mousemove', (e) => {
+function onWindowMouseMove(e) {
   const p = canvasPos(e);
   if (mode === 'drawing' && start) {
     mouse = clampToImage(p);
@@ -108,9 +109,9 @@ window.addEventListener('mousemove', (e) => {
       updateCursor(p);
     }
   }
-});
+}
 
-window.addEventListener('mouseup', (e) => {
+function onWindowMouseUp(e) {
   const edited = (mode === 'moving' || mode === 'resizing') && moved;
   let created = false;
   if (mode === 'drawing' && start) {
@@ -143,149 +144,11 @@ window.addEventListener('mouseup', (e) => {
     scheduleAutoSave();
     runHook('on_box_edited');
   }
-});
-
-el('prevBtn').addEventListener('click', () => go(-1));
-el('nextBtn').addEventListener('click', () => go(1));
-el('saveBtn').addEventListener('click', () => save());
-el('undoBtn').addEventListener('click', undo);
-el('redoBtn').addEventListener('click', redo);
-el('setDataBtn').addEventListener('click', setDataYaml);
-el('tagsDirBtn').addEventListener('click', setTagsDir);
-el('tagsDirInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') setTagsDir();
-});
-el('actionsExpandBtn').addEventListener('click', () => {
-  actionsExpanded = !actionsExpanded;
-  applyActionOverflow();
-});
-el('settingsBtn').addEventListener('click', openSettingsModal);
-el('settingsModalClose').addEventListener('click', closeSettingsModal);
-bindModalBackdrop('settingsModal', closeSettingsModal);
-qsa('.settings-tab').forEach((tab) => {
-  tab.addEventListener('click', () => selectSettingsTab(tab.dataset.tab));
-});
-qsa('.sub-tab').forEach((tab) => {
-  tab.addEventListener('click', () => {
-    selectSubTab(tab.dataset.sub, tab.closest('.settings-panel') || document);
-  });
-});
-el('shortcutEditBtn').addEventListener('click', () => setShortcutEditMode(true));
-el('shortcutCancelBtn').addEventListener('click', () => setShortcutEditMode(false));
-el('shortcutSaveBtn').addEventListener('click', saveShortcuts);
-el('loadDataBtn').addEventListener('click', loadDataFromModal);
-el('loadDataYaml').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') loadDataFromModal();
-});
-el('loadDataModalClose').addEventListener('click', closeLoadDataModal);
-bindModalBackdrop('loadDataModal', closeLoadDataModal);
-el('updateCheckBtn').addEventListener('click', () => {
-  el('updateStatus').textContent = 'Checking…';
-  refreshUpdateInfo(true);
-});
-el('updateHowBtn').addEventListener('click', openUpdateModal);
-el('updateModalClose').addEventListener('click', closeUpdateModal);
-bindModalBackdrop('updateModal', closeUpdateModal);
-el('changelogModalClose').addEventListener('click', closeChangelog);
-bindModalBackdrop('changelogModal', closeChangelog);
-el('tipModalClose').addEventListener('click', closeTipModal);
-bindModalBackdrop('tipModal', closeTipModal);
-el('yamlEditorClose').addEventListener('click', closeYamlEditor);
-el('yamlEditorCancel').addEventListener('click', closeYamlEditor);
-bindModalBackdrop('yamlEditorModal', closeYamlEditor);
-el('yamlEditorSave').addEventListener('click', saveYamlEditor);
-el('notifBtn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  toggleNotifPanel();
-});
-el('notifClear').addEventListener('click', () => {
-  notifLog = [];
-  notifUnread = 0;
-  updateNotifBadge();
-  renderNotifPanel();
-});
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('#notifPanel') && !e.target.closest('#notifBtn')) {
-    toggleNotifPanel(false);
-  }
-});
-el('recentSelect').addEventListener('change', () => {
-  const val = el('recentSelect').value;
-  if (!val) return;
-  el('dataYaml').value = val;
-  el('recentSelect').value = '';
-  setDataYaml();
-});
-el('splitSelect').addEventListener('change', () => setSplit(el('splitSelect').value));
-el('filterPanelClear').addEventListener('click', () => applyFilterChain([]));
-el('filterPanelApply').addEventListener('click', () => applyFilterChain(selectedFilterChain()));
-el('filterAddBtn').addEventListener('click', addFilterBlock);
-const counterInput = el('counter');
-counterInput.addEventListener('focus', () => counterInput.select());
-counterInput.addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter') return;
-  e.preventDefault();
-  jumpToImage(counterInput.value);
-  counterInput.blur();
-});
-counterInput.addEventListener('blur', () => updateNav());
-el('actionResultClose').addEventListener('click', closeActionResult);
-
-el('autoSaveSw').addEventListener('change', (e) => {
-  autoSave = e.target.checked;
-  settingsSet('autoSave', autoSave ? '1' : '0');
-  if (autoSave) scheduleAutoSave(); // save what is already pending
-  else clearTimeout(autoSaveTimer);
-});
-
-el('tipsSw').addEventListener('change', (e) => {
-  settingsSet('ybe_tips_enabled', e.target.checked ? '1' : '0');
-  if (!e.target.checked) closeTipModal();
-});
-
-el('addTagBtn').addEventListener('click', () => {
-  if (el('tagInput').classList.contains('hidden')) openTagInput();
-  else closeTagInput();
-});
-el('tagSubmitBtn').addEventListener('click', () => {
-  addTagFromInput();
-  closeTagInput();
-});
-el('tagExpandBtn').addEventListener('click', () => {
-  const bar = el('tagBar');
-  const expanded = bar.classList.toggle('expanded');
-  el('tagExpandBtn').title = expanded ? 'Show fewer tags' : 'Show all tags';
-  applyTagOverflow();
-});
-el('tagInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !readonly) {
-    e.preventDefault();
-    addTagFromInput();
-    closeTagInput();
-  } else if (e.key === 'Escape') {
-    e.preventDefault();
-    closeTagInput();
-  }
-});
-window.addEventListener('resize', applyTagOverflow);
-
-const classSelectEl = el('classSelect');
-if (classSelectEl) {
-  classSelectEl.addEventListener('change', () => {
-    const v = parseInt(classSelectEl.value, 10);
-    if (selected >= 0) {
-      if (readonly) return;
-      boxes[selected].class = v;
-      justDrawn = false;
-      markDirty();
-      draw();
-      updateHistoryButtons();
-      runHook('on_box_edited');
-    } else {
-      defaultClass = v;
-    }
-  });
 }
+
+// ------------------------------------------------------------------------- //
+// image list reload + app shortcut actions
+// ------------------------------------------------------------------------- //
 
 // Fetch a fresh image list and apply it, keeping the current image by path.
 // `url` is the endpoint (GET) or the endpoint plus a fetch init; `tag` and
@@ -480,6 +343,10 @@ function escDeactivateRow(e) {
   return false;
 }
 
+// ------------------------------------------------------------------------- //
+// keyboard dispatch
+// ------------------------------------------------------------------------- //
+
 function dispatchAppShortcut(e) {
   for (const name of APP_SHORTCUT_ORDER) {
     if (name === 'app_force_draw') continue; // modifier-only, matched on mousedown
@@ -491,32 +358,6 @@ function dispatchAppShortcut(e) {
   }
   return false;
 }
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    for (const [id, close] of ESCAPE_CLOSERS) {
-      if (!isHidden(id)) { close(); return; }
-    }
-  }
-  // app_escape / app_sel_points must also work while typing in inputs
-  const escInfo = appShortcuts['app_escape'];
-  if (escInfo && shortcutMatches(e, escInfo.shortcut) && escDeactivateRow(e)) return;
-  const ptsInfo = appShortcuts['app_sel_points'];
-  if (ptsInfo && shortcutMatches(e, ptsInfo.shortcut) && tabCycleRow(e)) return;
-
-  if (e.target.matches('input, select, textarea')) return;
-  // Alt + digit toggles the matching available tag (Alt+1 = first in tags.yaml)
-  if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code.startsWith('Digit')) {
-    const n = parseInt(e.code.slice(5), 10);
-    if (n >= 1 && n <= availableTags.length) {
-      e.preventDefault();
-      toggleTagByNumber(n);
-      return;
-    }
-  }
-  if (dispatchAppShortcut(e)) return;
-  runActionForShortcut(e);
-});
 
 function shortcutMatches(e, shortcut) {
   const parts = shortcut.split('+').map((s) => s.trim());
@@ -544,6 +385,32 @@ function runActionForShortcut(e) {
   }
 }
 
+function onGlobalKeyDown(e) {
+  if (e.key === 'Escape') {
+    for (const [id, close] of ESCAPE_CLOSERS) {
+      if (!isHidden(id)) { close(); return; }
+    }
+  }
+  // app_escape / app_sel_points must also work while typing in inputs
+  const escInfo = appShortcuts['app_escape'];
+  if (escInfo && shortcutMatches(e, escInfo.shortcut) && escDeactivateRow(e)) return;
+  const ptsInfo = appShortcuts['app_sel_points'];
+  if (ptsInfo && shortcutMatches(e, ptsInfo.shortcut) && tabCycleRow(e)) return;
+
+  if (e.target.matches('input, select, textarea')) return;
+  // Alt + digit toggles the matching available tag (Alt+1 = first in tags.yaml)
+  if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code.startsWith('Digit')) {
+    const n = parseInt(e.code.slice(5), 10);
+    if (n >= 1 && n <= availableTags.length) {
+      e.preventDefault();
+      toggleTagByNumber(n);
+      return;
+    }
+  }
+  if (dispatchAppShortcut(e)) return;
+  runActionForShortcut(e);
+}
+
 // Set up the appearance controls once, after /api/config has supplied the
 // server's settings (so `settingsGet` can fall back to them). Idempotent: the
 // fallback path below and later config reloads must not re-init.
@@ -558,3 +425,193 @@ function initSettings() {
   boxesVisible = settingsGet(SHOW_BOXES_KEY) !== '0';
   el('tipsSw').checked = settingsGet('ybe_tips_enabled') !== '0';
 }
+
+// ------------------------------------------------------------------------- //
+// wiring
+// ------------------------------------------------------------------------- //
+
+function wireCanvas() {
+  canvas.addEventListener('mousedown', onCanvasMouseDown);
+  // window (not just the canvas): a drag that leaves the image still tracks
+  // the cursor and completes on release instead of losing the box.
+  window.addEventListener('mousemove', onWindowMouseMove);
+  window.addEventListener('mouseup', onWindowMouseUp);
+}
+
+function wireNavigation() {
+  el('prevBtn').addEventListener('click', () => go(-1));
+  el('nextBtn').addEventListener('click', () => go(1));
+  el('splitSelect').addEventListener('change', () => setSplit(el('splitSelect').value));
+  el('recentSelect').addEventListener('change', () => {
+    const val = el('recentSelect').value;
+    if (!val) return;
+    el('dataYaml').value = val;
+    el('recentSelect').value = '';
+    setDataYaml();
+  });
+  el('setDataBtn').addEventListener('click', setDataYaml);
+  el('tagsDirBtn').addEventListener('click', setTagsDir);
+  el('tagsDirInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') setTagsDir();
+  });
+
+  const counterInput = el('counter');
+  counterInput.addEventListener('focus', () => counterInput.select());
+  counterInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    jumpToImage(counterInput.value);
+    counterInput.blur();
+  });
+  counterInput.addEventListener('blur', () => updateNav());
+}
+
+function wireEditingControls() {
+  el('saveBtn').addEventListener('click', () => save());
+  el('undoBtn').addEventListener('click', undo);
+  el('redoBtn').addEventListener('click', redo);
+  el('autoSaveSw').addEventListener('change', (e) => {
+    autoSave = e.target.checked;
+    settingsSet('autoSave', autoSave ? '1' : '0');
+    if (autoSave) scheduleAutoSave(); // save what is already pending
+    else clearTimeout(autoSaveTimer);
+  });
+  el('actionResultClose').addEventListener('click', closeActionResult);
+
+  const classSelectEl = el('classSelect');
+  if (classSelectEl) {
+    classSelectEl.addEventListener('change', () => {
+      const v = parseInt(classSelectEl.value, 10);
+      if (selected >= 0) {
+        if (readonly) return;
+        boxes[selected].class = v;
+        justDrawn = false;
+        markDirty();
+        draw();
+        updateHistoryButtons();
+        runHook('on_box_edited');
+      } else {
+        defaultClass = v;
+      }
+    });
+  }
+}
+
+function wireTags() {
+  el('addTagBtn').addEventListener('click', () => {
+    if (el('tagInput').classList.contains('hidden')) openTagInput();
+    else closeTagInput();
+  });
+  el('tagSubmitBtn').addEventListener('click', () => {
+    addTagFromInput();
+    closeTagInput();
+  });
+  el('tagExpandBtn').addEventListener('click', () => {
+    const bar = el('tagBar');
+    const expanded = bar.classList.toggle('expanded');
+    el('tagExpandBtn').title = expanded ? 'Show fewer tags' : 'Show all tags';
+    applyTagOverflow();
+  });
+  el('tagInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !readonly) {
+      e.preventDefault();
+      addTagFromInput();
+      closeTagInput();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeTagInput();
+    }
+  });
+  window.addEventListener('resize', applyTagOverflow);
+}
+
+function wireUpdates() {
+  el('updateCheckBtn').addEventListener('click', () => {
+    el('updateStatus').textContent = 'Checking…';
+    refreshUpdateInfo(true);
+  });
+  el('updateHowBtn').addEventListener('click', openUpdateModal);
+  el('updateModalClose').addEventListener('click', closeUpdateModal);
+  bindModalBackdrop('updateModal', closeUpdateModal);
+}
+
+function wireSettings() {
+  el('settingsBtn').addEventListener('click', openSettingsModal);
+  el('settingsModalClose').addEventListener('click', closeSettingsModal);
+  bindModalBackdrop('settingsModal', closeSettingsModal);
+  qsa('.settings-tab').forEach((tab) => {
+    tab.addEventListener('click', () => selectSettingsTab(tab.dataset.tab));
+  });
+  qsa('.sub-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      selectSubTab(tab.dataset.sub, tab.closest('.settings-panel') || document);
+    });
+  });
+  el('shortcutEditBtn').addEventListener('click', () => setShortcutEditMode(true));
+  el('shortcutCancelBtn').addEventListener('click', () => setShortcutEditMode(false));
+  el('shortcutSaveBtn').addEventListener('click', saveShortcuts);
+  el('actionsExpandBtn').addEventListener('click', () => {
+    actionsExpanded = !actionsExpanded;
+    applyActionOverflow();
+  });
+  el('filterPanelClear').addEventListener('click', () => applyFilterChain([]));
+  el('filterPanelApply').addEventListener('click', () => applyFilterChain(selectedFilterChain()));
+  el('filterAddBtn').addEventListener('click', addFilterBlock);
+  el('tipsSw').addEventListener('change', (e) => {
+    settingsSet('ybe_tips_enabled', e.target.checked ? '1' : '0');
+    if (!e.target.checked) closeTipModal();
+  });
+}
+
+function wireDatasetModals() {
+  el('loadDataBtn').addEventListener('click', loadDataFromModal);
+  el('loadDataYaml').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') loadDataFromModal();
+  });
+  el('loadDataModalClose').addEventListener('click', closeLoadDataModal);
+  bindModalBackdrop('loadDataModal', closeLoadDataModal);
+  el('changelogModalClose').addEventListener('click', closeChangelog);
+  bindModalBackdrop('changelogModal', closeChangelog);
+  el('tipModalClose').addEventListener('click', closeTipModal);
+  bindModalBackdrop('tipModal', closeTipModal);
+}
+
+function wireYamlEditor() {
+  el('yamlEditorClose').addEventListener('click', closeYamlEditor);
+  el('yamlEditorCancel').addEventListener('click', closeYamlEditor);
+  bindModalBackdrop('yamlEditorModal', closeYamlEditor);
+  el('yamlEditorSave').addEventListener('click', saveYamlEditor);
+}
+
+function wireNotifications() {
+  el('notifBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleNotifPanel();
+  });
+  el('notifClear').addEventListener('click', () => {
+    notifLog = [];
+    notifUnread = 0;
+    updateNotifBadge();
+    renderNotifPanel();
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#notifPanel') && !e.target.closest('#notifBtn')) {
+      toggleNotifPanel(false);
+    }
+  });
+}
+
+function wireEvents() {
+  wireCanvas();
+  wireNavigation();
+  wireEditingControls();
+  wireTags();
+  wireUpdates();
+  wireSettings();
+  wireDatasetModals();
+  wireYamlEditor();
+  wireNotifications();
+  document.addEventListener('keydown', onGlobalKeyDown);
+}
+
+wireEvents();
