@@ -7,8 +7,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test tests/js",
-    "test:js": "node --test tests/js"
+    "test": "node --test \"tests/js/**/*.test.js\"",
+    "test:js": "node --test \"tests/js/**/*.test.js\""
   },
   "devDependencies": {
     "jsdom": "^30.1.2"
