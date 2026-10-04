@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.11.0
+- New action and shortcut for a minimal box view: press `,` to hide the resize anchors, the class label and the `x` / `/` corner buttons so only the box outlines remain. Press it again to show them; the choice is remembered across reloads.
+
 ## 7.10.0
 - A reload button (↻) now sits beside the Split selector. It re-scans the image folders and re-runs the active filter chain for the selected split, keeping you on the same image.
 - Changing the split now shows a spinner at the Split control and briefly blocks the selector and reload button while the list (and filter chain) updates.

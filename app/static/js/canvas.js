@@ -231,22 +231,24 @@ function draw(panelMode) {
       ctx.strokeRect(r.x, r.y, r.w, r.h);
       ctx.setLineDash([]);
 
-      const label = `${b.class}: ${classes[b.class] || 'class ' + b.class}`;
-      ctx.font = '14px system-ui, sans-serif';
-      const tw = ctx.measureText(label).width;
-      const ly = Math.max(0, r.y - 18);
-      ctx.fillStyle = fixed
-        ? 'rgba(138,147,166,0.9)'
-        : active ? 'rgba(255,209,102,0.92)' : 'rgba(46,204,113,0.85)';
-      ctx.fillRect(r.x, ly, tw + 8, 18);
-      ctx.fillStyle = '#111';
-      ctx.fillText(label, r.x + 4, ly + 13);
+      if (boxDetailsVisible) {
+        const label = `${b.class}: ${classes[b.class] || 'class ' + b.class}`;
+        ctx.font = '14px system-ui, sans-serif';
+        const tw = ctx.measureText(label).width;
+        const ly = Math.max(0, r.y - 18);
+        ctx.fillStyle = fixed
+          ? 'rgba(138,147,166,0.9)'
+          : active ? 'rgba(255,209,102,0.92)' : 'rgba(46,204,113,0.85)';
+        ctx.fillRect(r.x, ly, tw + 8, 18);
+        ctx.fillStyle = '#111';
+        ctx.fillText(label, r.x + 4, ly + 13);
 
-      if (!readonly) {
-        drawDeleteButton(r);
-        drawClassButton(r);
+        if (!readonly) {
+          drawDeleteButton(r);
+          drawClassButton(r);
+        }
+        if (active && !readonly && !fixed) drawHandles(r);
       }
-      if (active && !readonly && !fixed) drawHandles(r);
       if (editingPoint && editingPoint.i === idx) drawPointGuide(r, editingPoint.name);
     });
   }
@@ -397,7 +399,7 @@ function canvasPos(e) {
  * @returns {string|null} The handle name, or null.
  */
 function handleHit(p) {
-  if (!boxesVisible || selected < 0 || boxes[selected].fixed) return null;
+  if (!boxesVisible || !boxDetailsVisible || selected < 0 || boxes[selected].fixed) return null;
   const r = toPx(boxes[selected]);
   for (const hp of handlePoints(r)) {
     if (Math.abs(p.x - hp.x) <= HANDLE_SIZE && Math.abs(p.y - hp.y) <= HANDLE_SIZE) {
@@ -417,16 +419,18 @@ function hitTest(p) {
   if (!boxesVisible) return { type: 'none' };
   const h = handleHit(p);
   if (h) return { type: 'handle', handle: h, index: selected };
-  for (let i = boxes.length - 1; i >= 0; i--) {
-    const d = deleteBtnRect(toPx(boxes[i]));
-    if (p.x >= d.x && p.x <= d.x + d.w && p.y >= d.y && p.y <= d.y + d.h) {
-      return { type: 'delete', index: i };
+  if (boxDetailsVisible) {
+    for (let i = boxes.length - 1; i >= 0; i--) {
+      const d = deleteBtnRect(toPx(boxes[i]));
+      if (p.x >= d.x && p.x <= d.x + d.w && p.y >= d.y && p.y <= d.y + d.h) {
+        return { type: 'delete', index: i };
+      }
     }
-  }
-  for (let i = boxes.length - 1; i >= 0; i--) {
-    const c = classBtnRect(toPx(boxes[i]));
-    if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
-      return { type: 'class', index: i };
+    for (let i = boxes.length - 1; i >= 0; i--) {
+      const c = classBtnRect(toPx(boxes[i]));
+      if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
+        return { type: 'class', index: i };
+      }
     }
   }
   for (let i = boxes.length - 1; i >= 0; i--) {

@@ -288,6 +288,12 @@ const APP_SHORTCUT_HANDLERS = {
     settingsSet(SHOW_BOXES_KEY, boxesVisible ? '1' : '0');
     draw();
   },
+  app_box_details: (e) => {
+    e.preventDefault();
+    boxDetailsVisible = !boxDetailsVisible;
+    settingsSet(SHOW_BOX_DETAILS_KEY, boxDetailsVisible ? '1' : '0');
+    draw();
+  },
   app_fix_box: (e) => {
     if (readonly || selected < 0) return;
     e.preventDefault();
@@ -525,6 +531,7 @@ function initSettings() {
   el('autoSaveSw').checked = settingsGet('autoSave') === '1';
   autoSave = el('autoSaveSw').checked;
   boxesVisible = settingsGet(SHOW_BOXES_KEY) !== '0';
+  boxDetailsVisible = settingsGet(SHOW_BOX_DETAILS_KEY) !== '0';
   el('tipsSw').checked = settingsGet('ybe_tips_enabled') !== '0';
 }
 

@@ -217,6 +217,24 @@ test('runAppAction dispatches the built-in action handlers', async () => {
   assert.equal(app.state().boxes.length, 2);
 });
 
+test('app_box_details toggles the details flag', () => {
+  ready({ boxDetailsVisible: true });
+  app.api.runAppAction('app_box_details', { preventDefault() {} });
+  assert.equal(app.state().boxDetailsVisible, false);
+  app.api.runAppAction('app_box_details', { preventDefault() {} });
+  assert.equal(app.state().boxDetailsVisible, true);
+});
+
+test('app_box_details hides the corner buttons and handles from hit-testing', () => {
+  ready({ imgW: 100, imgH: 100, boxes: [box()], selected: -1, boxDetailsVisible: true });
+  assert.equal(app.api.hitTest({ x: 42, y: 42 }).type, 'class');
+  app.set({ selected: 0 });
+  assert.equal(app.api.hitTest({ x: 40, y: 40 }).type, 'handle');
+  app.set({ boxDetailsVisible: false });
+  assert.equal(app.api.hitTest({ x: 42, y: 42 }).type, 'box');
+  assert.equal(app.api.hitTest({ x: 40, y: 40 }).type, 'box');
+});
+
 test('runAppAction rejects an unknown action name', async () => {
   await assert.rejects(() => app.api.runAppAction('app_nope', {}), /unknown app action/);
 });
@@ -273,4 +291,14 @@ test('dispatchAppShortcut runs a bound app action', () => {
   });
   assert.equal(handled, true);
   assert.equal(app.state().boxesVisible, false);
+});
+
+test('dispatchAppShortcut runs app_box_details on comma', () => {
+  ready({ appShortcuts: { app_box_details: { shortcut: ',', label: 'Box details' } }, boxDetailsVisible: true });
+  const handled = app.api.dispatchAppShortcut({
+    code: 'Comma', key: ',', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false,
+    preventDefault() {},
+  });
+  assert.equal(handled, true);
+  assert.equal(app.state().boxDetailsVisible, false);
 });

@@ -4,6 +4,15 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.11.0] - 2026-10-05
+
+### Added
+
+- **A new action and shortcut for a minimal box view.** Press `,` (or bind
+  `app_box_details`) to hide the resize anchors, the class-name label and the
+  `x` / `/` corner buttons, leaving only the box outlines. Press it again to
+  bring them back; the choice is remembered across reloads.
+
 ## [7.10.0] - 2026-10-05
 
 ### Added
