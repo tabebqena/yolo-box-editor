@@ -4,6 +4,15 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.8.0] - 2026-10-04
+
+### Changed
+
+- **Running an action or hook no longer shows automatic success feedback.**
+  A successful run is silent and logged to the browser console; only a failure
+  notifies you, with a toast carrying the reason. Previously a hook toasted
+  "`<name>` succeeded" and a manual action opened the action-result modal.
+
 ## [7.7.0] - 2026-10-04
 
 ### Fixed

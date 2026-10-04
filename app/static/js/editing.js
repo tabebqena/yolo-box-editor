@@ -343,14 +343,6 @@ function closeActionResult() {
 }
 
 /**
- * Event hooks report success as a transient toast; failures still use the modal.
- * @param {string} msg - Status message to toast.
- */
-function setHookStatus(msg) {
-  toast(msg, { type: 'success', timeout: 3000 });
-}
-
-/**
  * Run one user action (or event hook) on the current image. `confirm: false`
  * skips the confirmation prompt — hooks run automatically. The backend owns the
  * steps + after_success chain and pauses whenever an app action is needed: it
@@ -387,20 +379,18 @@ async function runAction(name, opts = {}) {
     }
     dbg(`"${name}" response`, data);
     if (!data.ok) {
-      // failures always use the modal
-      showActionResult(data);
+      toast(`"${name}" failed: ${data.error || data.stderr || 'see console'}`, { type: 'error' });
       console.error(`[user action] "${name}" failed:`, {
         exit_code: data.exit_code,
         command: data.command,
       });
       return false;
     }
-    if (isHook) setHookStatus(`${name} succeeded`);
-    else showActionResult(data);
+    console.log(`[user action] "${name}" succeeded`, data);
     return true;
   } catch (err) {
     dbgWarn(`"${name}" request error`, err);
-    showActionResult({ ok: false, action: name, error: 'Error: ' + err.message });
+    toast(`"${name}" failed: ${err.message}`, { type: 'error' });
     return false;
   } finally {
     setActionButtonsDisabled(readonly);

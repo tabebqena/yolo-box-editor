@@ -1,6 +1,6 @@
 'use strict';
 
-// User actions, event hooks and the action-result modal.
+// User actions, event hooks and action result reporting.
 
 const { test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
@@ -74,14 +74,15 @@ test('applyActionOverflow hides the fourth action until expanded', () => {
   assert.equal(app.$('actionsExpandBtn').title, 'Show fewer actions');
 });
 
-test('runAction runs a server action and shows the result', async () => {
+test('runAction runs a server action silently on success', async () => {
   ready();
   app.fetchMock.on('/api/actions/run', () => ({
     body: { ok: true, action: 'Greet', command: 'echo hi', exit_code: 0, stdout: 'hi', stderr: '' },
   }));
   const ok = await app.api.runAction('Greet');
   assert.equal(ok, true);
-  assert.equal(app.api.isHidden('actionResult'), false);
+  assert.equal(app.api.isHidden('actionResult'), true);
+  assert.equal(app.$('toasts').children.length, 0);
 });
 
 test('runAction drives an after_success client action and resumes the server', async () => {
@@ -99,14 +100,14 @@ test('runAction drives an after_success client action and resumes the server', a
   assert.equal(app.state().boxesVisible, false); // the client action ran
 });
 
-test('runAction returns false and shows the modal when the action fails', async () => {
+test('runAction returns false and toasts when the action fails', async () => {
   ready();
   app.fetchMock.on('/api/actions/run', () => ({
     body: { ok: false, action: 'Bad', error: 'nope', exit_code: 1 },
   }));
   const ok = await app.api.runAction('Bad');
   assert.equal(ok, false);
-  assert.match(app.$('actionResultTitle').textContent, /failed/);
+  assert.match(app.$('toasts').textContent, /Bad.*nope/);
 });
 
 test('runAction does nothing without a current image', async () => {

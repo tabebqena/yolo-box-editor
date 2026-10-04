@@ -161,8 +161,9 @@ after_success:
 
 An **event hook** is a YAML file in your `hooks/` folder (not `actions/`) that
 runs when the app fires an event. Hooks use the same `steps` / `after_success`
-and placeholders as actions. A successful hook reports as a **toast**; a failed
-hook opens the result **modal**. They are opt-in: no file, no hook.
+and placeholders as actions. Running an action or hook is silent when it
+succeeds (the result is logged to the browser console); only a failure shows a
+**toast**. They are opt-in: no file, no hook.
 
 The event comes from the **file name**: `on_<event>.yaml`. If the file name does
 not name a known event, the top-level `event_name:` key is used as a fallback.
