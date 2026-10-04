@@ -4,6 +4,68 @@ const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
 const el = (id) => document.getElementById(id);
+const qs = (sel, root = document) => root.querySelector(sel);
+const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+// ------------------------------------------------------------------------- //
+// reusable DOM helpers (used everywhere; keep them small and side-effect free)
+// ------------------------------------------------------------------------- //
+
+// Build an element in one call: `mk('button', 'primary', 'Save')`.
+function mk(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined && text !== null) node.textContent = text;
+  return node;
+}
+
+// Build an <option>; `text` defaults to the value when omitted.
+function option(value, text) {
+  const o = document.createElement('option');
+  o.value = value;
+  if (text !== undefined) o.textContent = text;
+  return o;
+}
+
+// Toggle the shared `hidden` class on a node or element id.
+function setHidden(node, hidden) {
+  const n = typeof node === 'string' ? el(node) : node;
+  if (n) n.classList.toggle('hidden', !!hidden);
+}
+function showEl(id) { setHidden(id, false); }
+function hideEl(id) { setHidden(id, true); }
+function isHidden(id) { const n = el(id); return !n || n.classList.contains('hidden'); }
+
+// addEventListener by id or node, ignoring missing elements.
+function onEl(id, event, handler, opts) {
+  const n = typeof id === 'string' ? el(id) : id;
+  if (n) n.addEventListener(event, handler, opts);
+  return n;
+}
+
+// ------------------------------------------------------------------------- //
+// modals: one open/close/backdrop implementation for every overlay
+// ------------------------------------------------------------------------- //
+function openModal(id) { showEl(id); }
+function closeModal(id) { hideEl(id); }
+
+// Clicking the dimmed backdrop (the modal wrapper itself, outside its inner
+// box) closes the modal.
+function bindModalBackdrop(id, close) {
+  onEl(id, 'click', (e) => { if (e.target === el(id)) close(); });
+}
+
+// Escape closes the topmost open overlay, in this priority order.
+const ESCAPE_CLOSERS = [
+  ['yamlEditorModal', closeYamlEditor],
+  ['actionResult', closeActionResult],
+  ['changelogModal', closeChangelog],
+  ['tipModal', closeTipModal],
+  ['loadDataModal', closeLoadDataModal],
+  ['settingsModal', closeSettingsModal],
+  ['updateModal', closeUpdateModal],
+  ['notifPanel', () => toggleNotifPanel(false)],
+];
 
 // Login: a 401 from any API call means the session is gone, so surface the
 // sign-in form; the auth probes themselves are excluded to avoid a loop.
@@ -183,21 +245,12 @@ function renderNotifPanel() {
   if (!list) return;
   list.innerHTML = '';
   if (!notifLog.length) {
-    const empty = document.createElement('div');
-    empty.className = 'notif-empty';
-    empty.textContent = 'No notifications.';
-    list.appendChild(empty);
+    list.appendChild(mk('div', 'notif-empty', 'No notifications.'));
     return;
   }
   notifLog.forEach((n) => {
-    const row = document.createElement('div');
-    row.className = `notif-item notif-item-${n.type}`;
-    const type = document.createElement('span');
-    type.className = 'notif-item-type';
-    type.textContent = n.type;
-    const msg = document.createElement('span');
-    msg.textContent = n.msg;
-    row.append(type, msg);
+    const row = mk('div', `notif-item notif-item-${n.type}`);
+    row.append(mk('span', 'notif-item-type', n.type), mk('span', null, n.msg));
     list.appendChild(row);
   });
 }
@@ -242,14 +295,9 @@ function toast(msg, opts = {}) {
     if (!sticky && !opts.log) { notifUnread = Math.max(0, notifUnread - 1); updateNotifBadge(); }
   }
   if (!container) return null;
-  const node = document.createElement('div');
-  node.className = 'toast toast-' + type;
-  const body = document.createElement('div');
-  body.className = 'toast-message';
-  body.textContent = text;
-  const close = document.createElement('button');
-  close.className = 'toast-close';
-  close.textContent = '\u00d7';
+  const node = mk('div', 'toast toast-' + type);
+  const body = mk('div', 'toast-message', text);
+  const close = mk('button', 'toast-close', '\u00d7');
   close.title = 'Dismiss';
   const dismiss = () => {
     if (node._gone) return;
@@ -261,9 +309,7 @@ function toast(msg, opts = {}) {
   close.addEventListener('click', dismiss);
   node.append(body);
   if (opts.action && opts.action.label) {
-    const action = document.createElement('button');
-    action.className = 'toast-action';
-    action.textContent = opts.action.label;
+    const action = mk('button', 'toast-action', opts.action.label);
     action.addEventListener('click', () => {
       if (typeof opts.action.onClick === 'function') opts.action.onClick();
       dismiss();
@@ -356,11 +402,11 @@ function openUpdateModal() {
       summary.textContent = 'Update with the steps for your setup:';
     }
   }
-  el('updateModal').classList.remove('hidden');
+  openModal('updateModal');
 }
 
 function closeUpdateModal() {
-  el('updateModal').classList.add('hidden');
+  closeModal('updateModal');
 }
 
 // ------------------------------------------------------------------------- //
@@ -383,17 +429,13 @@ function showChangelog(version, changes) {
   const list = el('changelogList');
   if (list) {
     list.innerHTML = '';
-    changes.forEach((line) => {
-      const li = document.createElement('li');
-      li.textContent = line;
-      list.appendChild(li);
-    });
+    changes.forEach((line) => list.appendChild(mk('li', null, line)));
   }
-  el('changelogModal').classList.remove('hidden');
+  openModal('changelogModal');
 }
 
 function closeChangelog() {
-  el('changelogModal').classList.add('hidden');
+  closeModal('changelogModal');
   releaseAutoModal('changelog');
 }
 
@@ -877,12 +919,12 @@ function maybeShowTip(tips) {
 
   queueAutoModal('tip', () => {
     el('tipText').textContent = tips[idx];
-    el('tipModal').classList.remove('hidden');
+    openModal('tipModal');
   });
 }
 
 function closeTipModal() {
-  el('tipModal').classList.add('hidden');
+  closeModal('tipModal');
   releaseAutoModal('tip');
 }
 
@@ -910,14 +952,14 @@ function selectSubTab(name, scope) {
 }
 
 function openSettingsModal() {
-  el('settingsModal').classList.remove('hidden');
+  openModal('settingsModal');
   el('shortcutEditBtn').disabled = readonly;
   el('shortcutEditBtn').title = readonly
     ? 'Shortcuts cannot be changed in read-only mode'
     : 'Edit the key bindings';
   // With no dataset, the Dataset tab is the only useful one.
-  if (!datasetLoaded) selectSettingsTab('dataset');
   if (!datasetLoaded) {
+    selectSettingsTab('dataset');
     const input = el('dataYaml');
     input.focus();
     input.select();
@@ -925,12 +967,12 @@ function openSettingsModal() {
 }
 
 function closeSettingsModal() {
-  el('settingsModal').classList.add('hidden');
+  closeModal('settingsModal');
 }
 
 function openLoadDataModal() {
   queueAutoModal('loadData', () => {
-    el('loadDataModal').classList.remove('hidden');
+    openModal('loadDataModal');
     const input = el('loadDataYaml');
     input.focus();
     input.select();
@@ -938,23 +980,15 @@ function openLoadDataModal() {
 }
 
 function closeLoadDataModal() {
-  el('loadDataModal').classList.add('hidden');
+  closeModal('loadDataModal');
   releaseAutoModal('loadData');
 }
 
 function populateSplitSelect() {
   const sel = el('splitSelect');
   sel.innerHTML = '';
-  const all = document.createElement('option');
-  all.value = '';
-  all.textContent = 'All splits';
-  sel.appendChild(all);
-  splits.forEach((s) => {
-    const opt = document.createElement('option');
-    opt.value = s.name;
-    opt.textContent = s.name;
-    sel.appendChild(opt);
-  });
+  sel.appendChild(option('', 'All splits'));
+  splits.forEach((s) => sel.appendChild(option(s.name, s.name)));
   sel.value = activeSplit || '';
 }
 
@@ -965,38 +999,24 @@ function filterDef(name) {
 }
 
 function buildFilterBlock(i) {
-  const block = document.createElement('div');
-  block.className = 'filter-chain-item';
+  const block = mk('div', 'filter-chain-item');
 
-  const sel = document.createElement('select');
-  sel.className = 'filter-chain-select';
-  const none = document.createElement('option');
-  none.value = '';
-  none.textContent = i === 0 ? 'No filter' : '(none)';
-  sel.appendChild(none);
-  filters.forEach((f) => {
-    const opt = document.createElement('option');
-    opt.value = f.name;
-    opt.textContent = f.name;
-    sel.appendChild(opt);
-  });
+  const sel = mk('select', 'filter-chain-select');
+  sel.appendChild(option('', i === 0 ? 'No filter' : '(none)'));
+  filters.forEach((f) => sel.appendChild(option(f.name, f.name)));
   const active = activeFilters[i];
   sel.value = active && filterDef(active.name) ? active.name : '';
 
-  const head = document.createElement('div');
-  head.className = 'filter-chain-head';
+  const head = mk('div', 'filter-chain-head');
   head.appendChild(sel);
-  const remove = document.createElement('button');
+  const remove = mk('button', 'filter-chain-remove', '\u00d7');
   remove.type = 'button';
-  remove.className = 'filter-chain-remove';
-  remove.textContent = '\u00d7';
   remove.title = 'Remove this filter from the chain';
   remove.addEventListener('click', () => removeFilterBlock(block));
   head.appendChild(remove);
   block.appendChild(head);
 
-  const detail = document.createElement('div');
-  detail.className = 'filter-chain-detail';
+  const detail = mk('div', 'filter-chain-detail');
   block.appendChild(detail);
 
   const renderDetail = () => {
@@ -1004,41 +1024,25 @@ function buildFilterBlock(i) {
     const def = filterDef(sel.value);
     if (!def) return;
     if (def.description) {
-      const desc = document.createElement('p');
-      desc.className = 'filter-chain-desc';
-      desc.textContent = def.description;
+      const desc = mk('p', 'filter-chain-desc', def.description);
       desc.title = def.description;
       detail.appendChild(desc);
     }
     const saved = active && active.name === def.name ? (active.arguments || {}) : {};
     (def.arguments || []).forEach((arg) => {
-      const row = document.createElement('label');
-      row.className = 'filter-arg';
-      const label = document.createElement('span');
-      label.className = 'filter-arg-label';
-      label.textContent = arg.name + (arg.required ? ' *' : '');
-      row.appendChild(label);
+      const row = mk('label', 'filter-arg');
+      row.appendChild(mk('span', 'filter-arg-label', arg.name + (arg.required ? ' *' : '')));
 
       const value = Object.prototype.hasOwnProperty.call(saved, arg.name)
         ? saved[arg.name] : (arg.default != null ? arg.default : '');
       let input;
       if (Array.isArray(arg.options) && arg.options.length) {
-        input = document.createElement('select');
-        if (!arg.required) {
-          const empty = document.createElement('option');
-          empty.value = '';
-          empty.textContent = '';
-          input.appendChild(empty);
-        }
-        arg.options.forEach((opt) => {
-          const o = document.createElement('option');
-          o.value = opt;
-          o.textContent = opt;
-          input.appendChild(o);
-        });
+        input = mk('select');
+        if (!arg.required) input.appendChild(option('', ''));
+        arg.options.forEach((opt) => input.appendChild(option(opt, opt)));
         input.value = value;
       } else {
-        input = document.createElement('input');
+        input = mk('input');
         input.type = 'text';
         input.value = value || '';
         if (arg.default != null) input.placeholder = arg.default;
@@ -1113,10 +1117,7 @@ function populateFilterPanel() {
   body.innerHTML = '';
   const add = el('filterAddBtn');
   if (!filters.length) {
-    const empty = document.createElement('div');
-    empty.className = 'filter-empty';
-    empty.textContent = 'No filters found in filters/.';
-    body.appendChild(empty);
+    body.appendChild(mk('div', 'filter-empty', 'No filters found in filters/.'));
     if (add) add.disabled = true;
     return;
   }
@@ -1157,13 +1158,6 @@ const EXT_TYPE_LABELS = {
   backend: 'Server action',
   action: 'Other action',
 };
-
-function mk(tag, cls, text) {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined && text !== null) node.textContent = text;
-  return node;
-}
 
 function extRefNames() {
   return {
@@ -1243,12 +1237,8 @@ function makeEntryList(builder, opts) {
   const addRow = (entry) => {
     const row = mk('div', 'ext-entry');
     const type = mk('select', 'ext-type');
-    (opts.allowRefs ? ['cmd', 'app', 'backend', 'action'] : ['cmd']).forEach((t) => {
-      const o = document.createElement('option');
-      o.value = t;
-      o.textContent = EXT_TYPE_LABELS[t];
-      type.appendChild(o);
-    });
+    (opts.allowRefs ? ['cmd', 'app', 'backend', 'action'] : ['cmd'])
+      .forEach((t) => type.appendChild(option(t, EXT_TYPE_LABELS[t])));
     row.appendChild(type);
     const valueBox = mk('div', 'ext-value');
     row.appendChild(valueBox);
@@ -1275,12 +1265,7 @@ function makeEntryList(builder, opts) {
           return;
         }
         const sel = mk('select', 'ext-ref-select');
-        names.forEach((n) => {
-          const o = document.createElement('option');
-          o.value = n;
-          o.textContent = n;
-          sel.appendChild(o);
-        });
+        names.forEach((n) => sel.appendChild(option(n, n)));
         if (entry && entry.type === t) sel.value = entry.value;
         valueBox.appendChild(sel);
       }
@@ -1523,12 +1508,7 @@ function renderHookBuilder() {
   const evRow = mk('label', 'ext-field');
   evRow.appendChild(mk('span', 'ext-field-label', 'Event'));
   const ev = mk('select', 'ext-field-input');
-  hookEvents.forEach((e) => {
-    const o = document.createElement('option');
-    o.value = e;
-    o.textContent = 'on_' + e;
-    ev.appendChild(o);
-  });
+  hookEvents.forEach((e) => ev.appendChild(option(e, 'on_' + e)));
   evRow.appendChild(ev);
   details.body.appendChild(evRow);
   const active = extCheckbox('Active (uncheck to disable without deleting)', true);
@@ -1713,12 +1693,12 @@ async function openYamlEditor(kind, name) {
   const save = el('yamlEditorSave');
   save.disabled = !data.writable;
   save.title = data.writable ? '' : 'Shipped files are read-only here';
-  el('yamlEditorModal').classList.remove('hidden');
+  openModal('yamlEditorModal');
   textarea.focus();
 }
 
 function closeYamlEditor() {
-  el('yamlEditorModal').classList.add('hidden');
+  closeModal('yamlEditorModal');
   yamlEditor = null;
 }
 
@@ -1771,17 +1751,9 @@ function populateRecent(paths) {
   sel.innerHTML = '';
   const list = paths || [];
   // Nothing to pick from: hide the dropdown entirely.
-  sel.classList.toggle('hidden', list.length === 0);
-  const placeholder = document.createElement('option');
-  placeholder.value = '';
-  placeholder.textContent = 'Recent…';
-  sel.appendChild(placeholder);
-  list.forEach((p) => {
-    const opt = document.createElement('option');
-    opt.value = p;
-    opt.textContent = p;
-    sel.appendChild(opt);
-  });
+  setHidden(sel, list.length === 0);
+  sel.appendChild(option('', 'Recent…'));
+  list.forEach((p) => sel.appendChild(option(p, p)));
   sel.value = '';
 }
 
@@ -1809,17 +1781,10 @@ function populateActions(names) {
   box.innerHTML = '';
   actionsExpanded = false;
   (names || []).forEach((n) => {
-    const btn = document.createElement('button');
-    btn.className = 'action';
-    btn.textContent = n;
+    const btn = mk('button', 'action', n);
     const sc = actionShortcuts[n] && actionShortcuts[n].shortcut;
     btn.title = sc ? `Run action "${n}" on the current image (${sc})` : `Run action "${n}" on the current image`;
-    if (sc) {
-      const badge = document.createElement('span');
-      badge.className = 'btn-shortcut';
-      badge.textContent = sc;
-      btn.appendChild(badge);
-    }
+    if (sc) btn.appendChild(mk('span', 'btn-shortcut', sc));
     btn.addEventListener('click', () => runAction(n));
     box.appendChild(btn);
   });
@@ -1834,21 +1799,14 @@ function setActionButtonsDisabled(disabled) {
 // shortcuts (modal)
 // ------------------------------------------------------------------------- //
 function shortcutKbd(text) {
-  const k = document.createElement('kbd');
-  k.textContent = text;
-  return k;
+  return mk('kbd', null, text);
 }
 
 function menuRow(label, keys) {
-  const row = document.createElement('div');
-  row.className = 'menu-row';
-  const lbl = document.createElement('span');
-  lbl.className = 'menu-label';
-  lbl.textContent = label;
-  const keyBox = document.createElement('span');
-  keyBox.className = 'menu-keys';
+  const row = mk('div', 'menu-row');
+  const keyBox = mk('span', 'menu-keys');
   (Array.isArray(keys) ? keys : [keys]).forEach((k) => keyBox.appendChild(shortcutKbd(k)));
-  row.append(lbl, keyBox);
+  row.append(mk('span', 'menu-label', label), keyBox);
   return row;
 }
 
@@ -1935,10 +1893,7 @@ function startPresence() {
 }
 
 function shortcutSection(title) {
-  const h = document.createElement('div');
-  h.className = 'shortcut-section';
-  h.textContent = title;
-  return h;
+  return mk('div', 'shortcut-section', title);
 }
 
 const SHORTCUT_MODIFIERS = ['Ctrl', 'Alt', 'Shift', 'Meta'];
@@ -1954,26 +1909,18 @@ function currentShortcut(name) {
 }
 
 function shortcutEditRow(name, label) {
-  const row = document.createElement('div');
-  row.className = 'menu-row shortcut-edit-row';
-  const lbl = document.createElement('span');
-  lbl.className = 'menu-label';
-  lbl.textContent = label;
-  row.appendChild(lbl);
+  const row = mk('div', 'menu-row shortcut-edit-row');
+  row.appendChild(mk('span', 'menu-label', label));
 
-  const btn = document.createElement('button');
+  const btn = mk('button', 'shortcut-capture', shortcutDisplay(shortcutDraft[name]));
   btn.type = 'button';
-  btn.className = 'shortcut-capture';
-  btn.textContent = shortcutDisplay(shortcutDraft[name]);
   btn.title = 'Click, then press the new key combination';
   btn.addEventListener('click', () => startShortcutCapture(btn, name));
   row.appendChild(btn);
 
   if (userShortcutNames.has(name) || shortcutResets.has(name)) {
-    const reset = document.createElement('button');
+    const reset = mk('button', 'shortcut-reset', '\u21ba');
     reset.type = 'button';
-    reset.className = 'shortcut-reset';
-    reset.textContent = '\u21ba';
     reset.title = 'Reset to the shipped default';
     reset.addEventListener('click', () => resetShortcut(name));
     row.appendChild(reset);
@@ -2009,12 +1956,8 @@ function renderShortcuts() {
     });
   }
   wrap.appendChild(shortcutSection('Mouse'));
-  const mouse = document.createElement('div');
-  mouse.className = 'menu-row';
-  const mlabel = document.createElement('span');
-  mlabel.className = 'menu-label';
-  mlabel.textContent = 'Drag to draw · \u2715 to delete box';
-  mouse.appendChild(mlabel);
+  const mouse = mk('div', 'menu-row');
+  mouse.appendChild(mk('span', 'menu-label', 'Drag to draw · \u2715 to delete box'));
   wrap.appendChild(mouse);
 }
 
@@ -2162,12 +2105,7 @@ function populateClasses() {
   const sel = el('classSelect');
   if (!sel) return;
   sel.innerHTML = '';
-  classes.forEach((name, i) => {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = `${i}: ${name}`;
-    sel.appendChild(opt);
-  });
+  classes.forEach((name, i) => sel.appendChild(option(i, `${i}: ${name}`)));
   sel.value = defaultClass;
 }
 
@@ -2503,15 +2441,9 @@ function setTagStatus(msg, type = 'info') {
 }
 
 function tagBadge(name, active, num) {
-  const b = document.createElement('button');
+  const b = mk('button', 'tag-badge' + (active ? ' active' : ''));
   b.type = 'button';
-  b.className = 'tag-badge' + (active ? ' active' : '');
-  if (num) {
-    const n = document.createElement('span');
-    n.className = 'tag-badge-num';
-    n.textContent = String(num);
-    b.appendChild(n);
-  }
+  if (num) b.appendChild(mk('span', 'tag-badge-num', String(num)));
   b.appendChild(document.createTextNode(name));
   b.title = active
     ? `Remove tag "${name}" from this image${num ? ` (Alt+${num})` : ''}`
@@ -2589,11 +2521,7 @@ function renderTagBar() {
 
   const dl = el('tagSuggestions');
   dl.innerHTML = '';
-  availableTags.forEach((t) => {
-    const opt = document.createElement('option');
-    opt.value = t;
-    dl.appendChild(opt);
-  });
+  availableTags.forEach((t) => dl.appendChild(option(t)));
 
   // measure after the badges are laid out
   requestAnimationFrame(applyTagOverflow);
@@ -2623,14 +2551,14 @@ function removeTag(name) {
 
 function openTagInput() {
   if (readonly) return;
-  el('tagInput').classList.remove('hidden');
-  el('tagSubmitBtn').classList.remove('hidden');
+  showEl('tagInput');
+  showEl('tagSubmitBtn');
   el('tagInput').focus();
 }
 
 function closeTagInput() {
-  el('tagInput').classList.add('hidden');
-  el('tagSubmitBtn').classList.add('hidden');
+  hideEl('tagInput');
+  hideEl('tagSubmitBtn');
 }
 
 function addTagFromInput() {
@@ -2943,11 +2871,11 @@ function showActionResult(data) {
   setResultText('actionResultExit', `exit code: ${data.exit_code}`.trim(), true);
   setResultText('actionResultOut', data.stdout);
   setResultText('actionResultErr', data.stderr);
-  el('actionResult').classList.remove('hidden');
+  openModal('actionResult');
 }
 
 function closeActionResult() {
-  el('actionResult').classList.add('hidden');
+  closeModal('actionResult');
 }
 
 // Event hooks report success as a transient toast; failures still use the modal.
@@ -3039,14 +2967,10 @@ const classPicker = el('classPicker');
 
 function openClassPicker(x, y) {
   classPicker.innerHTML = '';
-  const title = document.createElement('div');
-  title.className = 'picker-title';
-  title.textContent = 'Choose class';
-  classPicker.appendChild(title);
+  classPicker.appendChild(mk('div', 'picker-title', 'Choose class'));
 
   classes.forEach((name, i) => {
-    const btn = document.createElement('button');
-    btn.textContent = `${i}: ${name}`;
+    const btn = mk('button', null, `${i}: ${name}`);
     btn.addEventListener('click', () => {
       if (selected >= 0) {
         const wasJustDrawn = justDrawn;
@@ -3065,7 +2989,7 @@ function openClassPicker(x, y) {
     classPicker.appendChild(btn);
   });
 
-  classPicker.classList.remove('hidden');
+  openModal('classPicker');
   const w = classPicker.offsetWidth;
   const h = classPicker.offsetHeight;
   const pad = 8;
@@ -3087,7 +3011,7 @@ function openPickerForSelectedBox() {
 }
 
 function closeClassPicker() {
-  classPicker.classList.add('hidden');
+  closeModal('classPicker');
 }
 
 // ------------------------------------------------------------------------- //
@@ -3599,15 +3523,9 @@ function setFieldValue(f, val) {
 }
 
 function makeRowControl(tag, cls, opts) {
-  const c = document.createElement(tag);
-  c.className = cls;
+  const c = mk(tag, cls);
   if (tag === 'select') {
-    classes.forEach((name, k) => {
-      const opt = document.createElement('option');
-      opt.value = k;
-      opt.textContent = `${k}: ${name}`;
-      c.appendChild(opt);
-    });
+    classes.forEach((name, k) => c.appendChild(option(k, `${k}: ${name}`)));
   } else {
     c.type = 'number';
     c.step = '0.001';
@@ -3624,14 +3542,10 @@ function renderSidePanel() {
   el('sidePanelCount').textContent = boxes.length;
   list.innerHTML = '';
   boxes.forEach((b, i) => {
-    const id = `pb${i}`;
-    const row = document.createElement('div');
-    row.className = 'box-row';
+    const row = mk('div', 'box-row');
     row.dataset.index = i;
 
-    const idx = document.createElement('span');
-    idx.className = 'box-row-idx';
-    idx.textContent = i;
+    const idx = mk('span', 'box-row-idx', i);
 
     const cls = makeRowControl('select', 'box-row-ctl box-row-class');
     cls.dataset.name = 'class';
@@ -3647,24 +3561,18 @@ function renderSidePanel() {
     const ptW = mkPoint('w');
     const ptH = mkPoint('h');
 
-    const fix = document.createElement('button');
+    const fix = mk('button', 'box-row-ctl box-row-fix', 'F');
     fix.type = 'button';
-    fix.className = 'box-row-ctl box-row-fix';
-    fix.textContent = 'F';
     fix.title = 'Fix / unfix this box (F) — fixed boxes ignore dragging';
 
-    const del = document.createElement('button');
+    const del = mk('button', 'box-row-ctl box-row-del danger', '\u00d7');
     del.type = 'button';
-    del.className = 'box-row-ctl box-row-del danger';
-    del.textContent = '\u00d7';
     del.title = 'Delete box';
 
-    const top = document.createElement('div');
-    top.className = 'box-row-top';
+    const top = mk('div', 'box-row-top');
     top.append(idx, cls, fix, del);
 
-    const bottom = document.createElement('div');
-    bottom.className = 'box-row-bottom';
+    const bottom = mk('div', 'box-row-bottom');
     bottom.append(ptCx, ptCy, ptW, ptH);
 
     row.append(top, bottom);
@@ -3932,9 +3840,7 @@ el('actionsExpandBtn').addEventListener('click', () => {
 });
 el('settingsBtn').addEventListener('click', openSettingsModal);
 el('settingsModalClose').addEventListener('click', closeSettingsModal);
-el('settingsModal').addEventListener('click', (e) => {
-  if (e.target === el('settingsModal')) closeSettingsModal();
-});
+bindModalBackdrop('settingsModal', closeSettingsModal);
 document.querySelectorAll('.settings-tab').forEach((tab) => {
   tab.addEventListener('click', () => selectSettingsTab(tab.dataset.tab));
 });
@@ -3951,31 +3857,21 @@ el('loadDataYaml').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') loadDataFromModal();
 });
 el('loadDataModalClose').addEventListener('click', closeLoadDataModal);
-el('loadDataModal').addEventListener('click', (e) => {
-  if (e.target === el('loadDataModal')) closeLoadDataModal();
-});
+bindModalBackdrop('loadDataModal', closeLoadDataModal);
 el('updateCheckBtn').addEventListener('click', () => {
   el('updateStatus').textContent = 'Checking…';
   refreshUpdateInfo(true);
 });
 el('updateHowBtn').addEventListener('click', openUpdateModal);
 el('updateModalClose').addEventListener('click', closeUpdateModal);
-el('updateModal').addEventListener('click', (e) => {
-  if (e.target === el('updateModal')) closeUpdateModal();
-});
+bindModalBackdrop('updateModal', closeUpdateModal);
 el('changelogModalClose').addEventListener('click', closeChangelog);
-el('changelogModal').addEventListener('click', (e) => {
-  if (e.target === el('changelogModal')) closeChangelog();
-});
+bindModalBackdrop('changelogModal', closeChangelog);
 el('tipModalClose').addEventListener('click', closeTipModal);
-el('tipModal').addEventListener('click', (e) => {
-  if (e.target === el('tipModal')) closeTipModal();
-});
+bindModalBackdrop('tipModal', closeTipModal);
 el('yamlEditorClose').addEventListener('click', closeYamlEditor);
 el('yamlEditorCancel').addEventListener('click', closeYamlEditor);
-el('yamlEditorModal').addEventListener('click', (e) => {
-  if (e.target === el('yamlEditorModal')) closeYamlEditor();
-});
+bindModalBackdrop('yamlEditorModal', closeYamlEditor);
 el('yamlEditorSave').addEventListener('click', saveYamlEditor);
 el('notifBtn').addEventListener('click', (e) => {
   e.stopPropagation();
@@ -4291,37 +4187,8 @@ function dispatchAppShortcut(e) {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    if (!el('yamlEditorModal').classList.contains('hidden')) {
-      closeYamlEditor();
-      return;
-    }
-    if (!el('actionResult').classList.contains('hidden')) {
-      closeActionResult();
-      return;
-    }
-    if (!el('changelogModal').classList.contains('hidden')) {
-      closeChangelog();
-      return;
-    }
-    if (!el('tipModal').classList.contains('hidden')) {
-      closeTipModal();
-      return;
-    }
-    if (!el('loadDataModal').classList.contains('hidden')) {
-      closeLoadDataModal();
-      return;
-    }
-    if (!el('settingsModal').classList.contains('hidden')) {
-      closeSettingsModal();
-      return;
-    }
-    if (!el('updateModal').classList.contains('hidden')) {
-      closeUpdateModal();
-      return;
-    }
-    if (!el('notifPanel').classList.contains('hidden')) {
-      toggleNotifPanel(false);
-      return;
+    for (const [id, close] of ESCAPE_CLOSERS) {
+      if (!isHidden(id)) { close(); return; }
     }
   }
   // app_escape / app_sel_points must also work while typing in inputs
@@ -4394,29 +4261,25 @@ let appStarted = false;
 
 // Show the signed-in-only controls (sign out, change password).
 function setAccountControls(visible) {
-  el('logoutBtn').classList.toggle('hidden', !visible);
-  el('changePwBtn').classList.toggle('hidden', !visible);
+  setHidden('logoutBtn', !visible);
+  setHidden('changePwBtn', !visible);
 }
 
 function showLogin(message) {
   const overlay = el('loginOverlay');
   if (!overlay) return;
   setAccountControls(false);
-  overlay.classList.remove('hidden');
+  showEl('loginOverlay');
   const err = el('loginError');
-  if (message) {
-    err.textContent = message;
-    err.classList.remove('hidden');
-  } else {
-    err.classList.add('hidden');
-  }
+  if (message) err.textContent = message;
+  setHidden(err, !message);
   const user = el('loginUser');
   if (user && !user.value) user.focus();
 }
 
 function hideLogin() {
-  el('loginOverlay').classList.add('hidden');
-  el('loginError').classList.add('hidden');
+  hideEl('loginOverlay');
+  hideEl('loginError');
   el('loginPass').value = '';
 }
 
@@ -4461,12 +4324,12 @@ function openPasswordModal() {
   el('pwNew').value = '';
   el('pwConfirm').value = '';
   el('pwError').classList.add('hidden');
-  el('passwordModal').classList.remove('hidden');
+  openModal('passwordModal');
   el('pwCurrent').focus();
 }
 
 function closePasswordModal() {
-  el('passwordModal').classList.add('hidden');
+  closeModal('passwordModal');
 }
 
 async function savePassword() {
