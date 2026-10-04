@@ -783,26 +783,19 @@ function updateSidePanelRow(row, i) {
 
 /**
  * Refresh selection, fixed state and field values for the side-panel rows.
- * @param {number} [only] - When given, update only that box's row (used by the
- *   drag hot path, where only the dragged box changed); otherwise all rows.
  */
-function updateSidePanelState(only) {
+function updateSidePanelState() {
   const list = el('boxList');
   if (!list) return;
   el('sidePanelCount').textContent = boxes.length;
-  if (only !== undefined) {
-    const row = list.children[only];
-    if (row) updateSidePanelRow(row, only);
-    return;
-  }
   Array.from(list.children).forEach((row, i) => updateSidePanelRow(row, i));
 }
 
 /**
  * Re-render the side-panel list only when its length changed, else update it.
- * @param {number|false} [panelMode] - `false` skips the update entirely (no box
- *   changed, e.g. while drawing); a number updates only that row (the dragged
- *   box); omitted does a full update.
+ * @param {false} [panelMode] - `false` skips the update during an in-progress
+ *   interaction (drawing or dragging a box); the panel is synced on mouse-up.
+ *   Omitted does a full update.
  */
 function syncSidePanel(panelMode) {
   const list = el('boxList');
@@ -812,9 +805,5 @@ function syncSidePanel(panelMode) {
     return;
   }
   if (panelMode === false) return;
-  if (typeof panelMode === 'number') {
-    updateSidePanelState(panelMode);
-    return;
-  }
   updateSidePanelState();
 }

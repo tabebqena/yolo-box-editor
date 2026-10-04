@@ -202,9 +202,9 @@ function handlePoints(r) {
 
 /**
  * Redraw the canvas: image, boxes, handles and in-progress interactions.
- * @param {number|false} [panelMode] - Forwarded to `syncSidePanel`: omitted
- *   syncs the whole side panel, a number syncs only that box's row (the drag
- *   hot path), `false` skips it (nothing changed, e.g. drawing a new box).
+ * @param {false} [panelMode] - Forwarded to `syncSidePanel`: omitted syncs the
+ *   whole side panel, `false` skips it during an in-progress interaction
+ *   (drawing a box, or dragging one); the panel is synced on mouse-up.
  */
 function draw(panelMode) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -509,7 +509,7 @@ function moveBox(p) {
   const cy = Math.max(origBox.h / 2, Math.min(1 - origBox.h / 2, origBox.cy + dy));
   boxes[selected] = { ...origBox, cx, cy };
   moved = true;
-  draw(selected); // only the dragged row changed
+  draw(false); // the side panel is synced once, on mouse-up
 }
 
 /**
@@ -551,7 +551,7 @@ function resizeBox(p) {
     h: clamp01(h / imgH),
   };
   moved = true;
-  draw(selected); // only the dragged row changed
+  draw(false); // the side panel is synced once, on mouse-up
 }
 
 // ------------------------------------------------------------------------- //

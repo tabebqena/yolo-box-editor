@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.12.0] - 2026-10-05
+
+### Changed
+
+- **Dragging a box no longer refreshes the side panel on every mouse move.** The
+  canvas still tracks the box live; the box's row (coordinates, selection) is
+  synced once when you release the mouse. This keeps dragging responsive on
+  images with many boxes, at the cost of the coordinate inputs not ticking
+  during the drag.
+
 ## [7.11.0] - 2026-10-05
 
 ### Added
