@@ -23,10 +23,12 @@ with the `images` path segment replaced by `labels`
 """
 
 import argparse
+import hmac
 import json
 import logging
 import os
 import re
+import secrets
 import shlex
 import shutil
 import subprocess
@@ -38,7 +40,15 @@ import urllib.error
 import urllib.request
 import uuid
 
-from flask import Flask, abort, jsonify, render_template, request, send_from_directory
+from flask import (
+    Flask,
+    abort,
+    jsonify,
+    render_template,
+    request,
+    send_from_directory,
+    session,
+)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # the shipped app/ directory
 
@@ -336,6 +346,14 @@ app = Flask(
     template_folder=os.path.join(BASE_DIR, "templates"),
     static_folder=os.path.join(BASE_DIR, "static"),
 )
+# Signs the login session cookie. Random per process: a restart (or the debug
+# reloader) invalidates existing sessions, which is fine for a single instance.
+# Tests never rely on a stable key.
+app.secret_key = secrets.token_hex(32)
+
+# Login credentials as an (username, password) tuple, or None when auth is off
+# (the default). Set from --auth; never written to disk.
+AUTH = None
 
 STATE = {
     "data_yaml": None,
@@ -2572,11 +2590,93 @@ def _prune_clients(now=None):
 
 
 # --------------------------------------------------------------------------- #
+# authentication (optional, enabled by --auth USER:PASS)
+# --------------------------------------------------------------------------- #
+# Paths served without a session so the login page itself can load. Everything
+# else under /api/ answers 401 until the user signs in; the SPA shell and its
+# static assets are public so the login form can be rendered.
+_AUTH_PUBLIC_PATHS = {"/api/login", "/api/session", "/api/logout"}
+
+
+def auth_enabled():
+    """True when `--auth` supplied credentials and a login is required."""
+    return AUTH is not None
+
+
+def _is_authenticated():
+    """True when auth is off, or the request carries a signed-in session."""
+    return not auth_enabled() or bool(session.get("ybe_user"))
+
+
+@app.before_request
+def _require_login():
+    """Block API calls (and the SPA load) until the user has signed in."""
+    if not auth_enabled():
+        return None
+    path = request.path
+    if path == "/" or path.startswith("/static/") or path in _AUTH_PUBLIC_PATHS:
+        return None
+    if session.get("ybe_user"):
+        return None
+    if path.startswith("/api/"):
+        return jsonify({"ok": False, "error": "authentication required"}), 401
+    abort(401)
+
+
+def _credentials_match(username, password):
+    """Constant-time comparison of the submitted credentials."""
+    if AUTH is None:
+        return False
+    expected_user, expected_pass = AUTH
+    user_ok = hmac.compare_digest(
+        str(username).encode("utf-8"), str(expected_user).encode("utf-8")
+    )
+    pass_ok = hmac.compare_digest(
+        str(password).encode("utf-8"), str(expected_pass).encode("utf-8")
+    )
+    return user_ok and pass_ok
+
+
+# --------------------------------------------------------------------------- #
 # routes
 # --------------------------------------------------------------------------- #
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/api/session")
+def api_session():
+    """Report whether a login is required and whether this client has one."""
+    signed_in = bool(session.get("ybe_user"))
+    return jsonify(
+        {
+            "auth_required": auth_enabled(),
+            "authenticated": _is_authenticated(),
+            "username": session.get("ybe_user") if signed_in else None,
+        }
+    )
+
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    """Sign in: compare the posted credentials and start a session."""
+    if not auth_enabled():
+        return jsonify({"ok": True, "auth_required": False})
+    data = request.get_json(silent=True) or {}
+    username = data.get("username", "")
+    password = data.get("password", "")
+    if _credentials_match(username, password):
+        session["ybe_user"] = str(username)
+        return jsonify({"ok": True, "username": str(username)})
+    return jsonify({"ok": False, "error": "invalid username or password"}), 401
+
+
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    """Sign out: drop the session's user marker."""
+    session.pop("ybe_user", None)
+    return jsonify({"ok": True})
 
 
 @app.route("/api/config")
@@ -2675,6 +2775,10 @@ def api_config():
             "user_shortcut_names": sorted(user_shortcut_names()),
             "readonly": STATE["readonly"],
             "debug": STATE["debug"],
+            "auth": {
+                "required": auth_enabled(),
+                "username": session.get("ybe_user") if auth_enabled() else None,
+            },
             "version": read_version(),
             "changelog": changelog_for(read_version()),
             "update": update_status(),
@@ -3371,6 +3475,7 @@ def api_tags_dir():
 # entrypoint
 # --------------------------------------------------------------------------- #
 def main():
+    global AUTH
     parser = argparse.ArgumentParser(description="YOLO labelling app (Flask)")
     parser.add_argument("--data", help="path to data.yaml")
     parser.add_argument(
@@ -3384,6 +3489,11 @@ def main():
         "--readonly",
         action="store_true",
         help="serve as a read-only viewer (no saving labels)",
+    )
+    parser.add_argument(
+        "--auth",
+        metavar="USER:PASS",
+        help="require a login (username:password); off by default",
     )
     parser.add_argument(
         "--debug",
@@ -3435,6 +3545,15 @@ def main():
     STATE["keep_pipe"] = args.keep_pipe
     STATE["keep_filter_pipes"] = args.keep_filter_pipes
     STATE["no_update_check"] = args.no_update_check
+
+    if args.auth is not None:
+        if ":" not in args.auth:
+            parser.error("--auth must be in the form USER:PASS")
+        username, password = args.auth.split(":", 1)
+        if not username:
+            parser.error("--auth username must not be empty")
+        AUTH = (username, password)
+        log.info("login required (user %r)", username)
 
     start_update_checker()
 

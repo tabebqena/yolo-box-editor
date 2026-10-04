@@ -32,6 +32,7 @@
             <span aria-hidden="true">&#128276;</span>
             <span id="notifBadge" class="notif-badge hidden">0</span>
           </button>
+          <button id="logoutBtn" class="icon-btn hidden" title="Sign out">&#9099;</button>
           <button id="sidePanelToggle" title="Hide / show the side panel">Panel</button>
         </div>
       </div>
@@ -523,6 +524,19 @@ python -m pip install -r app/requirements.txt</pre>
   </div>
 
   <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <div id="loginOverlay" class="login-overlay hidden">
+    <form id="loginForm" class="login-box" autocomplete="on">
+      <div class="login-brand">YOLO Box Editor</div>
+      <p class="login-hint" id="loginHint">Sign in to continue</p>
+      <label class="login-field" for="loginUser">Username</label>
+      <input id="loginUser" type="text" autocomplete="username" autofocus>
+      <label class="login-field" for="loginPass">Password</label>
+      <input id="loginPass" type="password" autocomplete="current-password">
+      <div id="loginError" class="login-error hidden"></div>
+      <button type="submit" id="loginBtn" class="primary">Sign in</button>
+    </form>
+  </div>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

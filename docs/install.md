@@ -67,6 +67,7 @@ and run `python app/app.py`:
 ```bash
 python app/app.py --data /path/to/data.yaml
 python app/app.py --data /path/to/data.yaml --readonly   # viewer only
+python app/app.py --data /path/to/data.yaml --auth me:secret  # require a login
 python app/app.py --data /path/to/data.yaml --debug      # verbose browser console
 python app/app.py --no-resume                            # Load-a-dataset dialog, no auto-open
 python app/app.py --data /path/to/data.yaml --keep-pipe  # keep each run's {PIPE_PATH} file
@@ -89,6 +90,13 @@ you left it.
 the loaded config, image loads, saves, tag writes, user actions / `after_success`
 chains, hook runs, rescans and box edits. It also surfaces uncaught errors and
 unhandled promise rejections.
+
+`--auth USER:PASS` puts a sign-in screen in front of the app; without the flag
+there is no login. The credentials live in memory only and the session is a
+signed cookie. This is a convenience gate, **not strong security**: over plain
+`http://` the password is sent in clear text, and while the process runs (also
+via `ybe start --auth …`) it is visible in the process list. Use it on localhost
+or a trusted network, or behind an HTTPS reverse proxy.
 
 ## Changelog and releases
 

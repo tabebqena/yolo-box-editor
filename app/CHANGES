@@ -2,6 +2,10 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.0.0
+- Optional login: start with `--auth USER:PASS` (off by default) and the app asks for those credentials on a sign-in screen before showing the dataset. A Sign out button in the side panel ends the session.
+- This is a convenience gate for a trusted network, not strong security: the password is sent in clear text over plain http and is visible in the process list while running.
+
 ## 6.9.0
 - Creating an action, hook or filter now looks like an editor: a titled header, grouped sections (Details, Steps, After success, Arguments) and a sticky Create / Clear footer. Command and argument fields are shown in monospace.
 

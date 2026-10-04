@@ -4,6 +4,26 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.0.0] - 2026-10-04
+
+### Added
+
+- **Optional login**: run with `--auth USER:PASS` and the app shows a sign-in
+  screen before loading the dataset; every `/api/*` call returns `401` until the
+  user signs in, and a **Sign out** button in the side panel ends the session.
+  Authentication is off by default, so local single-user use is unchanged.
+
+  New routes: `GET /api/session`, `POST /api/login`, `POST /api/logout`;
+  `/api/config` reports an `auth` object. Credentials are held in memory only
+  (never written to disk) and the session is a signed cookie.
+
+### Security
+
+- `--auth` is a **convenience gate, not strong security**. The password is sent
+  in the request body over plain `http://` (cleartext), and when started through
+  the launcher it is visible in the process list. Use it only on localhost or a
+  trusted network, or put the app behind an HTTPS reverse proxy.
+
 ## [6.9.0] - 2026-10-03
 
 ### Changed

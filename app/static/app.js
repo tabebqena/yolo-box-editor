@@ -5,6 +5,24 @@ const ctx = canvas.getContext('2d');
 
 const el = (id) => document.getElementById(id);
 
+// Login is optional (enabled with `--auth USER:PASS`). A 401 from any API call
+// means the session is gone or absent, so surface the login form; the auth
+// probes themselves are excluded to avoid a loop.
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const res = await nativeFetch(...args);
+  if (res.status === 401) {
+    let url = '';
+    try {
+      url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
+    } catch (e) { /* ignore */ }
+    if (url.indexOf('/api/session') === -1 && url.indexOf('/api/login') === -1) {
+      showLogin();
+    }
+  }
+  return res;
+};
+
 const HANDLE_SIZE = 8;
 const DEL_BTN = 16;
 const AUTO_SAVE_DELAY = 400; // ms to coalesce rapid edits into one auto-save
@@ -4368,17 +4386,104 @@ function initSettings() {
   el('tipsSw').checked = settingsGet('ybe_tips_enabled') !== '0';
 }
 
+// ---------------------------------------------------------------------------
+// login (optional; enabled with `--auth USER:PASS`)
+// ---------------------------------------------------------------------------
+let appStarted = false;
+
+function showLogin(message) {
+  const overlay = el('loginOverlay');
+  if (!overlay) return;
+  el('logoutBtn').classList.add('hidden');
+  overlay.classList.remove('hidden');
+  const err = el('loginError');
+  if (message) {
+    err.textContent = message;
+    err.classList.remove('hidden');
+  } else {
+    err.classList.add('hidden');
+  }
+  const user = el('loginUser');
+  if (user && !user.value) user.focus();
+}
+
+function hideLogin() {
+  el('loginOverlay').classList.add('hidden');
+  el('loginError').classList.add('hidden');
+  el('loginPass').value = '';
+}
+
+async function submitLogin(e) {
+  if (e) e.preventDefault();
+  const btn = el('loginBtn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: el('loginUser').value, password: el('loginPass').value }),
+    });
+    if (res.ok) {
+      hideLogin();
+      el('logoutBtn').classList.remove('hidden');
+      startApp();
+    } else {
+      let msg = 'Sign in failed';
+      try {
+        const d = await res.json();
+        if (d && d.error) msg = d.error;
+      } catch (err) { /* ignore */ }
+      el('loginPass').value = '';
+      showLogin(msg);
+      el('loginPass').focus();
+    }
+  } catch (err) {
+    showLogin('Could not reach the server');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function logout() {
+  try { await fetch('/api/logout', { method: 'POST' }); } catch (e) { /* ignore */ }
+  location.reload();
+}
+
+// Build the app once, with or without a login in front of it.
+function startApp() {
+  if (appStarted) return;
+  appStarted = true;
+  loadConfig().catch((err) => {
+    console.error('[ybe] config load failed:', err);
+    initSettings(); // still build the UI with browser-only settings
+  });
+  startPresence();
+  // The start-thread check may not have finished when the page loads; retry so a
+  // freshly found update still reaches the user without a reload.
+  refreshUpdateInfo();
+  UPDATE_POLL_MS.forEach((ms) => setTimeout(() => refreshUpdateInfo(), ms));
+}
+
+// Ask the server whether a login is needed before building the app.
+async function boot() {
+  let info = null;
+  try {
+    const res = await fetch('/api/session');
+    if (res.ok) info = await res.json();
+  } catch (e) { /* offline: try to start anyway */ }
+  if (info && info.auth_required && !info.authenticated) {
+    showLogin();
+    return;
+  }
+  if (info && info.auth_required) el('logoutBtn').classList.remove('hidden');
+  startApp();
+}
+
 // With --debug these surface any error that would otherwise only show in the
 // browser console; without it they are no-ops.
 window.addEventListener('error', (e) => dbgWarn('uncaught error', e.error || e.message));
 window.addEventListener('unhandledrejection', (e) => dbgWarn('unhandled rejection', e.reason));
 
-loadConfig().catch((err) => {
-  console.error('[ybe] config load failed:', err);
-  initSettings(); // still build the UI with browser-only settings
-});
-startPresence();
-// The start-thread check may not have finished when the page loads; retry so a
-// freshly found update still reaches the user without a reload.
-refreshUpdateInfo();
-UPDATE_POLL_MS.forEach((ms) => setTimeout(() => refreshUpdateInfo(), ms));
+el('loginForm').addEventListener('submit', submitLogin);
+el('logoutBtn').addEventListener('click', logout);
+boot();

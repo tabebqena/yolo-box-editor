@@ -103,6 +103,7 @@ def clean_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "USER_SHORTCUTS_FILE", str(tmp_path / "shortcuts.txt"))
     monkeypatch.setattr(ybe, "PIPE_DIR", str(tmp_path / "pipes"))
     monkeypatch.setattr(ybe, "FILTER_PIPES_DIR", str(tmp_path / "filter-pipes"))
+    monkeypatch.setattr(ybe, "AUTH", None)
     ybe.STATE.clear()
     ybe.STATE.update(DEFAULT_STATE)
     ybe.EXECUTIONS.clear()
@@ -3132,4 +3133,58 @@ def test_api_extension_delete_refuses_shipped(clean_state):
         "/api/extensions/delete", json={"kind": "action", "name": "Keep"})
     assert resp.status_code == 400
     assert (Path(clean_state) / "app-actions" / "Keep.yaml").is_file()
+
+
+# --------------------------------------------------------------------------- #
+# optional login (--auth USER:PASS)
+# --------------------------------------------------------------------------- #
+def test_auth_off_by_default(clean_state):
+    client = ybe.app.test_client()
+    info = client.get("/api/session").get_json()
+    assert info["auth_required"] is False
+    assert info["authenticated"] is True
+    assert client.get("/api/config").status_code == 200
+
+
+def test_auth_blocks_api_until_signed_in(clean_state):
+    ybe.AUTH = ("alice", "s3cret")
+    client = ybe.app.test_client()
+    assert client.get("/api/config").status_code == 401
+    info = client.get("/api/session").get_json()
+    assert info["auth_required"] is True and info["authenticated"] is False
+    # The SPA shell loads so the login form can be rendered.
+    assert client.get("/").status_code == 200
+
+
+def test_auth_login_logout_roundtrip(clean_state):
+    ybe.AUTH = ("alice", "s3cret")
+    client = ybe.app.test_client()
+    assert client.post(
+        "/api/login", json={"username": "alice", "password": "nope"}
+    ).status_code == 401
+    assert client.get("/api/config").status_code == 401
+
+    good = client.post(
+        "/api/login", json={"username": "alice", "password": "s3cret"})
+    assert good.status_code == 200 and good.get_json()["ok"] is True
+    assert client.get("/api/config").status_code == 200
+    assert client.get("/api/config").get_json()["auth"] == {
+        "required": True, "username": "alice"}
+
+    assert client.post("/api/logout").status_code == 200
+    assert client.get("/api/config").status_code == 401
+
+
+def test_auth_rejects_wrong_username(clean_state):
+    ybe.AUTH = ("alice", "s3cret")
+    resp = ybe.app.test_client().post(
+        "/api/login", json={"username": "bob", "password": "s3cret"})
+    assert resp.status_code == 401
+
+
+def test_login_is_noop_when_auth_off(clean_state):
+    resp = ybe.app.test_client().post(
+        "/api/login", json={"username": "x", "password": "y"})
+    assert resp.status_code == 200
+    assert resp.get_json()["auth_required"] is False
 
