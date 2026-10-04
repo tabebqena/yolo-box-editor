@@ -209,6 +209,12 @@ def main():
         help="folder holding your actions/ hooks/ filters/ scripts/ (default: "
         "$YBX_HOME, else the parent of app.py)",
     )
+    parser.add_argument(
+        "--allow-root",
+        action="store_true",
+        help="allow running as root (not recommended: written files become "
+        "root-owned and the debug server runs with root privileges)",
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5000)
     parser.add_argument(
@@ -263,6 +269,18 @@ def main():
     )
     args = parser.parse_args()
 
+    # Refuse to run as root by default. Written files become root-owned (and,
+    # being 0600, unreadable by the normal user), sudo resets $YBX_HOME, and the
+    # debug=True Werkzeug console would execute code with root privileges.
+    # Containers commonly run as root, so this is an explicit opt-out, not a
+    # hard block.
+    is_root = getattr(os, "geteuid", lambda: -1)() == 0
+    if is_root and not args.allow_root:
+        parser.error(
+            "refusing to run as root; pass --allow-root to override "
+            "(written files would be root-owned and the debug server would run as root)"
+        )
+
     # Resolve the user folder first: everything below reads/writes paths derived
     # from it, and the folders must exist before the first read.
     if args.home:
@@ -277,6 +295,8 @@ def main():
     log.info(
         "yolo-box-editor %s | user dir: %s (override with --home)", read_version(), config.YBX_HOME
     )
+    if is_root:
+        log.warning("running as root (--allow-root): files written will be owned by root")
 
     # Copy the run-wide toggles into the shared state the routes read.
     state.STATE["readonly"] = args.readonly

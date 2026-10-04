@@ -18,7 +18,9 @@ wholesale, so `app/ybe/` ships automatically.
   custom user folder; `--host`/`--port`, default `127.0.0.1:5000`). Other flags:
   `--no-resume` (open Settings instead of the last dataset), `--keep-pipe` and
   `--keep-filter-pipes` (keep scratch pipe files), `--no-update-check`,
-  `--log-file`, `--no-reload`. Auth admin commands (run, print and exit):
+  `--log-file`, `--no-reload`, `--allow-root` (running as root is refused by
+  default; this overrides for, e.g., containers). Auth admin commands (run,
+  print and exit):
   `--create-user NAME` (prompts for the password with `getpass`, no echo) and
   `--list-users`. Flask runs with `debug=True`.
 - Install/update/remove: `ybx.sh` (`install` / `upgrade` / `update` / `version` /

@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.2.0
+- Starting the app as the root user is now refused: it would make your files root-owned and run the debug server with root privileges. If you really need it (for example inside a container), pass `--allow-root`.
+
 ## 7.1.0
 - Signing in now survives a restart. The session key is saved in `.secret_key` in your user folder (owner-only), so `ybe restart` and `ybe update` no longer sign you out. The file is kept across updates; delete it if you want to force everyone to sign in again.
 

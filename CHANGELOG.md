@@ -4,6 +4,18 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.2.0] - 2026-10-04
+
+### Added
+
+- **Root guard.** Starting the app as root now aborts with a clear message
+  instead of continuing. Running as root makes every written file (`users.json`,
+  `.secret_key`, labels, tags, logs) owned by root — and, because those files are
+  stored `0600`, unreadable by the normal user — and runs the `debug=True`
+  Werkzeug console with root privileges. Pass the new **`--allow-root`** flag to
+  override, for setups (e.g. containers) where root is expected; a warning is
+  logged when the override is used.
+
 ## [7.1.0] - 2026-10-04
 
 ### Changed
