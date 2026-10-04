@@ -874,16 +874,9 @@ async function jumpToImage(text) {
     return;
   }
   const idx = Math.min(Math.max(n - 1, 0), images.length - 1);
-  if (idx !== currentIndex && dirty) {
-    if (autoSave) {
-      if (!(await flushAutoSave())) {
-        updateNav();
-        return;
-      }
-    } else if (!confirm('You have unsaved changes. Discard them?')) {
-      updateNav();
-      return;
-    }
+  if (idx !== currentIndex && !(await saveOrDiscard())) {
+    updateNav();
+    return;
   }
   loadImage(idx);
 }
@@ -2099,6 +2092,21 @@ async function saveShortcuts() {
   }
 }
 
+// Blank the editor when there is no image to show (empty dataset / image list).
+function resetToEmptyImage() {
+  currentIndex = -1;
+  boxes = [];
+  selected = -1;
+  imageTags = [];
+  imgW = 0;
+  imgH = 0;
+  canvas.width = 0;
+  canvas.height = 0;
+  updateNav();
+  renderSidePanel();
+  renderTagBar();
+}
+
 function populateClasses() {
   if (classes.length === 0) classes = ['class_0'];
   if (defaultClass >= classes.length) defaultClass = 0;
@@ -2179,18 +2187,8 @@ async function loadConfig(startIdx = 0, opts = {}) {
       loadImage(0);
     }
   } else {
-    currentIndex = -1;
-    boxes = [];
-    selected = -1;
     justDrawn = false;
-    imageTags = [];
-    imgW = 0;
-    imgH = 0;
-    canvas.width = 0;
-    canvas.height = 0;
-    updateNav();
-    renderSidePanel();
-    renderTagBar();
+    resetToEmptyImage();
   }
   renderUpdateStatus();
   notifyUpdateDaily();
@@ -2411,6 +2409,14 @@ async function resumeLastImage(cfg) {
   loadImage(0);
 }
 
+// Leave the current image safely: auto-save pending edits, or ask before
+// discarding them. Returns false when navigation should be blocked.
+async function saveOrDiscard() {
+  if (!dirty) return true;
+  if (autoSave) return flushAutoSave(); // stay put if the save failed
+  return confirm('You have unsaved changes. Discard them?');
+}
+
 async function go(delta) {
   if (currentIndex < 0) return;
   const next = currentIndex + delta;
@@ -2420,13 +2426,7 @@ async function go(delta) {
   // unsaved-changes / auto-save handling; the on_prev/on_next hooks below still
   // run on the image being left, just before it is replaced.
   await runHook(delta < 0 ? 'on_before_prev' : 'on_before_next');
-  if (dirty) {
-    if (autoSave) {
-      if (!(await flushAutoSave())) return; // stay put if the save failed
-    } else if (!confirm('You have unsaved changes. Discard them?')) {
-      return;
-    }
-  }
+  if (!(await saveOrDiscard())) return;
   // navigation hooks run on the image being left; they capture its index before
   // loadImage advances currentIndex
   runHook(delta < 0 ? 'on_prev' : 'on_next');
@@ -2607,10 +2607,9 @@ function pushUndo() {
   updateHistoryButtons();
 }
 
-function undo() {
-  if (readonly || !undoStack.length) return;
-  redoStack.push(snapshot());
-  const snap = undoStack.pop();
+// Apply a history snapshot to the current image. Shared by undo/redo; the
+// caller has already moved the snapshot between the two stacks.
+function applySnapshot(snap, label) {
   boxes = snap.boxes;
   imageTags = snap.tags;
   selected = -1;
@@ -2619,26 +2618,21 @@ function undo() {
   syncClassSelect(-1);
   updateHistoryButtons();
   renderTagBar();
-  dbg('undo', { boxes: boxes.length, tags: imageTags.length,
+  dbg(label, { boxes: boxes.length, tags: imageTags.length,
     undo: undoStack.length, redo: redoStack.length });
   draw();
+}
+
+function undo() {
+  if (readonly || !undoStack.length) return;
+  redoStack.push(snapshot());
+  applySnapshot(undoStack.pop(), 'undo');
 }
 
 function redo() {
   if (readonly || !redoStack.length) return;
   undoStack.push(snapshot());
-  const snap = redoStack.pop();
-  boxes = snap.boxes;
-  imageTags = snap.tags;
-  selected = -1;
-  justDrawn = false;
-  markDirty();
-  syncClassSelect(-1);
-  updateHistoryButtons();
-  renderTagBar();
-  dbg('redo', { boxes: boxes.length, tags: imageTags.length,
-    undo: undoStack.length, redo: redoStack.length });
-  draw();
+  applySnapshot(redoStack.pop(), 'redo');
 }
 
 function deleteSelected() {
@@ -2936,13 +2930,8 @@ async function runAction(name, opts = {}) {
   }
 }
 
-async function postActionRun(body) {
-  const res = await fetch('/api/actions/run', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return res.json();
+function postActionRun(body) {
+  return postJson('/api/actions/run', body);
 }
 
 // Fire an event hook if it is defined and an image is loaded. No-op otherwise.
@@ -3966,6 +3955,26 @@ if (classSelectEl) {
   });
 }
 
+// Fetch a fresh image list and apply it, keeping the current image by path.
+// `url` is the endpoint (GET) or the endpoint plus a fetch init; `tag` and
+// `label` keep the console messages specific to the calling action.
+async function reloadImagesList(url, init, tag, label) {
+  const anchor = captureImageAnchor();
+  dbg(`${label} images list`, { was: images.length, index: currentIndex,
+    anchor: anchor && anchor.path });
+  try {
+    const res = await fetch(url, init);
+    const data = await res.json();
+    if (!data.ok) {
+      console.error(`[${tag}] ${label} failed`, data);
+      return;
+    }
+    applyImagesPayload(data, anchor, label);
+  } catch (err) {
+    console.error(`[${tag}] failed:`, err);
+  }
+}
+
 const APP_SHORTCUT_HANDLERS = {
   app_prev: (e) => { e.preventDefault(); go(-1); },
   app_next: (e) => { e.preventDefault(); go(1); },
@@ -4037,42 +4046,18 @@ const APP_SHORTCUT_HANDLERS = {
   // Re-scan the image folders and keep the user on the same image *by path*
   // (falling back to the next surviving one when it was removed); used e.g.
   // after a user action deleted/added image files. Targeted — no full reload.
-  app_refresh_images_list: async (e) => {
+  app_refresh_images_list: (e) => {
     e.preventDefault();
-    const anchor = captureImageAnchor();
-    dbg('rescan images list', { was: images.length, index: currentIndex,
-      anchor: anchor && anchor.path });
-    try {
-      const res = await fetch('/api/images/rescan', { method: 'POST' });
-      const data = await res.json();
-      if (!data.ok) {
-        console.error('[app_refresh_images_list] rescan failed', data);
-        return;
-      }
-      applyImagesPayload(data, anchor, 'rescan');
-    } catch (err) {
-      console.error('[app_refresh_images_list] failed:', err);
-    }
+    return reloadImagesList('/api/images/rescan', { method: 'POST' },
+      'app_refresh_images_list', 'rescan');
   },
   // Re-read the server's current list *without* touching the disk: use after a
   // `backend_*` action already re-scanned it (e.g. Archive's
   // `backend_rescan_images`). Keeps the same image by path; no extra disk scan.
-  app_reload_images_list: async (e) => {
+  app_reload_images_list: (e) => {
     e.preventDefault();
-    const anchor = captureImageAnchor();
-    dbg('reload images list', { was: images.length, index: currentIndex,
-      anchor: anchor && anchor.path });
-    try {
-      const res = await fetch('/api/images');
-      const data = await res.json();
-      if (!data.ok) {
-        console.error('[app_reload_images_list] reload failed', data);
-        return;
-      }
-      applyImagesPayload(data, anchor, 'reload');
-    } catch (err) {
-      console.error('[app_reload_images_list] failed:', err);
-    }
+    return reloadImagesList('/api/images', undefined,
+      'app_reload_images_list', 'reload');
   },
   // Re-fetch the current image from the server (cache-busted); e.g. after an
   // external editor wrote a new version of the file.
@@ -4098,17 +4083,7 @@ function applyImagesPayload(data, anchor, label) {
   populateFilterPanel();
   if (data.filter_error) showTransientFilterMessage(data.filter_error);
   if (!images.length) {
-    currentIndex = -1;
-    boxes = [];
-    selected = -1;
-    imageTags = [];
-    imgW = 0;
-    imgH = 0;
-    canvas.width = 0;
-    canvas.height = 0;
-    updateNav();
-    renderSidePanel();
-    renderTagBar();
+    resetToEmptyImage();
     return;
   }
   loadImage(resolveImageAnchor(anchor));
