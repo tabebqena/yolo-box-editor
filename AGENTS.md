@@ -7,8 +7,9 @@ secret key, then it runs the Flask app) and the implementation lives in the
 plain `app/ybe/` package — `server.py` holds the Flask app object and all
 routes, the rest are the reusable pieces (`config`, `state`, `parsing`, `auth`,
 `dataset`, `extensions`, …). The UI is plain `app/templates/index.html` +
-`app/static/app.js` (~4600 lines) + `app/static/style.css` with **no build
-step**. No database. The `data.yaml` reader is hand-rolled — no PyYAML at
+`app/static/app.js` (~4400 lines; small reusable DOM/modal helpers live at the
+top) + `app/static/style.css` with **no build step** for the app itself. No
+database. The `data.yaml` reader is hand-rolled — no PyYAML at
 runtime. User files live in `YBX_HOME` (below). `ybx.sh` copies `app/`
 wholesale, so `app/ybe/` ships automatically.
 
@@ -30,12 +31,16 @@ wholesale, so `app/ybe/` ships automatically.
   only `<dir>/app/` atomically and leaves user files and `.venv` alone.
   `app/launcher.sh.in` is the `ybe` launcher template (start/stop/restart/status/
   logs) that `ybx.sh` fills in. (Replaces the old `install.sh`.)
-- Tests (from repo root): `python -m pytest -q` (~289 tests); single test
+- Python tests (from repo root): `python -m pytest -q` (~289 tests); single test
   `python -m pytest tests/test_app.py::test_name -q`. `pytest.ini` puts `app/`
   on `pythonpath`.
+- JavaScript tests: `npm ci` then `npm run test:js` (Node's `node --test` +
+  jsdom; Node >= 20). The suite lives in `tests/js/`. `package.json` and
+  `package-lock.json` are committed; `/node_modules/` is gitignored. The release
+  workflow runs this suite before creating a tag.
 - No lint / format / typecheck config exists.
-- Tests import `PIL` (Pillow) but `app/requirements.txt` lists only `Flask`.
-  Install Pillow (`pip install pillow`) or collection fails immediately.
+- Python tests import `PIL` (Pillow) but `app/requirements.txt` lists only
+  `Flask`. Install Pillow (`pip install pillow`) or collection fails immediately.
 
 ## Layout / entrypoints
 - `app/app.py` — the command-line entrypoint only: parses flags, resolves
@@ -121,7 +126,8 @@ wholesale, so `app/ybe/` ships automatically.
   fresh install is usable with no setup. A non-empty `USERS` turns login on:
   `before_request` returns 401 for `/api/*` without a signed session, while `/`,
   `/static/*` and `/api/{session,login,logout}` stay public. The UI shows a
-  sign-in form and offers Sign out and Change password. Routes: `GET
+  sign-in form; Sign out and Change password live in **Settings → Account**
+  (that tab appears only when login is enabled). Routes: `GET
   /api/session`, `POST /api/login`, `POST /api/logout`, `POST /api/password`.
   Account admin is CLI-only (`--create-user`/`--list-users`); there is no users
   tab in the UI. The session cookie is signed with `SECRET_KEY_FILE`
@@ -157,6 +163,14 @@ wholesale, so `app/ybe/` ships automatically.
 - Fixtures create real JPEGs (Pillow) in `tmp_path`; tests never touch the repo's
   own `app/actions/`, `shortcuts.txt`, `.recent_data_yamls.json`,
   `.settings.json`, `.view_state.json` or `users.json`.
+- `tests/js/*.test.js` is the frontend suite; add a file there (it is picked up
+  automatically). `tests/js/helpers/app.js` loads `app/templates/index.html`
+  into jsdom, stubs `fetch`/canvas/`requestAnimationFrame`/`confirm`, runs
+  `app.js` in the window's vm context (without its trailing `boot();`) and
+  injects `window.__ybe` (state get/set + the callable API). jsdom has no
+  layout, so canvas drawing/layout is asserted through state and DOM, not
+  pixels. Keep new helper functions at the top of `app.js` (they are exposed on
+  `window` and covered in `tests/js/helpers.test.js`).
 
 ## Repo conventions & boundaries
 
