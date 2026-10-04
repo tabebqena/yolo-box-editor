@@ -8,21 +8,27 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Optional login**: run with `--auth USER:PASS` and the app shows a sign-in
-  screen before loading the dataset; every `/api/*` call returns `401` until the
-  user signs in, and a **Sign out** button in the side panel ends the session.
-  Authentication is off by default, so local single-user use is unchanged.
+- **Optional login** with a persistent, multi-user account store. Create users
+  from the command line with `--create-user NAME PASS` (or seed one with
+  `--auth NAME:PASS`, which only registers the user when new); `--list-users`
+  prints the registered names. Once the store has at least one user, the app
+  shows a sign-in screen before loading the dataset, every `/api/*` call returns
+  `401` until signed in, and a **Sign out** button in the side panel ends the
+  session. With no users there is no login, so local single-user use is
+  unchanged.
 
-  New routes: `GET /api/session`, `POST /api/login`, `POST /api/logout`;
-  `/api/config` reports an `auth` object. Credentials are held in memory only
-  (never written to disk) and the session is a signed cookie.
+  Accounts live in `users.json` in the user folder, stored as salted PBKDF2
+  hashes (never plaintext) with owner-only (`0600`) permissions. New session
+  routes: `GET /api/session`, `POST /api/login`, `POST /api/logout`;
+  `/api/config` reports an `auth` object.
 
 ### Security
 
-- `--auth` is a **convenience gate, not strong security**. The password is sent
-  in the request body over plain `http://` (cleartext), and when started through
-  the launcher it is visible in the process list. Use it only on localhost or a
-  trusted network, or put the app behind an HTTPS reverse proxy.
+- The login is a **convenience gate, not strong security**. Over plain `http://`
+  the password is sent in the request body (cleartext), and a password passed on
+  the command line is visible in the process list and shell history. Use it only
+  on localhost or a trusted network, or put the app behind an HTTPS reverse
+  proxy. The stored hashes protect the file, not the command line.
 
 ## [6.9.0] - 2026-10-03
 

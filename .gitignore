@@ -1,6 +1,7 @@
 # --- user files (YBX_HOME = repo root in a clone): never tracked ---
 # Root-anchored so the shipped app/actions/, app/hooks/, … stay tracked.
 /config.json
+/users.json
 /.settings.json
 /.recent_data_yamls.json
 /.view_state.json

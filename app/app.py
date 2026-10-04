@@ -23,7 +23,6 @@ with the `images` path segment replaced by `labels`
 """
 
 import argparse
-import hmac
 import json
 import logging
 import os
@@ -49,6 +48,7 @@ from flask import (
     send_from_directory,
     session,
 )
+from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # the shipped app/ directory
 
@@ -97,6 +97,10 @@ UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")
 RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
 VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")  # active split/filter per dataset
 SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")  # cross-browser UI prefs
+# Login accounts: {"version": 1, "users": {"name": "<password_hash>"}}. A
+# non-empty store turns login on; the file is owner-only (0600) because it holds
+# password hashes. Managed with --auth / --create-user / --list-users.
+USERS_FILE = os.path.join(YBX_HOME, "users.json")
 
 # Update check: compare the shipped VERSION with the newest GitHub one. A check
 # is skipped while the cache is fresh (< UPDATE_CHECK_INTERVAL) and the running
@@ -119,7 +123,7 @@ def configure_home(path):
     """Point the user folders at `path` (the `--home` override)."""
     global YBX_HOME, USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR
     global USER_SCRIPT_DIR, USER_SHORTCUTS_FILE, RECENT_FILE, VIEW_FILE
-    global SETTINGS_FILE, UPDATE_CHECK_FILE, CONFIG_FILE
+    global SETTINGS_FILE, UPDATE_CHECK_FILE, CONFIG_FILE, USERS_FILE
     YBX_HOME = os.path.abspath(os.path.expanduser(path))
     USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
     USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
@@ -131,6 +135,7 @@ def configure_home(path):
     VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")
     SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")
     UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")
+    USERS_FILE = os.path.join(YBX_HOME, "users.json")
 
 
 def ensure_user_dirs():
@@ -351,9 +356,10 @@ app = Flask(
 # Tests never rely on a stable key.
 app.secret_key = secrets.token_hex(32)
 
-# Login credentials as an (username, password) tuple, or None when auth is off
-# (the default). Set from --auth; never written to disk.
-AUTH = None
+# Persistent login accounts as a {username: password_hash} map, loaded from
+# USERS_FILE at startup. Empty (the default) means login is off; any entry turns
+# it on. Passwords are only ever stored hashed.
+USERS = {}
 
 STATE = {
     "data_yaml": None,
@@ -2598,14 +2604,88 @@ def _prune_clients(now=None):
 _AUTH_PUBLIC_PATHS = {"/api/login", "/api/session", "/api/logout"}
 
 
+def _valid_username(username):
+    """A username may not be empty, contain ':', or include control chars."""
+    return bool(username) and ":" not in username and not any(
+        ord(ch) < 32 for ch in username
+    )
+
+
+def load_users():
+    """Load USERS_FILE into the USERS map; missing/corrupt file means none."""
+    global USERS
+    try:
+        with open(USERS_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        USERS = {}
+        return USERS
+    raw = data.get("users") if isinstance(data, dict) else None
+    USERS = (
+        {str(name): str(hash_) for name, hash_ in raw.items()}
+        if isinstance(raw, dict)
+        else {}
+    )
+    return USERS
+
+
+def _write_users():
+    """Persist USERS atomically and owner-only; returns False on failure."""
+    try:
+        os.makedirs(os.path.dirname(USERS_FILE) or ".", exist_ok=True)
+        tmp = USERS_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"version": 1, "users": USERS}, f, indent=2, sort_keys=True)
+            f.write("\n")
+        os.replace(tmp, USERS_FILE)
+        try:
+            os.chmod(USERS_FILE, 0o600)
+        except OSError:
+            pass
+        return True
+    except OSError:
+        return False
+
+
+def set_user(username, password):
+    """Create or update a user; returns "created" or "updated"."""
+    existed = username in USERS
+    USERS[username] = generate_password_hash(password)
+    if not _write_users():
+        raise OSError(f"could not write {USERS_FILE}")
+    return "updated" if existed else "created"
+
+
+def add_user_if_absent(username, password):
+    """Register a user only when missing; True when a user was added."""
+    if username in USERS:
+        return False
+    USERS[username] = generate_password_hash(password)
+    return _write_users()
+
+
+def verify_user(username, password):
+    """Constant-time check of a submitted password against the store."""
+    hashed = USERS.get(str(username))
+    if not hashed:
+        return False
+    return check_password_hash(hashed, str(password))
+
+
 def auth_enabled():
-    """True when `--auth` supplied credentials and a login is required."""
-    return AUTH is not None
+    """True when at least one user is registered and a login is required."""
+    return bool(USERS)
+
+
+def _session_username():
+    """The signed-in username, if it still exists in the store."""
+    user = session.get("ybe_user")
+    return user if user in USERS else None
 
 
 def _is_authenticated():
-    """True when auth is off, or the request carries a signed-in session."""
-    return not auth_enabled() or bool(session.get("ybe_user"))
+    """True when auth is off, or the request carries a valid session."""
+    return not auth_enabled() or _session_username() is not None
 
 
 @app.before_request
@@ -2616,25 +2696,11 @@ def _require_login():
     path = request.path
     if path == "/" or path.startswith("/static/") or path in _AUTH_PUBLIC_PATHS:
         return None
-    if session.get("ybe_user"):
+    if _session_username():
         return None
     if path.startswith("/api/"):
         return jsonify({"ok": False, "error": "authentication required"}), 401
     abort(401)
-
-
-def _credentials_match(username, password):
-    """Constant-time comparison of the submitted credentials."""
-    if AUTH is None:
-        return False
-    expected_user, expected_pass = AUTH
-    user_ok = hmac.compare_digest(
-        str(username).encode("utf-8"), str(expected_user).encode("utf-8")
-    )
-    pass_ok = hmac.compare_digest(
-        str(password).encode("utf-8"), str(expected_pass).encode("utf-8")
-    )
-    return user_ok and pass_ok
 
 
 # --------------------------------------------------------------------------- #
@@ -2648,12 +2714,12 @@ def index():
 @app.route("/api/session")
 def api_session():
     """Report whether a login is required and whether this client has one."""
-    signed_in = bool(session.get("ybe_user"))
+    username = _session_username()
     return jsonify(
         {
             "auth_required": auth_enabled(),
             "authenticated": _is_authenticated(),
-            "username": session.get("ybe_user") if signed_in else None,
+            "username": username,
         }
     )
 
@@ -2666,7 +2732,7 @@ def api_login():
     data = request.get_json(silent=True) or {}
     username = data.get("username", "")
     password = data.get("password", "")
-    if _credentials_match(username, password):
+    if verify_user(username, password):
         session["ybe_user"] = str(username)
         return jsonify({"ok": True, "username": str(username)})
     return jsonify({"ok": False, "error": "invalid username or password"}), 401
@@ -2777,7 +2843,7 @@ def api_config():
             "debug": STATE["debug"],
             "auth": {
                 "required": auth_enabled(),
-                "username": session.get("ybe_user") if auth_enabled() else None,
+                "username": _session_username() if auth_enabled() else None,
             },
             "version": read_version(),
             "changelog": changelog_for(read_version()),
@@ -3475,7 +3541,6 @@ def api_tags_dir():
 # entrypoint
 # --------------------------------------------------------------------------- #
 def main():
-    global AUTH
     parser = argparse.ArgumentParser(description="YOLO labelling app (Flask)")
     parser.add_argument("--data", help="path to data.yaml")
     parser.add_argument(
@@ -3493,7 +3558,18 @@ def main():
     parser.add_argument(
         "--auth",
         metavar="USER:PASS",
-        help="require a login (username:password); off by default",
+        help="register USER (with PASS) if not already known, then require a login",
+    )
+    parser.add_argument(
+        "--create-user",
+        nargs=2,
+        metavar=("NAME", "PASSWORD"),
+        help="create a user (or reset an existing password) in the user store, then exit",
+    )
+    parser.add_argument(
+        "--list-users",
+        action="store_true",
+        help="list registered users, then exit",
     )
     parser.add_argument(
         "--debug",
@@ -3546,14 +3622,38 @@ def main():
     STATE["keep_filter_pipes"] = args.keep_filter_pipes
     STATE["no_update_check"] = args.no_update_check
 
+    load_users()
+
+    # Admin commands manage the user store and exit before the server starts.
+    if args.list_users:
+        for name in sorted(USERS):
+            print(name)
+        if not USERS:
+            print(f"(no users registered in {USERS_FILE})")
+        return
+
+    if args.create_user:
+        username, password = args.create_user
+        if not _valid_username(username):
+            parser.error("--create-user NAME must be non-empty and contain no ':'")
+        try:
+            action = set_user(username, password)
+        except OSError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        print(f"{action} user {username!r} in {USERS_FILE}")
+        return
+
     if args.auth is not None:
         if ":" not in args.auth:
             parser.error("--auth must be in the form USER:PASS")
         username, password = args.auth.split(":", 1)
-        if not username:
-            parser.error("--auth username must not be empty")
-        AUTH = (username, password)
-        log.info("login required (user %r)", username)
+        if not _valid_username(username):
+            parser.error("--auth USER must be non-empty and contain no ':'")
+        if add_user_if_absent(username, password):
+            log.info("registered login user %r in %s", username, USERS_FILE)
+        else:
+            log.info("login user %r already registered (existing password kept)", username)
 
     start_update_checker()
 

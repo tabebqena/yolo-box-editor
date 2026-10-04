@@ -139,8 +139,9 @@ Usage:
 OPTIONS are the app's flags, e.g.:
   --data /path/to/data.yaml   dataset to open
   --readonly                  viewer only (no saving)
-  --auth user:pass            require a login (password is visible in the
-                              process list; prefer app.py directly)
+  --auth user:pass            register a login user (if new), then serve
+  --create-user name pass     register or reset a login user, then exit
+  --list-users                list registered users, then exit
   --debug                     verbose browser-console logging
   --host 0.0.0.0 --port 5000  bind address
   --no-resume                 skip reopening the last dataset

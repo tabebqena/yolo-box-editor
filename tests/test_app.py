@@ -103,7 +103,8 @@ def clean_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe, "USER_SHORTCUTS_FILE", str(tmp_path / "shortcuts.txt"))
     monkeypatch.setattr(ybe, "PIPE_DIR", str(tmp_path / "pipes"))
     monkeypatch.setattr(ybe, "FILTER_PIPES_DIR", str(tmp_path / "filter-pipes"))
-    monkeypatch.setattr(ybe, "AUTH", None)
+    monkeypatch.setattr(ybe, "USERS_FILE", str(tmp_path / "users.json"))
+    monkeypatch.setattr(ybe, "USERS", {})
     ybe.STATE.clear()
     ybe.STATE.update(DEFAULT_STATE)
     ybe.EXECUTIONS.clear()
@@ -3136,9 +3137,9 @@ def test_api_extension_delete_refuses_shipped(clean_state):
 
 
 # --------------------------------------------------------------------------- #
-# optional login (--auth USER:PASS)
+# optional login (persistent user store)
 # --------------------------------------------------------------------------- #
-def test_auth_off_by_default(clean_state):
+def test_auth_off_when_store_empty(clean_state):
     client = ybe.app.test_client()
     info = client.get("/api/session").get_json()
     assert info["auth_required"] is False
@@ -3146,8 +3147,8 @@ def test_auth_off_by_default(clean_state):
     assert client.get("/api/config").status_code == 200
 
 
-def test_auth_blocks_api_until_signed_in(clean_state):
-    ybe.AUTH = ("alice", "s3cret")
+def test_auth_on_when_store_has_user(clean_state):
+    ybe.set_user("alice", "s3cret")
     client = ybe.app.test_client()
     assert client.get("/api/config").status_code == 401
     info = client.get("/api/session").get_json()
@@ -3156,8 +3157,17 @@ def test_auth_blocks_api_until_signed_in(clean_state):
     assert client.get("/").status_code == 200
 
 
-def test_auth_login_logout_roundtrip(clean_state):
-    ybe.AUTH = ("alice", "s3cret")
+def test_password_is_stored_hashed(clean_state):
+    ybe.set_user("alice", "s3cret")
+    raw = Path(ybe.USERS_FILE).read_text(encoding="utf-8")
+    assert "s3cret" not in raw
+    assert json.loads(raw)["users"]["alice"] != "s3cret"
+    assert ybe.verify_user("alice", "s3cret")
+    assert not ybe.verify_user("alice", "wrong")
+
+
+def test_login_logout_roundtrip(clean_state):
+    ybe.set_user("alice", "s3cret")
     client = ybe.app.test_client()
     assert client.post(
         "/api/login", json={"username": "alice", "password": "nope"}
@@ -3167,7 +3177,6 @@ def test_auth_login_logout_roundtrip(clean_state):
     good = client.post(
         "/api/login", json={"username": "alice", "password": "s3cret"})
     assert good.status_code == 200 and good.get_json()["ok"] is True
-    assert client.get("/api/config").status_code == 200
     assert client.get("/api/config").get_json()["auth"] == {
         "required": True, "username": "alice"}
 
@@ -3175,11 +3184,55 @@ def test_auth_login_logout_roundtrip(clean_state):
     assert client.get("/api/config").status_code == 401
 
 
-def test_auth_rejects_wrong_username(clean_state):
-    ybe.AUTH = ("alice", "s3cret")
+def test_login_rejects_unknown_user(clean_state):
+    ybe.set_user("alice", "s3cret")
     resp = ybe.app.test_client().post(
         "/api/login", json={"username": "bob", "password": "s3cret"})
     assert resp.status_code == 401
+
+
+def test_add_user_if_absent_keeps_existing_password(clean_state):
+    ybe.set_user("alice", "first")
+    assert ybe.add_user_if_absent("alice", "second") is False
+    assert ybe.verify_user("alice", "first")
+    assert not ybe.verify_user("alice", "second")
+
+
+def test_set_user_updates_password(clean_state):
+    assert ybe.set_user("alice", "first") == "created"
+    assert ybe.set_user("alice", "second") == "updated"
+    assert ybe.verify_user("alice", "second")
+    assert not ybe.verify_user("alice", "first")
+
+
+def test_users_persist_across_reload(clean_state):
+    ybe.set_user("alice", "s3cret")
+    ybe.USERS = {}  # simulate a fresh process
+    ybe.load_users()
+    assert ybe.auth_enabled()
+    assert ybe.verify_user("alice", "s3cret")
+
+
+def test_load_users_tolerates_corrupt_file(clean_state):
+    Path(ybe.USERS_FILE).write_text("{ not json", encoding="utf-8")
+    ybe.USERS = {"stale": "x"}
+    ybe.load_users()
+    assert ybe.USERS == {}
+
+
+def test_users_file_is_owner_only(clean_state):
+    ybe.set_user("alice", "s3cret")
+    assert os.stat(ybe.USERS_FILE).st_mode & 0o777 == 0o600
+
+
+def test_session_invalid_after_user_removed(clean_state):
+    ybe.set_user("alice", "s3cret")
+    ybe.set_user("bob", "hunter2")  # keep the store non-empty
+    client = ybe.app.test_client()
+    client.post("/api/login", json={"username": "alice", "password": "s3cret"})
+    assert client.get("/api/config").status_code == 200
+    del ybe.USERS["alice"]
+    assert client.get("/api/config").status_code == 401
 
 
 def test_login_is_noop_when_auth_off(clean_state):
@@ -3187,4 +3240,11 @@ def test_login_is_noop_when_auth_off(clean_state):
         "/api/login", json={"username": "x", "password": "y"})
     assert resp.status_code == 200
     assert resp.get_json()["auth_required"] is False
+
+
+def test_valid_username_rules():
+    assert ybe._valid_username("alice")
+    assert not ybe._valid_username("")
+    assert not ybe._valid_username("a:b")
+    assert not ybe._valid_username("a\nb")
 

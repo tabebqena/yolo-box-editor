@@ -67,7 +67,9 @@ and run `python app/app.py`:
 ```bash
 python app/app.py --data /path/to/data.yaml
 python app/app.py --data /path/to/data.yaml --readonly   # viewer only
-python app/app.py --data /path/to/data.yaml --auth me:secret  # require a login
+python app/app.py --create-user alice secret             # register a login user, then exit
+python app/app.py --list-users                           # show registered users, then exit
+python app/app.py --data /path/to/data.yaml --auth alice:secret  # register if new, then serve
 python app/app.py --data /path/to/data.yaml --debug      # verbose browser console
 python app/app.py --no-resume                            # Load-a-dataset dialog, no auto-open
 python app/app.py --data /path/to/data.yaml --keep-pipe  # keep each run's {PIPE_PATH} file
@@ -91,12 +93,18 @@ the loaded config, image loads, saves, tag writes, user actions / `after_success
 chains, hook runs, rescans and box edits. It also surfaces uncaught errors and
 unhandled promise rejections.
 
-`--auth USER:PASS` puts a sign-in screen in front of the app; without the flag
-there is no login. The credentials live in memory only and the session is a
-signed cookie. This is a convenience gate, **not strong security**: over plain
-`http://` the password is sent in clear text, and while the process runs (also
-via `ybe start --auth …`) it is visible in the process list. Use it on localhost
-or a trusted network, or behind an HTTPS reverse proxy.
+`--create-user NAME PASS` registers a login user (or resets an existing one's
+password) and exits; `--list-users` prints the registered names. Once `users.json`
+(in your user folder) has at least one user, the app shows a sign-in screen before
+loading the dataset, and a **Sign out** button ends the session. With no users
+there is no login. `--auth NAME:PASS` registers the user only when new and then
+serves, so it is handy for a first run.
+
+Accounts are stored as salted hashes (never plaintext) and the file is
+owner-only. This is a convenience gate, **not strong security**: over plain
+`http://` the password is sent in clear text, and a password given on the command
+line is visible in the process list and shell history. Use it on localhost or a
+trusted network, or behind an HTTPS reverse proxy.
 
 ## Changelog and releases
 

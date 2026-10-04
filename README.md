@@ -50,8 +50,9 @@ Full details: [install, update and run](docs/install.md).
   every tag; click one to toggle it. See [tags](docs/tags.md).
 - **Undo / Redo / Save**, plus optional **auto-save** so navigation never asks.
 - **Read-only mode** (`--readonly`) to browse a dataset safely.
-- **Optional login** (`--auth USER:PASS`, off by default) for a shared or LAN
-  instance. A convenience gate, not strong security — see
+- **Optional login** for a shared or LAN instance: `--create-user NAME PASS` /
+  `--list-users` manage a hashed user store, and any registered user turns the
+  sign-in screen on. A convenience gate, not strong security — see
   [install](docs/install.md).
 - **Arrange the UI**: put the panel left or right, and float or dock the Tags,
   Boxes, Actions, Navigation and Save widgets. The layout is remembered.
