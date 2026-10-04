@@ -1,0 +1,15 @@
+# Keep only the images that have the chosen tag.
+#
+# The `tag_name` argument uses `options: {DATASET_TAG_NAMES}`, a dynamic token the
+# app expands into the loaded dataset's available tags (from tags.yaml), so the UI
+# shows a dropdown and only valid tags can be picked. `{TAGS_DIR}` is the active
+# split's tags folder, so a custom tags folder is honoured.
+api_version: 1
+name: Has tag
+description: Keep only images that have the chosen tag.
+arguments:
+  - name: tag_name
+    required: true
+    options: {DATASET_TAG_NAMES}
+steps:
+  - {PYTHON} {APP_SCRIPT_DIR}/tag_filter.py {INPUT_PIPE} {OUTPUT_PIPE} --tag {TAG_NAME} --tags-dir {TAGS_DIR}

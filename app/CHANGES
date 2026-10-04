@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.9.0
+- Two new built-in filters: Has tag and Does not have tag. Pick the tag from a dropdown filled from your tags.yaml (options: {DATASET_TAG_NAMES}); filters honour a custom tags folder via {TAGS_DIR}.
+
 ## 7.8.0
 - Running an action or hook no longer pops up a result window or a success toast. A successful run is logged to the browser console; a failure shows a toast with the reason.
 

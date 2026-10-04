@@ -231,6 +231,7 @@ FILTER_PLACEHOLDERS = (
     ("SPLIT", "active split (train/val/test) or empty on All splits"),
     ("INPUT_PIPE", "file with the candidate image paths (one per line)"),
     ("OUTPUT_PIPE", "file to write the kept image paths to"),
+    ("TAGS_DIR", "tags folder for the active split (empty on All splits)"),
     ("APP_DIR", "the shipped code folder (app/)"),
     ("HOME_DIR", "your user folder (the working directory of every run)"),
     ("APP_SCRIPT_DIR", "the shipped helper scripts (app/scripts/)"),

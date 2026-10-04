@@ -1998,6 +1998,28 @@ def test_resolve_filter_options_expands_class_names():
     assert ybe.resolve_filter_options(None, ["x"]) is None
 
 
+def test_load_filters_parses_tag_names_token(clean_state):
+    body = (
+        "name: ByTag\n"
+        "arguments:\n"
+        "  - name: tag_name\n"
+        "    options: {DATASET_TAG_NAMES}\n"
+        "steps:\n"
+        "  - echo {TAG_NAME}\n"
+    )
+    write_filter(clean_state, "ByTag.yaml", body)
+    arg = ybe.load_filters()[0]["ByTag"]["arguments"][0]
+    assert arg["options"] == [ybe.FILTER_TAG_NAMES_TOKEN]
+
+
+def test_resolve_filter_options_expands_tag_names():
+    token = ybe.FILTER_TAG_NAMES_TOKEN
+    assert ybe.resolve_filter_options([token], [], ["fire", "smoke"]) == ["fire", "smoke"]
+    assert ybe.resolve_filter_options([token], ["x"]) == []
+    assert ybe.resolve_filter_options([ybe.FILTER_CLASS_NAMES_TOKEN, token],
+                                      ["a"], ["t"]) == ["a", "t"]
+
+
 def test_normalize_filter_chain_rejects_value_outside_options(clean_state):
     write_filter(clean_state, "ByClass.yaml",
                  filter_yaml("echo hi", name="ByClass",
@@ -2056,6 +2078,64 @@ def test_class_filter_script_contains_and_not_contains(clean_state, tmp_path, mo
     result = ybe.run_filter_chain(
         [{"name": "NotContains", "arguments": {"class_name": "fire"}}], "train")
     assert result["ok"] and [e["name"] for e in result["images"]] == ["b.jpg", "c.jpg"]
+
+
+def test_shipped_tag_filters_use_tag_token(monkeypatch):
+    monkeypatch.setattr(ybe.config, "FILTERS_DIR", str(Path(ybe.config.BASE_DIR) / "filters"))
+    monkeypatch.setattr(ybe.config, "USER_FILTERS_DIR", str(Path(ybe.config.BASE_DIR) / "nope"))
+    filters, errors = ybe.load_filters()
+    assert errors == []
+    for name in ("Has tag", "Does not have tag"):
+        arg = filters[name]["arguments"][0]
+        assert arg["name"] == "tag_name"
+        assert arg["required"] is True
+        assert arg["options"] == [ybe.FILTER_TAG_NAMES_TOKEN]
+
+
+def test_shipped_tag_filters_end_to_end(clean_state, tmp_path, monkeypatch):
+    root = make_dataset(tmp_path, splits=("train",), images=("a", "b", "c"))
+    tags = root / "tags" / "train"
+    tags.mkdir(parents=True, exist_ok=True)
+    (tags / "a.txt").write_text("fire\n", encoding="utf-8")
+    (tags / "b.txt").write_text("smoke\n", encoding="utf-8")
+    (root / "tags.yaml").write_text("- fire\n- smoke\n", encoding="utf-8")
+    load_into_state(root)
+    monkeypatch.setattr(ybe.config, "FILTERS_DIR", str(Path(ybe.config.BASE_DIR) / "filters"))
+    monkeypatch.setattr(ybe.config, "USER_FILTERS_DIR", str(Path(ybe.config.BASE_DIR) / "nope"))
+    monkeypatch.setattr(ybe.config, "APP_SCRIPT_DIR", str(Path(ybe.config.BASE_DIR) / "scripts"))
+
+    chain, error = ybe._normalize_filter_chain(
+        [{"name": "Has tag", "arguments": {"tag_name": "fire"}}])
+    assert error is None
+    result = ybe.run_filter_chain(chain, "train")
+    assert result["ok"] and [e["name"] for e in result["images"]] == ["a.jpg"]
+
+    result = ybe.run_filter_chain(
+        [{"name": "Does not have tag", "arguments": {"tag_name": "fire"}}], "train")
+    assert result["ok"] and [e["name"] for e in result["images"]] == ["b.jpg", "c.jpg"]
+
+
+def test_tag_filter_script_honors_custom_tags_dir(clean_state, tmp_path, monkeypatch):
+    root = make_dataset(tmp_path, splits=("train",), images=("a", "b"))
+    custom = tmp_path / "mytags" / "train"
+    custom.mkdir(parents=True, exist_ok=True)
+    (custom / "a.txt").write_text("fire\n", encoding="utf-8")
+    load_into_state(root)
+    ybe.state.STATE["splits"][0]["tags_dir"] = str(custom)
+    monkeypatch.setattr(ybe.config, "APP_SCRIPT_DIR", str(Path(ybe.config.BASE_DIR) / "scripts"))
+    write_filter(clean_state, "ByTag.yaml",
+                 filter_yaml(
+                     "{PYTHON} {APP_SCRIPT_DIR}/tag_filter.py {INPUT_PIPE} {OUTPUT_PIPE} "
+                     "--tag {TAG_NAME} --tags-dir {TAGS_DIR}",
+                     name="ByTag",
+                     arguments=[{"name": "tag_name", "required": True,
+                                 "options": ybe.FILTER_TAG_NAMES_TOKEN}]))
+
+    chain, error = ybe._normalize_filter_chain(
+        [{"name": "ByTag", "arguments": {"tag_name": "fire"}}])
+    assert error is None
+    result = ybe.run_filter_chain(chain, "train")
+    assert result["ok"] and [e["name"] for e in result["images"]] == ["a.jpg"]
 
 
 def test_run_filter_substitutes_placeholders_and_args(clean_state):

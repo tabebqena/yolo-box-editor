@@ -230,13 +230,14 @@ def api_config():
     hooks, hook_errors = load_hooks()
     filters, filter_errors = load_filters()
     classes = read_classes()
+    tags = read_tags_yaml()
     filter_catalog = sorted(
         (
             {
                 "name": f["name"],
                 "description": f["description"],
                 "arguments": [
-                    {**arg, "options": resolve_filter_options(arg.get("options"), classes)}
+                    {**arg, "options": resolve_filter_options(arg.get("options"), classes, tags)}
                     for arg in f["arguments"]
                 ],
             }
@@ -287,7 +288,7 @@ def api_config():
             "data_yaml": state.STATE["data_yaml"],
             "dataset_path": state.STATE["dataset_path"],
             "classes": classes,
-            "tags": read_tags_yaml(),
+            "tags": tags,
             "images": _current_images(),
             "active_split": state.STATE["active_split"],
             "filters": filter_catalog,

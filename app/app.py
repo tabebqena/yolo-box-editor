@@ -106,6 +106,7 @@ from ybe.filters import (
 )
 from ybe.extensions import (
     FILTER_CLASS_NAMES_TOKEN,
+    FILTER_TAG_NAMES_TOKEN,
     _bump_api_version_text,
     _clean_extension_entries,
     _clean_filter_arguments,

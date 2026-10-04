@@ -4,6 +4,18 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.9.0] - 2026-10-04
+
+### Added
+
+- **Two new built-in filters, Has tag and Does not have tag.** They keep only
+  the images whose tag file does (or does not) contain the chosen tag. The tag
+  is picked from a dropdown filled from the dataset's `tags.yaml`, via the new
+  dynamic option token `options: {DATASET_TAG_NAMES}`.
+- **New filter placeholder `{TAGS_DIR}`** — the active split's tags folder, so a
+  filter can honour a custom tags folder. The shipped tag filters use it;
+  `app/scripts/tag_filter.py` backs them.
+
 ## [7.8.0] - 2026-10-04
 
 ### Changed
