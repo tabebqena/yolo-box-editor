@@ -8,9 +8,9 @@ build step, no cloud account — point it at a `data.yaml` and start labelling.
 
 ![YOLO Box Editor](docs/screenshot.svg)
 
-Version **3.4.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
-non-commercial-use condition, no warranty) · new to labelling? Start with
-[TUTORIAL.md](TUTORIAL.md).
+Version **7.18.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
+non-commercial-use condition, no warranty) · new to labelling? Press **F1** in the
+app (or start with [TUTORIAL.md](TUTORIAL.md)).
 
 ## Quick start
 
@@ -99,6 +99,9 @@ Full details: [install, update and run](docs/install.md).
   automatically on events like `after_save`. See
   [actions and hooks](docs/actions-and-hooks.md).
 - **Configurable shortcuts** in `shortcuts.txt`.
+- **Built-in help** — a 3-level tutorial (Beginner / Intermediate / Expert) and
+  task-focused **How to?** recipes, reachable with **F1** or the **?** button in
+  the top panel.
 
 ## Keyboard cheat sheet
 
@@ -133,7 +136,8 @@ missing, see [Why can't I see my tag?](docs/tags.md#why-cant-i-see-my-tag).
 
 ## Further reading
 
-- [TUTORIAL.md](TUTORIAL.md) — beginner walkthrough of labelling.
+- [TUTORIAL.md](TUTORIAL.md) — the 3-level tutorial (beginner → expert).
+- [How to?](docs/howto.md) — task-focused recipes (also built into the app, `F1`).
 - [install, update and run](docs/install.md) — installer, `ybe` commands, flags.
 - [dataset, files and formats](docs/dataset.md) — `data.yaml`, label format, where files live.
 - [actions and hooks](docs/actions-and-hooks.md) — custom commands and events.

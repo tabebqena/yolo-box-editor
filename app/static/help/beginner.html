@@ -1,0 +1,93 @@
+<h2>Beginner — your first boxes</h2>
+<p class="help-lead">A guided first run: start the app, find your way around the
+screen, and draw, move, resize and delete boxes. No prior labelling experience
+needed.</p>
+
+<h3>1. Start the app</h3>
+<p>If you installed with the one-liner, the <code>ybe</code> command is ready:</p>
+<pre>ybe start --data /path/to/dataset/data.yaml</pre>
+<p>From a clone, run it directly:</p>
+<pre>python app/app.py --data /path/to/dataset/data.yaml</pre>
+<p>Then open <code>http://127.0.0.1:5000</code> in your browser. No
+<code>--data</code>? The app reopens the dataset you used last, or shows the
+<strong>Load a dataset</strong> box — paste the path to your
+<code>data.yaml</code> and press <strong>Load</strong>.</p>
+
+<h3>2. Find your way around the screen</h3>
+<ul>
+  <li><strong>Control panel</strong> (left or right): the app name with the
+  <strong>?</strong> help, <strong>⚙</strong> settings, bell and
+  <strong>Panel</strong> buttons; the dataset name; the <strong>Split</strong>
+  picker; your <strong>Actions</strong>; and the <strong>Boxes</strong> list for
+  the current image.</li>
+  <li><strong>Canvas</strong> (middle): the picture you label. This is where you
+  draw.</li>
+  <li><strong>Bottom bar</strong>: tags (if enabled), <strong>Prev</strong> /
+  image counter / <strong>Next</strong>, and <strong>Undo</strong> /
+  <strong>Redo</strong> / <strong>Save</strong>.</li>
+  <li><strong>⚙ Settings</strong>: dataset, view/layout, filters and shortcuts.</li>
+</ul>
+<p class="help-note">Lost something? Every panel can be moved. See the
+Intermediate tab for the layout options.</p>
+
+<h3>3. Draw a box</h3>
+<ol>
+  <li><strong>Drag</strong> on the image from one corner of the object to the
+  opposite corner. A rectangle follows the mouse.</li>
+  <li>On release, a <strong>class list</strong> appears — click the object's
+  class (or press its number). A coloured box with a label appears.</li>
+</ol>
+<p>The new box is <em>selected</em>: yellow on the canvas, with its row active in
+the Boxes list.</p>
+<p class="help-note">To draw inside or on top of an existing box, hold the
+force-draw modifier (default <kbd>Ctrl</kbd>) and drag. A plain drag inside a box
+moves that box instead.</p>
+
+<h3>4. Move and resize a box</h3>
+<ul>
+  <li><strong>Move</strong>: click inside the selected box and drag.</li>
+  <li><strong>Resize</strong>: drag one of the eight square handles (corners and
+  edge midpoints).</li>
+  <li><strong>Type exact values</strong>: click the <code>cx</code>,
+  <code>cy</code>, <code>w</code> or <code>h</code> field in the box's row and
+  type. Coordinates are fractions of the image (0–1), so
+  <code>0.5</code> is the centre.</li>
+</ul>
+
+<h3>5. Delete a box</h3>
+<p>Select it, then press <kbd>Delete</kbd> or <kbd>Backspace</kbd> — or click the
+<strong>×</strong> in its row in the Boxes list.</p>
+
+<h3>6. Select a box</h3>
+<ul>
+  <li>Click it on the canvas, or click its row in the Boxes list.</li>
+  <li>Press <kbd>Shift</kbd> to jump to the next box.</li>
+  <li>Press <kbd>Esc</kbd> to deselect.</li>
+</ul>
+
+<h3>7. Change a box's class</h3>
+<p>With the box selected, press <kbd>/</kbd> or click the <strong>/</strong> on
+the box, then pick the class.</p>
+
+<h3>8. Save, undo and move between images</h3>
+<ul>
+  <li><kbd>S</kbd> or <strong>Save</strong> writes the current image's boxes to
+  <code>labels/&lt;split&gt;/&lt;image&gt;.txt</code>.</li>
+  <li><kbd>Z</kbd> / <kbd>Y</kbd> undo / redo edits to the current image.</li>
+  <li><kbd>←</kbd> / <kbd>→</kbd> or <strong>Prev</strong> / <strong>Next</strong>
+  change image. Save first — unsaved boxes live only in the session.</li>
+</ul>
+
+<h3>Beginner shortcuts</h3>
+<table>
+  <tr><th>Key</th><th>Action</th></tr>
+  <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>previous / next image</td></tr>
+  <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>delete selected box</td></tr>
+  <tr><td><kbd>Z</kbd> / <kbd>Y</kbd></td><td>undo / redo</td></tr>
+  <tr><td><kbd>S</kbd></td><td>save labels</td></tr>
+  <tr><td><kbd>/</kbd></td><td>change the selected box's class</td></tr>
+  <tr><td><kbd>Shift</kbd></td><td>select the next box</td></tr>
+  <tr><td><kbd>Esc</kbd></td><td>drop a just-drawn box / deselect</td></tr>
+  <tr><td><kbd>F1</kbd></td><td>open this help</td></tr>
+</table>
+<p>Ready for more? Open the <strong>Intermediate</strong> tab.</p>

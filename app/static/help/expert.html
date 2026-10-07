@@ -1,0 +1,102 @@
+<h2>Expert — extend the app</h2>
+<p class="help-lead">Add your own actions, filters and hooks, run your own scripts,
+and rebind every shortcut. Your files live in your user folder and are never
+touched by an update.</p>
+
+<h3>Where your files live</h3>
+<p>The app ships defaults in <code>app/actions/</code>, <code>app/hooks/</code>,
+<code>app/filters/</code> and <code>app/scripts/</code>. <em>Your</em> copies live
+next to the installed app in your user folder (<code>&lt;home&gt;/actions/</code>,
+<code>&lt;home&gt;/hooks/</code>, <code>&lt;home&gt;/filters/</code>,
+<code>&lt;home&gt;/scripts/</code>, <code>&lt;home&gt;/shortcuts.txt</code>) and
+win on a name clash. Commands run with the working directory set to that folder.</p>
+
+<h3>Actions — a button that runs a command</h3>
+<p>An action is one YAML file in <code>actions/</code>. Build one in
+<strong>Settings → Actions → Create</strong>, or write it by hand:</p>
+<pre># &lt;home&gt;/actions/Remove.yaml
+steps:                  # one entry per line; stop on the first failure
+  - rm -f {IMAGE_PATH}
+  - rm -f {LABEL_PATH}
+after_success:          # app actions to run afterwards
+  - app_refresh_images_list</pre>
+<p>Each entry in <code>steps</code> / <code>after_success</code> is:</p>
+<ul>
+  <li><code>app_*</code> — a built-in UI action (e.g.
+  <code>app_refresh_image</code>);</li>
+  <li><code>backend_*</code> — a built-in server action (currently
+  <code>backend_rescan_images</code>);</li>
+  <li><code>action_&lt;Name&gt;</code> — run another action inline;</li>
+  <li>anything else — a shell command.</li>
+</ul>
+<p>Placeholders (leave them <strong>unquoted</strong>; the app quotes them for
+you): <code>{IMAGE_PATH}</code>, <code>{LABEL_PATH}</code>,
+<code>{TAGS_DIR}</code>, <code>{DATASET_PATH}</code>,
+<code>{DATA_YAML_PATH}</code>, <code>{IMAGE_INDEX}</code>,
+<code>{APP_DIR}</code>, <code>{HOME_DIR}</code>,
+<code>{APP_SCRIPT_DIR}</code>, <code>{USER_SCRIPT_DIR}</code>,
+<code>{PYTHON}</code>, <code>{PIPE_PATH}</code>.</p>
+<p class="help-note">Always start a Python step with <code>{PYTHON}</code>
+rather than <code>python</code>, and name a helper explicitly:
+<code>{PYTHON} {USER_SCRIPT_DIR}/helper.py …</code>. Ship-style helpers live in
+<code>app/scripts/</code> (<code>class_filter.py</code>,
+<code>example.py</code>, <code>example_filter.py</code>,
+<code>tag_image.py</code>).</p>
+
+<h3>Filters — narrow the image list</h3>
+<p>A filter is one YAML file in <code>filters/</code>. It reads candidate image
+paths from <code>{INPUT_PIPE}</code> and writes the ones it keeps to
+<code>{OUTPUT_PIPE}</code>. Create one in
+<strong>Settings → Filters → Create</strong>, or by hand:</p>
+<pre>name: Sharp only
+description: Keep sharp images
+arguments:
+  - name: threshold
+    required: true
+    default: "100"
+steps:
+  - {PYTHON} {USER_SCRIPT_DIR}/sharp.py {INPUT_PIPE} {OUTPUT_PIPE} --threshold {THRESHOLD}</pre>
+<p>Filter placeholders add <code>{SPLIT}</code>, <code>{INPUT_PIPE}</code> and
+<code>{OUTPUT_PIPE}</code> to the action list; each declared argument becomes an
+upper-cased token (<code>threshold</code> → <code>{THRESHOLD}</code>). An argument
+with <code>options</code> renders as a dropdown, and
+<code>options: {DATASET_CLASS_NAMES}</code> or <code>{DATASET_TAG_NAMES}</code>
+builds it from the loaded dataset. Chain up to 8 filters in
+<strong>Settings → Filters → Active chain</strong>. See
+<code>app/filters/example.yaml</code> and
+<code>app/scripts/example_filter.py</code> for a working starting point.</p>
+
+<h3>Hooks — run on an event</h3>
+<p>A hook is <code>hooks/on_&lt;event&gt;.yaml</code>; it runs automatically when
+the app fires that event (no button). It uses the same steps and placeholders as
+an action. Events include <code>on_image_loaded</code>,
+<code>on_before_save</code>, <code>on_after_save</code>,
+<code>on_box_created</code> and <code>on_box_deleted</code>.</p>
+<pre># &lt;home&gt;/hooks/on_after_save.yaml
+steps:
+  - {PYTHON} {USER_SCRIPT_DIR}/helper.py {DATA_YAML_PATH} {IMAGE_PATH} {LABEL_PATH}</pre>
+<p>A <code>steps</code> failure in <code>on_before_save</code> aborts the save.
+Set <code>active: false</code> to switch a hook off everywhere, or untick
+<strong>Enabled for this dataset</strong> in <strong>Settings → Hooks</strong>.</p>
+
+<h3>Rebind shortcuts</h3>
+<p><strong>Settings → Shortcuts → Edit</strong>: click a binding, then press the
+new combination. Modifier-only bindings (like <kbd>Ctrl</kbd> for force-draw) are
+captured by pressing and releasing the modifier; <strong>↺</strong> restores the
+shipped default. Or edit <code>&lt;home&gt;/shortcuts.txt</code> directly:</p>
+<pre>app_undo     &lt;Ctrl+Z&gt;     undo
+MyAction     &lt;Ctrl+Shift+R&gt; run my action</pre>
+<p>A built-in <code>app_*</code> name or one of your action names may be bound;
+the label after <code>&gt;</code> is free text shown in the UI. An unknown name
+is reported as a dismissible error.</p>
+
+<h3>Good to know</h3>
+<ul>
+  <li>Every extension file carries <code>api_version: 1</code>. An older file is
+  flagged <strong>outdated</strong> — open it with its <strong>YAML</strong>
+  button and save to upgrade it (comments are kept); a newer file is blocked.</li>
+  <li>Actions and hooks can be disabled per dataset from their
+  <strong>Existing</strong> list without deleting the file.</li>
+  <li>Read-only mode blocks extension writes as well as label edits.</li>
+</ul>
+<p>Stuck on a task? Try the <strong>How to?</strong> tab.</p>

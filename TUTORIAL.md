@@ -1,9 +1,21 @@
-# yolo-box-editor — beginner tutorial
+# yolo-box-editor — tutorial
 
-A walkthrough for labelling your first images. You will learn: how to start the
-app, load a dataset, draw and fix boxes, and save your work.
+A three-level tutorial for labelling images. The same guide is built into the
+app: press **F1** (or click **?** in the top panel).
 
-## 1. What you are building
+- **Level 1 — Beginner** (§1–§12 below): install, find your way around the
+  screen, and draw / move / resize / delete boxes. Start here if labelling is
+  new to you.
+- **Level 2 — Intermediate**: arrange the UI, edit boxes from the keyboard, tags,
+  filters and read-only browsing.
+- **Level 3 — Expert**: add your own actions, filters and hooks, and rebind
+  shortcuts.
+
+For short, task-focused recipes see [How to?](docs/howto.md).
+
+## Level 1 — Beginner
+
+### 1. What you are building
 
 The app lets you draw rectangles around objects (fires, smoke, cars, birds…)
 in images. Each rectangle is a **box**, and boxes are saved to disk in **YOLO
@@ -22,7 +34,7 @@ A single box is written as five numbers:
 You do not type these numbers yourself — you draw rectangles and the app writes
 the numbers.
 
-## 2. Fields and folders
+### 2. Fields and folders
 
 Your dataset is a folder tree like this:
 
@@ -54,7 +66,7 @@ names: ['fire', 'smoke', 'other']
 `labels/` is optional to create — the app makes it for you the first time you
 save.
 
-## 3. Start the app
+### 3. Start the app
 
 The easy way is the installer (no clone needed):
 
@@ -83,7 +95,7 @@ canvas.
 > and click **Load data.yaml**. Reopen it any time with the **⚙ Settings** button
 > (top right) to switch datasets or change view options.
 
-## 4. The screen at a glance
+### 4. The screen at a glance
 
 - **Control column** — sits on the left or right (Settings → _Layout_), top to
   bottom: the app label with the **⚙ Settings**, notifications bell and
@@ -106,7 +118,7 @@ canvas.
   and _Updates_; the _Filters_ tab chains YAML filters and the _Shortcuts_ tab
   lists every binding in a scrollable panel.
 
-## 5. Your first box
+### 5. Your first box
 
 1. **Drag** on the image from the top-left corner of the object to its
    bottom-right corner. A rectangle follows your mouse.
@@ -121,7 +133,7 @@ in the side panel is **active** (controls enabled).
 > draw a brand-new box regardless of what is under the cursor. The modifier is
 > configurable via `app_force_draw` in `shortcuts.txt`.
 
-## 6. Selecting a box
+### 6. Selecting a box
 
 A box is *selected* in any of these ways:
 
@@ -135,7 +147,7 @@ Only the selected box's row has usable controls; every other row is greyed out.
 Selecting a different box deactivates the previous one. Press **`Esc`** to
 deselect everything.
 
-## 7. Editing boxes
+### 7. Editing boxes
 
 ### On the canvas
 
@@ -173,7 +185,7 @@ moves/resizes on the canvas as you type. Values are kept inside `0..1`.
 > `w 0.25` is a box a quarter of the image wide. On small images these numbers
 > feel chunky — that is normal.
 
-## 8. Undo, redo and save
+### 8. Undo, redo and save
 
 - **Undo** `z` / **Redo** `y` revert box edits *for the current image* one step
   at a time.
@@ -185,13 +197,13 @@ Use `→` / `←` (or **Prev / Next**) to move between images. Unsaved boxes are
 kept in the app's memory for the session — but **save before switching images**
 to survive a refresh.
 
-## 9. Read-only mode
+### 9. Read-only mode
 
 To browse without any chance of damaging labels, tick **Read-only** in
 **Settings** (or start with `python app/app.py --data … --readonly`). Drawing,
 editing and saving stop working; boxes still display.
 
-## 10. Tags (optional)
+### 10. Tags (optional)
 
 Tags are short labels you attach to a whole image (not to a box) — useful to
 mark, say, "night", "indoor" or "hard". They are separate from YOLO classes.
@@ -214,7 +226,7 @@ Tags are stored as one name per line in a `tags/` folder beside `labels/`
 (`tags/train/photo_01.txt` for `images/train/photo_01.jpg`). Removing a tag from
 an image does **not** remove it from `tags.yaml`.
 
-## 11. Keyboard shortcuts (the whole list)
+### 11. Keyboard shortcuts (the whole list)
 
 | Key            | Action                                      |
 | -------------- | ------------------------------------------- |
@@ -230,6 +242,7 @@ an image does **not** remove it from `tags.yaml`.
 | `F`            | fix / unfix the selected box (transient, not saved) |
 | `Ctrl`+drag    | force-draw a new box, even inside an existing one |
 | `Alt+1`…`Alt+9`| toggle tag by number (from `tags.yaml`)     |
+| `F1`           | open the built-in help (tutorial + How to?)  |
 
 All of these are configurable. Open **Settings → Shortcuts** and click
 **Edit**, then click a key and press the new combination; **Save** writes it to
@@ -237,7 +250,7 @@ your `shortcuts.txt` in the user folder (the shipped file is left alone). You
 can also edit that file by hand — see the README. The `Alt+1…9` tag toggles are
 built in.
 
-## 12. When you are done
+### 12. When you are done
 
 1. **Save** (`s`) on every image you edited.
 2. Check a label file: five numbers per line, all coordinates between `0` and `1`.
@@ -253,3 +266,110 @@ built in.
 4. Open one generated `labels/*.txt` — the numbers should match what you drew.
 
 If anything looks wrong (boxes on top, tiny numbers), re-read §6–§8 above.
+
+## Level 2 — Intermediate
+
+Once the basics feel natural, tune the workspace and edit without leaving the
+keyboard.
+
+### Arrange the UI (Settings → Layout)
+
+- Put the control panel on the left or right.
+- Each widget — **Tags**, **Boxes**, **Actions**, **Navigation** and
+  **Save / Undo** — can be shown or hidden and **docked** to the left panel, right
+  panel, bottom panel or a floating window (or reset to its default spot). Drag a
+  floating window by its title bar; the L/T/R/B buttons dock it.
+- Drag a panel divider to resize; panels appear only while they hold a widget.
+- The layout is remembered and mirrored on the server, so a new browser opens
+  with the same arrangement.
+
+### Edit a row with the keyboard
+
+Select a box, press `Tab`, then cycle class → `cx` → `cy` → `w` → `h` with `Tab`.
+The canvas highlights what you are editing (an orange dot for `cx`/`cy`, orange
+dashes for `w`/`h`). `Esc` leaves the row.
+
+### Protect a finished box
+
+`F` **fixes** the selected box: dashed grey outline, no handles, ignores dragging
+but still selectable and deletable. Fixing is transient — never saved, cleared
+when you change image.
+
+### Declutter the canvas
+
+- `.` hides / shows every box on the image (hidden boxes ignore the mouse).
+- `,` hides the handles, labels and `×` / `/` buttons, leaving plain outlines.
+
+### Tags
+
+Tags label a whole image (`tags.yaml` beside `data.yaml` lists them). Click a
+badge to toggle it, `+` adds a new name (written to `tags.yaml` on save), and
+`Alt+1`…`Alt+9` toggles by number. See [tags](docs/tags.md).
+
+### Filters
+
+**Settings → Filters → Active chain** stacks up to 8 filters that run top to
+bottom and narrow the image list (e.g. *Contains class*, *Has tag*). The chain is
+remembered per dataset. See [filters](docs/filters.md).
+
+### Navigation and saving
+
+- Type a number in the counter and press `Enter` to jump to an image.
+- The **Split** picker switches `train` / `val` / `test` or shows all splits.
+- **Auto-save** (Settings → General) saves after each edit.
+- **Read-only** (Settings → General, or `--readonly`) blocks all writes.
+
+## Level 3 — Expert
+
+Add your own extensions, run your own scripts and rebind shortcuts. Your files
+live in your user folder and are never touched by an update.
+
+### Where your files live
+
+Shipped defaults are under `app/actions/`, `app/hooks/`, `app/filters/` and
+`app/scripts/`. Your copies live in `<home>/actions/`, `<home>/hooks/`,
+`<home>/filters/`, `<home>/scripts/` and `<home>/shortcuts.txt`, and win on a
+name clash. Commands run with the working directory set to `<home>`.
+
+### Actions — a button that runs a command
+
+One YAML file per action in `actions/` (build it in **Settings → Actions**):
+
+```yaml
+# <home>/actions/Remove.yaml
+steps:
+  - rm -f {IMAGE_PATH}
+  - rm -f {LABEL_PATH}
+after_success:
+  - app_refresh_images_list
+```
+
+Each `steps` / `after_success` entry is an `app_*` built-in, a `backend_*`
+built-in, an `action_<Name>` reference, or a shell command. Placeholders include
+`{IMAGE_PATH}`, `{LABEL_PATH}`, `{TAGS_DIR}`, `{DATASET_PATH}`,
+`{DATA_YAML_PATH}`, `{IMAGE_INDEX}`, `{APP_DIR}`, `{HOME_DIR}`,
+`{APP_SCRIPT_DIR}`, `{USER_SCRIPT_DIR}`, `{PYTHON}` and `{PIPE_PATH}`. Start
+Python steps with `{PYTHON}`, and name helper scripts explicitly. See
+[actions and hooks](docs/actions-and-hooks.md).
+
+### Filters — narrow the image list
+
+One YAML file per filter in `filters/`, reading candidate paths from
+`{INPUT_PIPE}` and writing the kept ones to `{OUTPUT_PIPE}`. Declare
+`arguments` (each becomes an upper-cased placeholder, and `options` renders a
+dropdown). See [filters](docs/filters.md).
+
+### Hooks — run on an event
+
+`hooks/on_<event>.yaml` runs automatically on an event such as `on_after_save` or
+`on_box_created`. It uses the same steps and placeholders as an action; a
+`before_save` failure aborts the save. See
+[actions and hooks](docs/actions-and-hooks.md#hooks).
+
+### Rebind shortcuts
+
+**Settings → Shortcuts → Edit**: click a binding, press the new keys, **Save**;
+**↺** restores the shipped default. Or edit `<home>/shortcuts.txt` directly.
+
+For task-focused recipes see [How to?](docs/howto.md); the same guide is built
+into the app (press `F1`).

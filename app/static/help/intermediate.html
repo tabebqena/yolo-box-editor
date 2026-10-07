@@ -1,0 +1,97 @@
+<h2>Intermediate — shape the workspace and speed up editing</h2>
+<p class="help-lead">Once the basics feel natural, tune the UI to your taste and
+edit boxes without leaving the keyboard.</p>
+
+<h3>Arrange the UI (Settings → Layout)</h3>
+<ul>
+  <li><strong>Panel side</strong>: put the control panel on the left or right.</li>
+  <li><strong>Widgets</strong>: Tags, Boxes, Actions, Navigation and Save/Undo can
+  each be <strong>shown or hidden</strong> and <strong>docked</strong> to the left
+  panel, right panel, bottom panel, or a floating window — or reset to their
+  default spot. A floating window is dragged by its title bar and docked with the
+  L/T/R/B buttons.</li>
+  <li><strong>Resize</strong> the side, dock and bottom panels by dragging their
+  divider. Panels only appear while they hold a visible widget.</li>
+</ul>
+<p class="help-note">The layout is saved and shared with the server, so a fresh
+browser starts with the same arrangement.</p>
+
+<h3>The Boxes list</h3>
+<p>Every box of the current image has a row with its class dropdown and
+<code>cx cy w h</code> number fields. Click a row to select that box (its controls
+become editable and the others grey out). Changing a value moves or resizes the
+box live; the canvas highlights what you are editing:
+<code>cx</code>/<code>cy</code> show an orange dot at the centre,
+<code>w</code>/<code>h</code> show orange dashes on the matching edges.</p>
+
+<h3>Edit a whole row with the keyboard</h3>
+<ol>
+  <li>Select a box (click it or press <kbd>Shift</kbd>).</li>
+  <li>Press <kbd>Tab</kbd>. Focus jumps into its row and cycles:
+  class → <code>cx</code> → <code>cy</code> → <code>w</code> → <code>h</code> →
+  class …</li>
+  <li>Press <kbd>Esc</kbd> to leave the row and clear the highlight.</li>
+</ol>
+
+<h3>Protect a finished box: fix it</h3>
+<p>Press <kbd>F</kbd> (or click the <strong>F</strong> button in its row) to
+<em>fix</em> a box. A fixed box has a dashed grey outline and no handles: it
+ignores dragging and resizing but can still be selected and deleted. Handy when
+you need to draw next to — or inside — a box you are happy with. Fixing is
+transient and is never saved.</p>
+
+<h3>Declutter the canvas</h3>
+<ul>
+  <li><kbd>.</kbd> — hide / show all boxes on the image (hidden boxes ignore the
+  mouse, so you can see the photo).</li>
+  <li><kbd>,</kbd> — box details on / off: hide the handles, labels and the
+  <strong>×</strong> / <strong>/</strong> buttons, leaving plain outlines.</li>
+</ul>
+
+<h3>Tags (optional)</h3>
+<p>Tags label a whole image (for example <em>night</em> or <em>hard</em>), not a
+box. The available tags come from <code>tags.yaml</code> beside
+<code>data.yaml</code>.</p>
+<ul>
+  <li>Click a badge to toggle it on/off for the current image — it is saved
+  immediately.</li>
+  <li>Click <strong>+</strong>, type a name and press <kbd>Enter</kbd> to add a
+  new tag (also written to <code>tags.yaml</code>).</li>
+  <li><kbd>Alt</kbd>+<kbd>1</kbd> … <kbd>Alt</kbd>+<kbd>9</kbd> toggles the
+  numbered tags.</li>
+</ul>
+
+<h3>Filters — work a subset</h3>
+<p><strong>Settings → Filters → Active chain</strong> stacks up to 8 filters that
+run top to bottom and narrow the image list (for example “contains class” or
+“has tag”). Use <strong>+ Add filter</strong>, pick each filter, fill its
+arguments, then <strong>Apply</strong>. The chain is remembered per dataset.</p>
+
+<h3>Navigate quickly</h3>
+<ul>
+  <li>Type a number in the image counter and press <kbd>Enter</kbd> to jump.</li>
+  <li>The <strong>Split</strong> picker switches between <code>train</code> /
+  <code>val</code> / <code>test</code>, or shows all splits together.</li>
+  <li>Your last image is remembered per split, so switching back returns you to
+  it.</li>
+</ul>
+
+<h3>Save behaviour and read-only</h3>
+<ul>
+  <li><strong>Auto-save</strong> (Settings → General) saves after each edit, so
+  navigating never asks you to save.</li>
+  <li><strong>Read-only</strong> (Settings → General, or
+  <code>--readonly</code>) blocks drawing, editing and saving so you can browse
+  safely.</li>
+</ul>
+
+<h3>Handy extra shortcuts</h3>
+<table>
+  <tr><th>Key</th><th>Action</th></tr>
+  <tr><td><kbd>Tab</kbd></td><td>cycle the selected row's fields</td></tr>
+  <tr><td><kbd>F</kbd></td><td>fix / unfix the selected box</td></tr>
+  <tr><td><kbd>.</kbd></td><td>hide / show the boxes on the image</td></tr>
+  <tr><td><kbd>,</kbd></td><td>box details (handles/labels) on / off</td></tr>
+  <tr><td><kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd></td><td>toggle a tag by number</td></tr>
+</table>
+<p>Ready to extend the app? Open the <strong>Expert</strong> tab.</p>

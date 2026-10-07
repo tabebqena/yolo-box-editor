@@ -32,7 +32,7 @@ test('clicking a modal backdrop closes it, clicking inside does not', () => {
 test('ESCAPE_CLOSERS lists the overlays in priority order', () => {
   assert.deepEqual(
     plain(app.consts.ESCAPE_CLOSERS.map((entry) => entry[0])),
-    ['yamlEditorModal', 'actionResult', 'changelogModal', 'tipModal',
+    ['helpModal', 'yamlEditorModal', 'actionResult', 'changelogModal', 'tipModal',
       'loadDataModal', 'settingsModal', 'updateModal', 'notifPanel']
   );
 });

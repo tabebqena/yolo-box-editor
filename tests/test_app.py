@@ -647,6 +647,30 @@ def test_app_actions_include_hook_only_client_actions():
         assert name in ybe.config.APP_ACTIONS
 
 
+def test_app_help_action_is_builtin():
+    assert "app_help" in ybe.config.APP_ACTIONS
+
+
+def test_help_content_and_shipped_shortcut_ship():
+    base = Path(ybe.config.BASE_DIR)
+    # The shipped binding: F1 opens help.
+    text = (base / "shortcuts.txt").read_text(encoding="utf-8")
+    assert "app_help" in text
+    assert "F1" in text
+    # The tutorial + How-to fragments and the module ship with the app.
+    for name in ("beginner.html", "intermediate.html", "expert.html", "howto.html"):
+        assert (base / "static" / "help" / name).is_file()
+    assert (base / "static" / "js" / "help.js").is_file()
+    html = (base / "templates" / "index.html").read_text(encoding="utf-8")
+    assert 'id="helpModal"' in html
+    assert 'id="helpBtn"' in html
+    assert "help.js" in html
+    # ...and the Flask static route serves them.
+    client = ybe.app.test_client()
+    assert client.get("/static/help/beginner.html").status_code == 200
+    assert client.get("/static/js/help.js").status_code == 200
+
+
 def test_split_shortcuts_partitions_and_reports_unknown(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe.config, "ACTIONS_DIR", str(tmp_path / "actions"))
     monkeypatch.setattr(ybe.config, "USER_ACTIONS_DIR", str(tmp_path / "user-actions"))

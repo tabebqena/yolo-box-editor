@@ -59,6 +59,7 @@ references).
 | `app_refresh_images_list` | — | re-scan the image folders; stay on the same image by path |
 | `app_reload_images_list` | — | re-read the server list **without** re-scanning the disk |
 | `app_refresh_image` | — | re-fetch the current image (cache-busted) |
+| `app_help` | `F1` | open the built-in help (tutorial + How to?) |
 | `app_select_next_box` | — | select the next box (same as `app_sel_box`, callable from a step) |
 | `app_select_prev_box` | — | select the previous box |
 | `app_clear_tags` | — | remove every tag from the current image |

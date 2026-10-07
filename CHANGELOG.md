@@ -4,6 +4,20 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.18.0] - 2026-10-07
+
+### Added
+
+- **Built-in help.** The app now ships a 3-level tutorial — **Beginner**
+  (install, the screen, draw / move / resize / delete boxes and their shortcuts),
+  **Intermediate** (layout, keyboard row editing, tags, filters, read-only) and
+  **Expert** (your own actions, filters, hooks and shortcut rebinding) — plus a
+  **How to?** section of task-focused recipes. Open it with **F1**, the new
+  **?** button in the top panel, or the new `app_help` action (rebindable in
+  `shortcuts.txt`). Content ships as HTML fragments under `app/static/help/`.
+- New repo docs: [How to?](docs/howto.md), and [TUTORIAL.md](TUTORIAL.md) is now
+  the three-level tutorial.
+
 ## [7.17.0] - 2026-10-07
 
 ### Changed

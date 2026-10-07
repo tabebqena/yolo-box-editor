@@ -3,6 +3,7 @@
 
 // Escape closes the topmost open overlay, in this priority order.
 const ESCAPE_CLOSERS = [
+  ['helpModal', closeHelp],
   ['yamlEditorModal', closeYamlEditor],
   ['actionResult', closeActionResult],
   ['changelogModal', closeChangelog],
@@ -327,6 +328,11 @@ const APP_SHORTCUT_HANDLERS = {
     displayImage('/api/image' + keyQuery(images[currentIndex]) + '&_=' + Date.now());
     dbg('refresh image', { index: currentIndex });
   },
+  // Open the built-in help: the 3-level tutorial and the How-to recipes.
+  app_help: (e) => {
+    e.preventDefault();
+    openHelp();
+  },
 };
 
 /**
@@ -499,6 +505,12 @@ function onGlobalKeyDown(e) {
   if (escInfo && shortcutMatches(e, escInfo.shortcut) && escDeactivateRow(e)) return;
   const ptsInfo = appShortcuts['app_sel_points'];
   if (ptsInfo && shortcutMatches(e, ptsInfo.shortcut) && tabCycleRow(e)) return;
+  // Help opens from anywhere, even while an input or the YAML editor is focused.
+  const helpInfo = appShortcuts['app_help'];
+  if (helpInfo && shortcutMatches(e, helpInfo.shortcut)) {
+    runAppAction('app_help', e).catch((err) => console.error('[shortcut] app_help:', err));
+    return;
+  }
 
   if (e.target.matches('input, select, textarea')) return;
   // Alt + digit toggles the matching available tag (Alt+1 = first in tags.yaml)
@@ -726,6 +738,19 @@ function wireYamlEditor() {
 }
 
 /**
+ * Wire the help modal: the top-panel button, tabs, close and backdrop.
+ * @returns {void}
+ */
+function wireHelp() {
+  onEl('helpBtn', 'click', () => openHelp());
+  onEl('helpClose', 'click', closeHelp);
+  bindModalBackdrop('helpModal', closeHelp);
+  qsa('.help-tab').forEach((tab) => {
+    tab.addEventListener('click', () => selectHelpTab(tab.dataset.helpTab));
+  });
+}
+
+/**
  * Wire the notifications button, panel and outside-click dismissal.
  * @returns {void}
  */
@@ -760,6 +785,7 @@ function wireEvents() {
   wireSettings();
   wireDatasetModals();
   wireYamlEditor();
+  wireHelp();
   wireNotifications();
   document.addEventListener('keydown', onGlobalKeyDown);
 }

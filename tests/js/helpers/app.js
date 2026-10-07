@@ -22,7 +22,7 @@ const APP_JS = path.join(ROOT, 'app', 'static', 'app.js');
 // share one global lexical environment, then app.js (the entry point) runs.
 const MODULE_FILES = [
   'core.js', 'api.js', 'canvas.js', 'navigation.js', 'extensions.js', 'shortcuts.js',
-  'images.js', 'editing.js', 'appearance.js', 'events.js',
+  'images.js', 'editing.js', 'appearance.js', 'help.js', 'events.js',
 ].map((f) => path.join(ROOT, 'app', 'static', 'js', f));
 
 // Top-level `let` declarations in app.js that tests may need to set directly.

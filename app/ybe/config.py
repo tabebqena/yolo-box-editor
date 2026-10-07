@@ -132,6 +132,7 @@ APP_ACTIONS = {
     "app_refresh_images_list",
     "app_reload_images_list",
     "app_refresh_image",
+    "app_help",
     # Client-only actions meant to be called from an action/hook `steps` or
     # `after_success` (not bound to keys by default).
     "app_select_next_box",

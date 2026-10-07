@@ -15,6 +15,7 @@
 # Anything else is reported as an error banner on the page (dismissible).
 #
 # Built-in app actions — edit the bindings or labels freely:
+app_help     <F1>            open help / tutorials
 app_prev     <ArrowLeft>     prev image
 app_next     <ArrowRight>    next image
 app_del      <Delete>        delete box

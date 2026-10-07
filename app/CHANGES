@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.18.0
+- The app now ships a built-in help with a 3-level tutorial (Beginner, Intermediate, Expert) and task-focused "How to?" recipes. Open it with F1 or the ? button in the top panel.
+
 ## 7.17.0
 - Updates now wait out a briefly-locked file instead of failing (mainly Windows), and the launcher/installer scripts are POSIX sh so they also work on systems without bash. The app has so far been used on Debian-based Linux; macOS, other Linux distributions and Windows run the same Python core and are new territory — feedback is welcome, and `ybe uninstall` undoes it cleanly.
 

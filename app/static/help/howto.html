@@ -1,0 +1,107 @@
+<h2>How to?</h2>
+<p class="help-lead">Short, task-focused recipes. Press <kbd>F1</kbd> any time to
+come back here.</p>
+
+<h3>Install and start</h3>
+<pre># one-liner (needs Python 3)
+curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | sh -s -- install
+
+# start with a dataset, then open http://127.0.0.1:5000
+ybe start --data /path/to/data.yaml</pre>
+<p>From a clone: <code>python app/app.py --data /path/to/data.yaml</code>.
+Already running? <code>ybe status</code>, <code>ybe logs -f</code>,
+<code>ybe stop</code>.</p>
+
+<h3>Load or switch a dataset</h3>
+<p>Open <strong>⚙ Settings → Dataset</strong>, paste the path to
+<code>data.yaml</code> and click <strong>Load</strong> (or pick a
+<strong>Recent…</strong> entry). On a first run the load box appears by itself.</p>
+
+<h3>Draw a box</h3>
+<p>Drag from one corner of the object to the opposite one, then click the class
+in the pop-up (or press its number). To draw inside an existing box, hold
+<kbd>Ctrl</kbd> and drag.</p>
+
+<h3>Move or resize a box</h3>
+<p>Click the box to select it, then drag inside it to move, or drag one of its
+eight handles to resize. For exact values, type into <code>cx</code>,
+<code>cy</code>, <code>w</code> or <code>h</code> in its row.</p>
+
+<h3>Delete a box</h3>
+<p>Select it and press <kbd>Delete</kbd> or <kbd>Backspace</kbd>, or click the
+<strong>×</strong> in its row.</p>
+
+<h3>Change a box's class</h3>
+<p>Select the box, press <kbd>/</kbd> (or click the <strong>/</strong> on the
+box), then choose the new class.</p>
+
+<h3>Undo a mistake</h3>
+<p><kbd>Z</kbd> undoes the last edit to the current image; <kbd>Y</kbd> redoes
+it. Press <kbd>Esc</kbd> right after drawing to drop the box you just made.</p>
+
+<h3>Save my work / find the label files</h3>
+<p>Press <kbd>S</kbd> or click <strong>Save</strong>. Labels are written to
+<code>labels/&lt;split&gt;/&lt;image&gt;.txt</code>, five numbers per line. Turn on
+<strong>Auto-save</strong> in <strong>Settings → General</strong> to save after
+every edit.</p>
+
+<h3>Tag an image</h3>
+<p>Click a tag badge to toggle it; click <strong>+</strong> to create a new tag.
+Use <kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>9</kbd> for the numbered tags. Available
+tags come from <code>tags.yaml</code>.</p>
+
+<h3>Show only some images</h3>
+<p><strong>Settings → Filters → Active chain</strong>: add up to 8 filters, set
+their arguments, and click <strong>Apply</strong>. For example, use
+<strong>Contains class</strong> to keep only images that already have a class.</p>
+
+<h3>Rearrange the panels</h3>
+<p><strong>Settings → Layout</strong>: move the control panel left/right, and
+show, hide, float or dock each widget. Drag a panel divider to resize it.</p>
+
+<h3>Create an action (custom button)</h3>
+<p><strong>Settings → Actions → Create</strong>: name it, add one command per
+step using the <strong>Insert placeholder</strong> buttons, and save. It appears
+in the Actions area — optionally bind a key in <strong>shortcuts.txt</strong>.
+See the Expert tab for the file format.</p>
+
+<h3>Create a filter</h3>
+<p><strong>Settings → Filters → Create</strong>: give it a name, arguments and
+steps that read <code>{INPUT_PIPE}</code> and write <code>{OUTPUT_PIPE}</code>.
+Copy <code>app/filters/example.yaml</code> as a starting point.</p>
+
+<h3>Create a hook (run on an event)</h3>
+<p><strong>Settings → Hooks → Create</strong>: pick an event such as
+<em>after_save</em> and add steps. The file is
+<code>hooks/on_after_save.yaml</code>. A hook runs with no button.</p>
+
+<h3>Change a keyboard shortcut</h3>
+<p><strong>Settings → Shortcuts → Edit</strong>: click the binding, press the new
+keys, then <strong>Save</strong>. <strong>↺</strong> resets one to the default.
+You can also edit <code>&lt;home&gt;/shortcuts.txt</code> by hand.</p>
+
+<h3>Browse without changing anything</h3>
+<p>Tick <strong>Read-only</strong> in <strong>Settings → General</strong>, or
+start with <code>--readonly</code>. Drawing, editing, tags and saving are blocked.</p>
+
+<h3>Update or uninstall</h3>
+<pre>ybe update      # update in place, keeping your files
+ybe uninstall   # remove the app, keeping your files</pre>
+<p>See <strong>Settings → Updates</strong> for the method that matches your
+install.</p>
+
+<h3>Nothing shows up / something looks wrong</h3>
+<ul>
+  <li><strong>No dataset</strong> — load a <code>data.yaml</code>
+  (<strong>Settings → Dataset</strong>).</li>
+  <li><strong>No images</strong> — check the split, then click the reload (↻)
+  button beside the Split picker.</li>
+  <li><strong>A tag is missing</strong> — it must be listed in
+  <code>tags.yaml</code> beside <code>data.yaml</code>.</li>
+  <li><strong>Boxes on top / tiny numbers</strong> — coordinates are fractions of
+  the image, so small images make chunky values; that is normal.</li>
+  <li><strong>A command failed</strong> — the action pop-up shows its output,
+  error and exit code; check the path and the placeholders.</li>
+</ul>
+<p>Still stuck? The repository <code>docs/</code> folder has the full
+guides, and the browser console (start with <code>--debug</code>) logs details.</p>

@@ -26,6 +26,7 @@
       <div class="sidebar-head">
         <div class="brand">YOLO Box Editor</div>
         <div class="sidebar-head-actions">
+          <button id="helpBtn" class="icon-btn" title="Help: tutorials and how-to (F1)">?</button>
           <button id="settingsBtn" class="icon-btn" title="Settings: view options, dataset, shortcuts">&#9881;</button>
           <button id="notifBtn" class="icon-btn" title="Notifications" aria-label="Notifications"
                   aria-haspopup="true" aria-expanded="false">
@@ -534,6 +535,22 @@ python -m pip install -r app/requirements.txt</pre>
     </div>
   </div>
 
+  <div id="helpModal" class="modal hidden">
+    <div class="modal-box help-modal">
+      <div class="modal-head">
+        <span class="modal-title">Help</span>
+        <button id="helpClose" class="modal-close" title="Close (Esc)">&#10005;</button>
+      </div>
+      <div class="help-tabs" role="tablist">
+        <button class="help-tab active" type="button" role="tab" data-help-tab="beginner">Beginner</button>
+        <button class="help-tab" type="button" role="tab" data-help-tab="intermediate">Intermediate</button>
+        <button class="help-tab" type="button" role="tab" data-help-tab="expert">Expert</button>
+        <button class="help-tab" type="button" role="tab" data-help-tab="howto">How to?</button>
+      </div>
+      <div id="helpBody" class="help-body" aria-live="polite"></div>
+    </div>
+  </div>
+
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
   <div id="loginOverlay" class="login-overlay hidden">
@@ -580,6 +597,7 @@ python -m pip install -r app/requirements.txt</pre>
   <script src="{{ url_for('static', filename='js/images.js') }}"></script>
   <script src="{{ url_for('static', filename='js/editing.js') }}"></script>
   <script src="{{ url_for('static', filename='js/appearance.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/help.js') }}"></script>
   <script src="{{ url_for('static', filename='js/events.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
