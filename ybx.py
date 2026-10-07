@@ -30,6 +30,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -266,25 +267,69 @@ def prepare_from_source(tmp, opts):
     return app_src
 
 
+# Windows (and occasionally Linux antivirus/indexers) can briefly lock files
+# while another process is finishing with them. Retry those transient locks
+# instead of failing the whole update.
+LOCK_RETRIES = 10
+LOCK_DELAY = 0.3  # seconds -> up to ~3s of retries
+
+
+def rename_retry(src, dst):
+    """`os.rename`, retrying transient PermissionError (e.g. a Windows lock)."""
+    last = None
+    for attempt in range(LOCK_RETRIES):
+        try:
+            os.rename(src, dst)
+            return True
+        except FileNotFoundError:
+            raise
+        except PermissionError as exc:
+            last = exc
+            time.sleep(LOCK_DELAY)
+    raise last
+
+
+def remove_tree(path):
+    """Best-effort `rmtree` that waits out transient locks; True when removed."""
+    for attempt in range(LOCK_RETRIES):
+        try:
+            shutil.rmtree(path)
+            return True
+        except FileNotFoundError:
+            return True
+        except PermissionError:
+            time.sleep(LOCK_DELAY)
+        except OSError:
+            return False
+    return False
+
+
 def place_app(src, dest):
     """Atomically replace `<dest>/app` with `src`; user files/venv untouched."""
     staging = os.path.join(dest, ".app.staging.%d" % os.getpid())
     old = os.path.join(dest, ".app.old.%d" % os.getpid())
     if not (os.path.isfile(os.path.join(src, "app.py")) and os.path.isfile(os.path.join(src, "VERSION"))):
         die("staged app is missing app.py or VERSION")
-    shutil.rmtree(staging, ignore_errors=True)
-    shutil.rmtree(old, ignore_errors=True)
+    remove_tree(staging)
+    remove_tree(old)
     shutil.copytree(src, staging, symlinks=True)
     app_dest = os.path.join(dest, "app")
     if os.path.exists(app_dest):
-        os.rename(app_dest, old)
+        try:
+            rename_retry(app_dest, old)
+        except OSError as exc:
+            die("could not move the current app/ aside (is the app still running?): %s" % exc)
     try:
-        os.rename(staging, app_dest)
+        rename_retry(staging, app_dest)
     except OSError:
         if os.path.exists(old):
-            os.rename(old, app_dest)
+            try:
+                rename_retry(old, app_dest)
+            except OSError:
+                pass
         die("could not install app/ (rolled back)")
-    shutil.rmtree(old, ignore_errors=True)
+    if not remove_tree(old):
+        warn("could not fully remove %s (a file is still in use); it will be cleaned up later" % old)
 
 
 # --------------------------------------------------------------------------- #
@@ -391,7 +436,7 @@ def render_launcher(template_path, opts):
             opts.dir,
             opts.dir,
         )
-    return '#!/usr/bin/env bash\nexec "%s/bin/python" "%s/app/launcher.py" --home "%s" "$@"\n' % (
+    return '#!/bin/sh\nexec "%s/bin/python" "%s/app/launcher.py" --home "%s" "$@"\n' % (
         venv,
         opts.dir,
         opts.dir,

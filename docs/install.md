@@ -12,9 +12,9 @@ installs to `~/.local/bin` on Linux/macOS and `%LOCALAPPDATA%\yolo-box-editor\bi
 on Windows (this is added to your `PATH`; open a new terminal to use `ybe`).
 Pick whichever bootstrap you have:
 
-```bash
+```sh
 # one-liner (Linux/macOS): curl fetches the thin `ybx.sh` bootstrap, which runs Python
-curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | bash -s -- install
+curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | sh -s -- install
 
 # download the Python installer and run it (no bash pipe)
 curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.py -o ybx.py
@@ -31,6 +31,12 @@ cd yolo-box-editor
 ```
 
 On **Windows** (PowerShell) either bootstrap works:
+
+> **Platform support.** The app has only been used and tested on **Debian-based
+> Linux** (Ubuntu/Debian). macOS uses the same code but is untested; other Linux
+> distributions (Fedora, Arch, Alpine, …) are untested; and Windows support is
+> new and has **never been run on a real Windows machine** — it reuses the same
+> Python core through Windows APIs. Please report anything that fails.
 
 ```powershell
 # save and run the PowerShell bootstrap

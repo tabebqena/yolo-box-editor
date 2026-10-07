@@ -18,9 +18,9 @@ Install sets up an isolated `.venv`, adds the **`ybe`** command and starts the
 app. The one-line bootstrap needs **Python 3** and either a shell or Python to
 fetch the installer — pick whichever you have:
 
-```bash
-# 1. one-liner (bash) — curl only fetches a tiny bootstrap; the installer is Python
-curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | bash -s -- install
+```sh
+# 1. one-liner (sh) — curl only fetches a tiny bootstrap; the installer is Python
+curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | sh -s -- install
 
 # 2. download the Python installer and run it
 curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.py -o ybx.py
@@ -50,6 +50,12 @@ irm https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.ps1 -Ou
 py -3 -c "import urllib.request; open('ybx.py','wb').write(urllib.request.urlopen('https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.py').read())"
 py -3 ybx.py install
 ```
+
+> **Platform support:** the app has only been used and tested on **Debian-based
+> Linux** (e.g. Ubuntu/Debian). macOS uses the same code but is untested, other
+> Linux distributions (Fedora, Arch, Alpine, …) are untested, and **Windows
+> support is new and has never been run on a real Windows machine** — it reuses
+> the same Python core through Windows APIs. Please report anything that fails.
 
 Already have Python? `pip install -r app/requirements.txt` then
 `python app/app.py --data /path/to/data.yaml`.

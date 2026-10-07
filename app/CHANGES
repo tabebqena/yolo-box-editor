@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.17.0
+- Updates now wait out a briefly-locked file instead of failing (mainly Windows), and the launcher/installer scripts are POSIX sh so they also work on systems without bash. Note: the app has so far only been used and tested on Debian-based Linux; Windows and other platforms are not yet verified.
+
 ## 7.16.0
 - Windows is now supported: install natively with the PowerShell bootstrap (ybx.ps1) or the Python installer, and run every ybe command (start/stop/status/logs/update/uninstall) the same as on Linux and macOS. The installer adds ybe to your PATH and starts/stops the server with Windows APIs.
 

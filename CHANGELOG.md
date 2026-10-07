@@ -4,6 +4,24 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.17.0] - 2026-10-07
+
+### Changed
+
+- **The app/ swap now retries transient file locks** (up to ~3s) instead of
+  failing. This is mainly for Windows (and antivirus/indexers elsewhere) where a
+  file can be briefly locked during an update; the whole `place_app()` rename and
+  cleanup path now waits the lock out and reports clearly if it cannot.
+- **The launcher and installer shims are POSIX `sh`** (`#!/bin/sh`) instead of
+  bash, so install and run work on distributions without bash (e.g. Alpine);
+  `ybx.sh` is now POSIX sh and the documented one-liner uses `sh -s --`.
+
+### Documentation
+
+- A **platform-support note** now says the app has only been used and tested on
+  Debian-based Linux; macOS and other Linux distributions are untested, and
+  Windows support is new and has never been run on a real Windows machine.
+
 ## [7.16.0] - 2026-10-07
 
 ### Added

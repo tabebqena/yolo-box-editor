@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 #
 # ybx.sh - thin bootstrap for the Python installer (ybx.py).
 #
@@ -6,11 +6,12 @@
 # Python 3 interpreter and hands the arguments over. When it runs from a
 # checkout it executes the sibling ybx.py; fetched on its own (the one-line
 # installer) it downloads ybx.py with Python's urllib (no curl) and runs it.
+# POSIX sh only, so it also works where bash is not installed (e.g. Alpine).
 #
 # One-liner (no clone needed):
-#   curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | bash -s -- install
+#   curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | sh -s -- install
 #
-set -euo pipefail
+set -eu
 
 PY="$(command -v python3 || command -v python || true)"
 if [ -z "$PY" ]; then

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # yolo-box-editor launcher (also reachable as `ybe`).
 #
 # Thin shim only: all logic lives in app/ybe/launcher.py, which this executes

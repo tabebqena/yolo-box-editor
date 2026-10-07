@@ -97,6 +97,67 @@ def test_install_self_copies_from_the_installed_tree(tmp_path):
     assert (Path(opts.dir) / "ybx.py").read_text() == "NEW INSTALLER"
 
 
+def _raise_permission(*args, **kwargs):
+    raise PermissionError("locked")
+
+
+def test_rename_retry_recovers_from_permission_error(tmp_path, monkeypatch):
+    src = tmp_path / "src"
+    src.mkdir()
+    dst = tmp_path / "dst"
+    calls = {"n": 0}
+    real_rename = ybx.os.rename
+
+    def flaky(a, b):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise PermissionError("locked")
+        return real_rename(a, b)
+
+    monkeypatch.setattr(ybx, "LOCK_DELAY", 0)
+    monkeypatch.setattr(ybx.os, "rename", flaky)
+    assert ybx.rename_retry(str(src), str(dst)) is True
+    assert calls["n"] == 3
+    assert dst.is_dir() and not src.exists()
+
+
+def test_rename_retry_raises_after_retries(monkeypatch):
+    monkeypatch.setattr(ybx, "LOCK_RETRIES", 3)
+    monkeypatch.setattr(ybx, "LOCK_DELAY", 0)
+    monkeypatch.setattr(ybx.os, "rename", _raise_permission)
+    with pytest.raises(PermissionError):
+        ybx.rename_retry("a", "b")
+
+
+def test_remove_tree_retries_then_succeeds(tmp_path, monkeypatch):
+    target = tmp_path / "d"
+    target.mkdir()
+    (target / "f").write_text("x")
+    calls = {"n": 0}
+    real_rmtree = ybx.shutil.rmtree
+
+    def flaky(path, *args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise PermissionError("locked")
+        return real_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(ybx, "LOCK_DELAY", 0)
+    monkeypatch.setattr(ybx.shutil, "rmtree", flaky)
+    assert ybx.remove_tree(str(target)) is True
+    assert not target.exists()
+
+
+def test_remove_tree_gives_up_without_raising(tmp_path, monkeypatch):
+    target = tmp_path / "d"
+    target.mkdir()
+    monkeypatch.setattr(ybx, "LOCK_RETRIES", 3)
+    monkeypatch.setattr(ybx, "LOCK_DELAY", 0)
+    monkeypatch.setattr(ybx.shutil, "rmtree", _raise_permission)
+    assert ybx.remove_tree(str(target)) is False
+    assert target.is_dir()
+
+
 def test_parse_args():
     opts = ybx.parse_args(["install", "--dir", "/tmp/x", "--no-start", "--from", "."])
     assert opts.cmd == "install"
