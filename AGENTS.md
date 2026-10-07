@@ -9,14 +9,16 @@ routes, the rest are the reusable pieces (`config`, `state`, `parsing`, `auth`,
 `dataset`, `extensions`, …). The UI is plain `app/templates/index.html` +
 `app/static/style.css` + classic-script modules under `app/static/js/` (`core`,
 `canvas`, `navigation`, `extensions`, `shortcuts`, `images`, `editing`,
-`appearance`, `events`), finished by the `app/static/app.js` entry point; small
-reusable DOM/modal helpers live in `js/core.js`. **No build step**, and the
-modules share one global scope, so the load order in `index.html` and
+`appearance`, `help`, `events`), finished by the `app/static/app.js` entry point;
+small reusable DOM/modal helpers live in `js/core.js`. The built-in help ships as
+HTML fragments under `app/static/help/` (`beginner`, `intermediate`, `expert`,
+`howto`), opened with **F1** / the top-panel **?** button. **No build step**, and
+the modules share one global scope, so the load order in `index.html` and
 `tests/js/helpers/app.js` must stay in sync. No
 database. The `data.yaml` reader is hand-rolled — no PyYAML at
 runtime. User files live in `YBX_HOME` (below). The installer (`ybx.py`, started
 by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
-`app/launcher.py` and `app/static/js/` ship automatically.
+`app/launcher.py`, `app/static/js/` and `app/static/help/` ship automatically.
 
 ## Commands
 - Run: `python app/app.py --data /path/to/data.yaml` (optional `--readonly` to
@@ -40,7 +42,7 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   find Python and run `ybx.py`. `app/launcher.sh.in` and `app/launcher.cmd.in`
   are the thin Unix/Windows `ybe` shims that execute the Python launcher.
   (Replaces the old `install.sh`.)
-- Python tests (from repo root): `python -m pytest -q` (~320 tests); single test
+- Python tests (from repo root): `python -m pytest -q` (~340 tests); single test
   `python -m pytest tests/test_app.py::test_name -q`. `pytest.ini` puts `app/`
   on `pythonpath`.
 - JavaScript tests: `npm ci` then `npm run test:js` (Node's `node --test` +
@@ -117,11 +119,13 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   `startApp`, `boot`, final event wiring). Everything else lives in
   `app/static/js/` as classic scripts loaded by `index.html` in dependency
   order: `core`, `canvas`, `navigation`, `extensions`, `shortcuts`, `images`,
-  `editing`, `appearance`, `events`. They share one global lexical scope, so
-  top-level `let`/`const`/functions are visible across files and the order in
+  `editing`, `appearance`, `help`, `events`. They share one global lexical scope,
+  so top-level `let`/`const`/functions are visible across files and the order in
   `index.html` and `tests/js/helpers/app.js` must match. `js/events.js` owns
   `ESCAPE_CLOSERS` (it references the overlay closers defined in earlier
   modules). `js/core.js` holds the shared DOM/modal helpers and mutable state.
+  `js/help.js` owns the help modal (`openHelp`/`closeHelp`/`selectHelpTab`): it
+  lazy-loads and caches the `app/static/help/*.html` fragments per tab.
 - `YBX_HOME` resolution: `--home <dir>` > `$YBX_HOME` > the parent of `app.py`.
   The launcher (`ybe.launcher.resolve_home`) resolves it the same way (from the
   parent of the shipped `app/`), so a clone and an install behave the same; the
@@ -176,9 +180,10 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   so sign-in survives restarts and updates (delete the file to invalidate every
   session).
 - `app/VERSION`, `app/CHANGES` (per-version "what's new" notes shown once per
-  installed version) and `CHANGELOG.md` (Keep a Changelog); `README.md` /
-  `TUTORIAL.md` and `docs/` (`actions-and-hooks.md`, `filters.md`, `tags.md`,
-  `dataset.md`, `install.md`) are user-facing docs.
+  installed version) and `CHANGELOG.md` (Keep a Changelog); `README.md`,
+  `TUTORIAL.md` (the 3-level tutorial) and `docs/` (`actions-and-hooks.md`,
+  `filters.md`, `tags.md`, `dataset.md`, `install.md`, `howto.md`) are
+  user-facing docs.
 
 ## Cross-file invariants
 - Built-in actions are the `app_*` set in `APP_ACTIONS` (`app/ybe/config.py`) and
@@ -190,6 +195,10 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
 - Hook events are `HOOK_EVENTS` (`app/ybe/config.py`), fired via
   `runHook('on_...')` in `app/static/js/editing.js`, and documented in
   `app/hooks/example.yaml` plus `docs/actions-and-hooks.md` — keep all in sync.
+- The built-in help is opened by the `app_help` action (shipped binding `F1`) and
+  the top-panel **?** button. Its tabs are declared in three places that must
+  stay in sync: the `.help-tab` buttons in `index.html`, `HELP_TABS` in
+  `js/help.js`, and the fragments under `app/static/help/`.
 - The extension YAML format is versioned by `EXTENSION_API_VERSION`
   (`app/ybe/config.py`); bump it when the action/hook/filter file format changes.
   The UI compares a file's `api_version:` against it.
