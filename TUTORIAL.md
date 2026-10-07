@@ -60,8 +60,11 @@ The easy way is the installer (no clone needed):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | bash -s -- install
-yolo-box-editor --data /path/to/dataset/data.yaml
+ybe start --data /path/to/dataset/data.yaml
 ```
+
+(No shell / no curl? [README](README.md#quick-start) lists Python-only install
+options too.)
 
 Or run it straight from a clone:
 

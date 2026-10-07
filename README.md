@@ -14,11 +14,28 @@ non-commercial-use condition, no warranty) · new to labelling? Start with
 
 ## Quick start
 
+Install sets up an isolated `.venv`, adds the **`ybe`** command and starts the
+app. The one-line bootstrap needs **Python 3** and either a shell or Python to
+fetch the installer — pick whichever you have:
+
 ```bash
-# install (one line) — sets up a venv, adds the `ybe` command, starts the app
+# 1. one-liner (bash) — curl only fetches a tiny bootstrap; the installer is Python
 curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | bash -s -- install
 
-# open http://127.0.0.1:5000 and paste the path to your data.yaml
+# 2. download the Python installer and run it
+curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.py -o ybx.py
+python3 ybx.py install
+
+# 3. entirely from Python (no curl at all)
+python3 -c "import urllib.request; open('ybx.py','wb').write(urllib.request.urlopen('https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.py').read())"
+python3 ybx.py install
+
+# 4. from a clone
+git clone https://github.com/tabebqena/yolo-box-editor.git
+cd yolo-box-editor
+./ybx.sh install --from .        # or: python3 ybx.py install --from .
+
+# then open http://127.0.0.1:5000 and paste the path to your data.yaml
 ```
 
 Already have Python? `pip install -r app/requirements.txt` then

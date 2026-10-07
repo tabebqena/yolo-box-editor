@@ -4,6 +4,24 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.15.0] - 2026-10-07
+
+### Changed
+
+- **The launcher (`ybe`) and installer are now implemented in Python.** The
+  `ybe` command is still a tiny shell shim, but all of its logic — start, stop,
+  restart, status, logs and the delegated version/update/uninstall commands —
+  now lives in `app/ybe/launcher.py`, and the installer is a self-contained
+  `ybx.py`. This removes the GNU-only shell tools (notably `sort -V`) that made
+  some commands unreliable on macOS, so Linux and macOS now behave the same. A
+  Windows `.cmd`/`.ps1` shim can reuse the same module.
+- **Install and update downloads no longer shell out to curl.** The installer
+  fetches the app archive with Python's `urllib`, so only Python 3 is required
+  (the optional one-line bootstrap still uses curl to fetch the tiny shim).
+- The `ybe` and installer CLI are unchanged (`ybe update`, `ybx.py install
+  --from .`, `--latest`, `--commit`, `--purge`, …); only the implementation and
+  the docs changed.
+
 ## [7.14.0] - 2026-10-07
 
 ### Fixed

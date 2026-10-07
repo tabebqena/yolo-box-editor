@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.15.0
+- The ybe command and the installer now run on Python instead of shell scripts, so every ybe command (start/stop/status/logs/update/uninstall) behaves the same on Linux and macOS. Install and update downloads use Python instead of curl, so only Python 3 is required.
+
 ## 7.14.0
 - Fixed: `ybe status` no longer reports the app as running when it is not. A leftover ybe.pid could point at an unrelated process that later reused the same PID; the launcher now confirms the process is really the app, so status, stop, upgrade and uninstall are accurate.
 

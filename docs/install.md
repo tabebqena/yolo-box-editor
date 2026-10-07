@@ -2,25 +2,35 @@
 
 ## Install
 
-The installer is `ybx.sh`. It downloads the latest version, sets up an isolated
-`.venv`, adds a `yolo-box-editor` command (with the short alias `ybe`) to
-`~/.local/bin`, and then **starts the app in the background** so it is ready at
+The installer is **`ybx.py`**, a self-contained Python program (standard library
+only). It downloads the latest version, sets up an isolated `.venv`, adds a
+`yolo-box-editor` command (with the short alias `ybe`) to `~/.local/bin`, and
+then **starts the app in the background** so it is ready at
 <http://127.0.0.1:5000> (pass `--no-start` to skip that; on an upgrade a running
-instance is restarted). It works straight from the internet (no clone needed) or
-from a checkout:
+instance is restarted). All downloads use Python's `urllib` — no curl, git or
+archive tools are needed. Pick whichever bootstrap you have:
 
 ```bash
-# one-liner; installs to ~/.local/share/yolo-box-editor
+# one-liner: curl fetches the thin `ybx.sh` bootstrap, which runs Python
 curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | bash -s -- install
 
-# or from a clone (offline, uses this checkout):
+# download the Python installer and run it (no bash pipe)
+curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.py -o ybx.py
+python3 ybx.py install
+
+# entirely from Python (no curl at all)
+python3 -c "import urllib.request; open('ybx.py','wb').write(urllib.request.urlopen('https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.py').read())"
+python3 ybx.py install
+
+# from a clone (offline, uses this checkout)
 git clone git@github.com:tabebqena/yolo-box-editor.git
 cd yolo-box-editor
-./ybx.sh install --from .
+./ybx.sh install --from .        # or: python3 ybx.py install --from .
 ```
 
+`ybx.sh` is only a thin bootstrap: it finds Python and hands off to `ybx.py`.
 Once installed, use the **`ybe`** command (also `yolo-box-editor`) for
-everything — you never need `ybx.sh` again:
+everything — you never need the installer again:
 
 ```bash
 ybe version        # print the installed version
@@ -29,14 +39,14 @@ ybe update         # update in place, keeping your files and venv (alias: upgrad
 ybe uninstall      # remove the app, venv and launchers (keeps your files)
 ```
 
-`ybx.sh` is only the installer. From a clone (or by running the script
-directly) it can also do the same jobs, plus install a specific ref:
+The installer can also be run directly for the same jobs, plus installing a
+specific ref:
 
 ```bash
-ybx.sh install --from .            # install from this checkout
-ybx.sh update --latest             # latest commit on main (unreleased; no git needed)
-ybx.sh update --commit 1a2b3c4     # a specific commit (no git needed)
-ybx.sh uninstall --purge --yes     # remove the whole user folder too
+ybx.py install --from .            # install from this checkout
+ybx.py update --latest             # latest commit on main (unreleased; no git needed)
+ybx.py update --commit 1a2b3c4     # a specific commit (no git needed)
+ybx.py uninstall --purge --yes     # remove the whole user folder too
 ```
 
 `check-update` prints three lines: `exit code:`, `current_version:` and
@@ -119,14 +129,15 @@ when the **major or minor** part of `app/VERSION` changes on `main`. Patch bumps
 are left for manual tagging. The release body is the matching `app/CHANGES`
 section.
 
-An update (`ybe update`) only ever replaces `<dir>/app/` (atomically); your
-`actions/`, `hooks/`, `filters/`, `scripts/`, `shortcuts.txt` and the `.venv`
-are never touched. It picks the latest GitHub release, else the newest tag, else
-the `main` branch (override with `--version <tag|branch|commit>`). To move to
-unreleased code instead, use `--latest` or pin one with `--commit <sha>`; both
-download over HTTP and need no `git`. `uninstall` stops the app and removes the
-launchers, `<dir>/app` and `<dir>/.venv`, keeping your files; add
-`--purge --yes` to delete `<dir>` entirely.
+An update (`ybe update`) replaces `<dir>/app/` atomically and refreshes
+`<dir>/ybx.py` (the installer updates itself too); your `actions/`, `hooks/`,
+`filters/`, `scripts/`, `shortcuts.txt` and the `.venv` are never touched. It
+picks the latest GitHub release, else the newest tag, else the `main` branch
+(override with `--version <tag|branch|commit>`). To move to unreleased code
+instead, use `--latest` or pin one with `--commit <sha>`; both download over
+HTTP with Python's `urllib` and need no `git` or `curl`. `uninstall` stops the
+app and removes the launchers, `<dir>/app`, `<dir>/.venv` and `<dir>/ybx.py`,
+keeping your files; add `--purge --yes` to delete `<dir>` entirely.
 
 ## Update notices in the app
 
