@@ -15,10 +15,11 @@ Commands:
 """
 
 import os
-import signal
 import subprocess
 import sys
 import time
+
+from ybe import procutil as proc
 
 
 def app_dir():
@@ -85,69 +86,21 @@ def write_pid(path, pid):
         pass
 
 
-def _pid_alive(pid):
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
-
-
-def _pid_cmdline(pid):
-    """The command line of `pid` as one string (empty when unavailable).
-
-    Uses `/proc` on Linux and falls back to `ps -ww` (BSD `ps` truncates
-    otherwise) on macOS and other systems without `/proc`.
-    """
-    try:
-        with open("/proc/%d/cmdline" % pid, "rb") as handle:
-            return handle.read().replace(b"\0", b" ").decode("utf-8", "replace")
-    except OSError:
-        pass
-    try:
-        result = subprocess.run(
-            ["ps", "-ww", "-p", str(pid), "-o", "args="],
-            capture_output=True,
-            text=True,
-        )
-    except OSError:
-        return ""
-    return result.stdout.strip()
-
-
 def pid_is_app(pid, python_app=None):
     """True when `pid` is alive and its command line references our app.py.
 
     Guards against a stale pid file whose PID was reused by an unrelated
-    process after a crash or reboot.
+    process after a crash or reboot. The platform specifics live in
+    `ybe.procutil`.
     """
-    python_app = python_app or app_py()
-    return _pid_alive(pid) and python_app in _pid_cmdline(pid)
+    return proc.pid_is_app(pid, python_app or app_py())
 
 
 # --------------------------------------------------------------------------- #
 # start / stop / restart / status / logs
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------#
 def _terminate(pid):
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except OSError:
-        return
-    for _ in range(50):
-        if not _pid_alive(pid):
-            return
-        time.sleep(0.1)
-    try:
-        os.kill(pid, signal.SIGKILL)
-    except OSError:
-        pass
-    time.sleep(0.2)
+    proc.terminate(pid)
 
 
 def do_start(home, args):
@@ -184,23 +137,19 @@ def do_start(home, args):
     except OSError:
         pass
 
-    # Detach so the server keeps running after this command returns: new
-    # session on POSIX, stderr/stdout into the log file, no stdin.
-    with open(logpath, "ab") as loghandle:
-        proc = subprocess.Popen(
-            [sys.executable, python_app, "--home", home, "--no-reload", "--log-file", logpath] + app_args,
-            stdin=subprocess.DEVNULL,
-            stdout=loghandle,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-    write_pid(pid_file(home), proc.pid)
+    # Detach so the server keeps running after this command returns (see
+    # procutil.spawn: new session on POSIX, DETACHED_PROCESS on Windows).
+    child = proc.spawn(
+        [sys.executable, python_app, "--home", home, "--no-reload", "--log-file", logpath] + app_args,
+        logpath,
+    )
+    write_pid(pid_file(home), child.pid)
 
     deadline = time.time() + 2.0
-    while time.time() < deadline and not pid_is_app(proc.pid, python_app):
+    while time.time() < deadline and not pid_is_app(child.pid, python_app):
         time.sleep(0.1)
-    if pid_is_app(proc.pid, python_app):
-        say("yolo-box-editor started (pid %d)." % proc.pid)
+    if pid_is_app(child.pid, python_app):
+        say("yolo-box-editor started (pid %d)." % child.pid)
         say("Log:  %s" % logpath)
         say("Stop: ybe stop")
         return 0
@@ -266,6 +215,7 @@ def do_logs(home, args):
     if not args or args[0] not in ("-f", "--follow"):
         _tail(logpath, 100)
         return 0
+    _tail(logpath, 100)
     try:
         with open(logpath, encoding="utf-8", errors="replace") as handle:
             handle.seek(0, os.SEEK_END)
@@ -287,8 +237,8 @@ def delegate(home, command, args):
     installer = installer_path(home)
     if not os.path.isfile(installer):
         die("cannot find %s (reinstall with the installer)" % installer)
-    proc = subprocess.run([sys.executable, installer, command, "--dir", home] + args)
-    return proc.returncode
+    result = subprocess.run([sys.executable, installer, command, "--dir", home] + args)
+    return result.returncode
 
 
 # --------------------------------------------------------------------------- #

@@ -38,6 +38,19 @@ cd yolo-box-editor
 # then open http://127.0.0.1:5000 and paste the path to your data.yaml
 ```
 
+**Windows** (PowerShell; installs to `%LOCALAPPDATA%\yolo-box-editor` and adds
+`ybe` to your PATH — open a new terminal afterwards):
+
+```powershell
+# 5. bootstrap (PowerShell) — saves and runs the Python installer
+irm https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.ps1 -OutFile ybx.ps1
+.\ybx.ps1 install
+
+# 6. or run the Python installer directly
+py -3 -c "import urllib.request; open('ybx.py','wb').write(urllib.request.urlopen('https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.py').read())"
+py -3 ybx.py install
+```
+
 Already have Python? `pip install -r app/requirements.txt` then
 `python app/app.py --data /path/to/data.yaml`.
 

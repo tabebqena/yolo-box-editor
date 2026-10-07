@@ -133,6 +133,9 @@ def _make_source_tree(tmp_path):
     (tree / "app" / "launcher.sh.in").write_text(
         'exec "@VENV@/bin/python" "@DIR@/app/launcher.py" --home "@DIR@" "$@"\n'
     )
+    (tree / "app" / "launcher.cmd.in").write_text(
+        '@echo off\r\n"@VENV@\\Scripts\\python.exe" "@DIR@\\app\\launcher.py" --home "@DIR@" %*\r\n'
+    )
     (tree / "app" / "requirements.txt").write_text("Flask\n")
     (tree / "app" / "scripts" / "helper.py").write_text("# helper\n")
     (tree / "ybx.py").write_text("SOURCE INSTALLER")
@@ -161,6 +164,36 @@ def test_do_install_from_source_offline(tmp_path, monkeypatch):
     text = launcher.read_text()
     assert str(install_dir) in text and "@DIR@" not in text and "@VENV@" not in text
     assert (bin_path / "ybe").exists()
+
+
+def test_do_install_from_source_windows_launchers(tmp_path, monkeypatch):
+    tree = _make_source_tree(tmp_path)
+    install_dir = tmp_path / "installed"
+    bin_path = tmp_path / "bin"
+    monkeypatch.setattr(ybx, "IS_WINDOWS", True)
+    monkeypatch.setattr(ybx, "setup_venv", lambda opts: None)
+    monkeypatch.setattr(ybx, "maybe_start", lambda opts: None)
+    monkeypatch.setattr(ybx, "bin_dir", lambda: str(bin_path))
+    monkeypatch.setattr(ybx, "_add_to_user_path", lambda target: True)
+
+    opts = ybx.parse_args(["install", "--from", str(tree), "--dir", str(install_dir), "--no-start"])
+    ybx.do_install(opts)
+
+    primary = bin_path / "yolo-box-editor.cmd"
+    alias = bin_path / "ybe.cmd"
+    assert primary.is_file() and alias.is_file()
+    text = primary.read_text()
+    assert str(install_dir) in text and "@DIR@" not in text and "@VENV@" not in text
+    assert "Scripts\\python.exe" in text
+    # No POSIX shim/symlink on Windows.
+    assert not (bin_path / "yolo-box-editor").exists()
+
+
+def test_launcher_names_per_platform(monkeypatch):
+    monkeypatch.setattr(ybx, "IS_WINDOWS", True)
+    assert ybx.launcher_names() == ("yolo-box-editor.cmd", "ybe.cmd")
+    monkeypatch.setattr(ybx, "IS_WINDOWS", False)
+    assert ybx.launcher_names() == ("yolo-box-editor", "ybe")
 
 
 def test_uninstall_keeps_user_files(tmp_path, monkeypatch):

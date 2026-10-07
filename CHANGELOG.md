@@ -4,6 +4,23 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.16.0] - 2026-10-07
+
+### Added
+
+- **Windows support.** `ybe` (and the installer) now work natively on Windows:
+  the installer writes `yolo-box-editor.cmd` + `ybe.cmd` to
+  `%LOCALAPPDATA%\yolo-box-editor\bin`, adds that folder to your user `PATH`,
+  and installs to `%LOCALAPPDATA%\yolo-box-editor`. There is a PowerShell
+  bootstrap, `ybx.ps1` (`irm .../ybx.ps1 -OutFile ybx.ps1; .\ybx.ps1 install`).
+  Background start/stop/status and stale-PID detection use Windows APIs
+  (`OpenProcess`, `DETACHED_PROCESS`, `taskkill`) behind the same
+  `app/ybe/procutil.py` used on Linux/macOS, so all commands behave the same.
+- The launcher and installer were refactored so the OS-specific process code
+  lives in one place (`app/ybe/procutil.py`); the installer now stops a running
+  server before swapping `app/` (important on Windows) and drives stop/status
+  through the launcher instead of duplicating the logic.
+
 ## [7.15.0] - 2026-10-07
 
 ### Changed

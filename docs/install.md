@@ -4,14 +4,16 @@
 
 The installer is **`ybx.py`**, a self-contained Python program (standard library
 only). It downloads the latest version, sets up an isolated `.venv`, adds a
-`yolo-box-editor` command (with the short alias `ybe`) to `~/.local/bin`, and
-then **starts the app in the background** so it is ready at
-<http://127.0.0.1:5000> (pass `--no-start` to skip that; on an upgrade a running
-instance is restarted). All downloads use Python's `urllib` — no curl, git or
-archive tools are needed. Pick whichever bootstrap you have:
+`yolo-box-editor` command (with the short alias `ybe`) and then **starts the app
+in the background** so it is ready at <http://127.0.0.1:5000> (pass `--no-start`
+to skip that; on an upgrade a running instance is restarted). All downloads use
+Python's `urllib` — no curl, git or archive tools are needed. The launcher
+installs to `~/.local/bin` on Linux/macOS and `%LOCALAPPDATA%\yolo-box-editor\bin`
+on Windows (this is added to your `PATH`; open a new terminal to use `ybe`).
+Pick whichever bootstrap you have:
 
 ```bash
-# one-liner: curl fetches the thin `ybx.sh` bootstrap, which runs Python
+# one-liner (Linux/macOS): curl fetches the thin `ybx.sh` bootstrap, which runs Python
 curl -fsSL https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | bash -s -- install
 
 # download the Python installer and run it (no bash pipe)
@@ -28,9 +30,21 @@ cd yolo-box-editor
 ./ybx.sh install --from .        # or: python3 ybx.py install --from .
 ```
 
-`ybx.sh` is only a thin bootstrap: it finds Python and hands off to `ybx.py`.
-Once installed, use the **`ybe`** command (also `yolo-box-editor`) for
-everything — you never need the installer again:
+On **Windows** (PowerShell) either bootstrap works:
+
+```powershell
+# save and run the PowerShell bootstrap
+irm https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.ps1 -OutFile ybx.ps1
+.\ybx.ps1 install
+
+# or run the Python installer directly
+py -3 -c "import urllib.request; open('ybx.py','wb').write(urllib.request.urlopen('https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.py').read())"
+py -3 ybx.py install
+```
+
+`ybx.sh` (and `ybx.ps1`) are only thin bootstraps: they find Python and hand off
+to `ybx.py`. Once installed, use the **`ybe`** command (also `yolo-box-editor`)
+for everything — you never need the installer again:
 
 ```bash
 ybe version        # print the installed version
@@ -144,7 +158,7 @@ keeping your files; add `--purge --yes` to delete `<dir>` entirely.
 The app checks GitHub for a newer version at every start and at most once a
 week (the result is cached in `<home>/.update_check.json`). When one is found it
 shows a **daily notification** with a **How to update** button, and the same
-info lives in **Settings → Updates** (with a manual **Check now**). On Linux/
-macOS that is `ybe update`; for a manual/Windows install it is `git pull`
-then `pip install -r app/requirements.txt`. Disable the check with
+info lives in **Settings → Updates** (with a manual **Check now**). On
+Linux/macOS/Windows that is `ybe update`; for a manual (`pip install`) setup it
+is `git pull` then `pip install -r app/requirements.txt`. Disable the check with
 `--no-update-check`.

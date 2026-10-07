@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.16.0
+- Windows is now supported: install natively with the PowerShell bootstrap (ybx.ps1) or the Python installer, and run every ybe command (start/stop/status/logs/update/uninstall) the same as on Linux and macOS. The installer adds ybe to your PATH and starts/stops the server with Windows APIs.
+
 ## 7.15.0
 - The ybe command and the installer now run on Python instead of shell scripts, so every ybe command (start/stop/status/logs/update/uninstall) behaves the same on Linux and macOS. Install and update downloads use Python instead of curl, so only Python 3 is required.
 

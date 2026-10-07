@@ -4,6 +4,6 @@
 # Thin shim only: all logic lives in app/ybe/launcher.py, which this executes
 # with the virtual environment's Python. The installer (`ybx.py`) replaces
 # @DIR@ (the install/user folder) and @VENV@ (its virtual environment) with the
-# real paths when installing. A Windows `.cmd`/`.ps1` shim is planned; it will
-# execute the same Python module.
+# real paths when installing. On Windows the equivalent shim is
+# `app/launcher.cmd.in`; it runs the same Python module.
 exec "@VENV@/bin/python" "@DIR@/app/launcher.py" --home "@DIR@" "$@"

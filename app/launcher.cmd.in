@@ -1,0 +1,8 @@
+@echo off
+rem yolo-box-editor launcher (also reachable as `ybe`).
+rem
+rem Thin Windows shim only: all logic lives in app\ybe\launcher.py, which this
+rem executes with the virtual environment's Python. The installer (`ybx.py`)
+rem replaces @DIR@ (the install/user folder) and @VENV@ (its virtual
+rem environment) with the real paths when installing.
+"@VENV@\Scripts\python.exe" "@DIR@\app\launcher.py" --home "@DIR@" %*

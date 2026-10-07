@@ -30,7 +30,6 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -41,10 +40,16 @@ BASE = "https://github.com/%s/%s" % (OWNER, REPO)
 API = "https://api.github.com/repos/%s/%s" % (OWNER, REPO)
 RAW = "https://raw.githubusercontent.com/%s/%s" % (OWNER, REPO)
 
-DEFAULT_DIR = os.path.join(
-    os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), REPO
-)
-PYTHON_CMD = os.environ.get("PYTHON_CMD", "python3")
+IS_WINDOWS = os.name == "nt"
+
+if IS_WINDOWS:
+    DEFAULT_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), REPO)
+    PYTHON_CMD = os.environ.get("PYTHON_CMD", "py")
+else:
+    DEFAULT_DIR = os.path.join(
+        os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), REPO
+    )
+    PYTHON_CMD = os.environ.get("PYTHON_CMD", "python3")
 SUBCOMMANDS = ("install", "upgrade", "update", "version", "check-update", "uninstall")
 
 USER_DIRS = ("actions", "hooks", "filters", "scripts")
@@ -297,15 +302,18 @@ def venv_python(venv):
 
 def setup_venv(opts):
     venv = os.path.join(opts.dir, ".venv")
-    if shutil.which(opts.python) is None:
+    # Prefer the requested interpreter, but fall back to the one running this
+    # installer (covers Windows `py`, minimal PATHs and venv-on-venv updates).
+    python_cmd = shutil.which(opts.python) or sys.executable
+    if not python_cmd:
         die(
-            "%s not found. Install Python 3.8+ (e.g. 'sudo apt install python3 "
-            "python3-venv')." % opts.python
+            "Python 3 not found. Install it (e.g. 'sudo apt install python3 "
+            "python3-venv', or python.org on Windows)."
         )
     if not os.path.isfile(venv_python(venv)):
         say("Creating virtual environment: %s" % venv)
         try:
-            subprocess.run([opts.python, "-m", "venv", venv], check=True)
+            subprocess.run([python_cmd, "-m", "venv", venv], check=True)
         except (subprocess.CalledProcessError, OSError):
             die("could not create the venv (on Debian/Ubuntu: sudo apt install python3-venv)")
     else:
@@ -329,7 +337,20 @@ def setup_venv(opts):
 # launcher and self-install
 # --------------------------------------------------------------------------- #
 def bin_dir():
-    return os.path.abspath(os.path.expanduser(os.environ.get("BIN_DIR") or "~/.local/bin"))
+    env = os.environ.get("BIN_DIR")
+    if env:
+        return os.path.abspath(os.path.expanduser(env))
+    if IS_WINDOWS:
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "Programs", REPO, "bin")
+    return os.path.abspath(os.path.expanduser("~/.local/bin"))
+
+
+def launcher_names():
+    """The primary command and its short alias, per platform."""
+    if IS_WINDOWS:
+        return ("yolo-box-editor.cmd", "ybe.cmd")
+    return ("yolo-box-editor", "ybe")
 
 
 def install_self(opts, app_src):
@@ -363,111 +384,147 @@ def render_launcher(template_path, opts):
             text = handle.read()
         return text.replace("@DIR@", opts.dir).replace("@VENV@", os.path.join(opts.dir, ".venv"))
     # Fallback when the template is somehow missing: an equivalent one-liner.
-    return (
-        "#!/usr/bin/env bash\n"
-        'exec "%s/bin/python" "%s/app/launcher.py" --home "%s" "$@"\n'
-        % (os.path.join(opts.dir, ".venv"), opts.dir, opts.dir)
+    venv = os.path.join(opts.dir, ".venv")
+    if IS_WINDOWS:
+        return '@echo off\r\n"%s\\Scripts\\python.exe" "%s\\app\\launcher.py" --home "%s" %%*\r\n' % (
+            venv,
+            opts.dir,
+            opts.dir,
+        )
+    return '#!/usr/bin/env bash\nexec "%s/bin/python" "%s/app/launcher.py" --home "%s" "$@"\n' % (
+        venv,
+        opts.dir,
+        opts.dir,
     )
+
+
+def _replace_existing(path):
+    """Clear `path` so a launcher can be written there (dirs are moved aside)."""
+    if os.path.isdir(path) and not os.path.islink(path):
+        warn("%s is a directory; moving it to %s.bak" % (path, path))
+        try:
+            os.rename(path, path + ".bak")
+        except OSError:
+            pass
+    else:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def _add_to_user_path(target_dir):
+    """Append `target_dir` to the user PATH on Windows (new terminals only)."""
+    try:
+        import winreg
+    except ImportError:
+        return False
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_READ | winreg.KEY_WRITE
+        ) as key:
+            try:
+                current, _ = winreg.QueryValueEx(key, "Path")
+            except FileNotFoundError:
+                current = ""
+            parts = [part for part in current.split(";") if part]
+            norm = os.path.normcase(os.path.normpath(target_dir))
+            if any(os.path.normcase(os.path.normpath(part)) == norm for part in parts):
+                return True
+            new = ";".join(parts + [target_dir]) if parts else target_dir
+            winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, new)
+        return True
+    except OSError:
+        return False
+
+
+def _warn_or_add_to_path(target_dir):
+    norm = os.path.normcase(os.path.normpath(target_dir))
+    entries = {
+        os.path.normcase(os.path.normpath(part))
+        for part in os.environ.get("PATH", "").split(os.pathsep)
+        if part
+    }
+    if norm in entries:
+        return
+    if IS_WINDOWS and _add_to_user_path(target_dir):
+        say("Added %s to your PATH (open a new terminal to use `ybe`)." % target_dir)
+        return
+    warn("%s is not on your PATH; add it or use the full path." % target_dir)
 
 
 def make_launcher(opts):
     target_dir = bin_dir()
     os.makedirs(target_dir, exist_ok=True)
-    launcher = os.path.join(target_dir, "yolo-box-editor")
-    text = render_launcher(os.path.join(opts.dir, "app", "launcher.sh.in"), opts)
-    with open(launcher, "w", encoding="utf-8") as handle:
-        handle.write(text)
-    os.chmod(launcher, 0o755)
+    primary_name, alias_name = launcher_names()
+    template_name = "launcher.cmd.in" if IS_WINDOWS else "launcher.sh.in"
 
-    alias = os.path.join(target_dir, "ybe")
-    if os.path.isdir(alias) and not os.path.islink(alias):
-        warn("%s is a directory; moving it to %s.bak" % (alias, alias))
-        try:
-            os.rename(alias, alias + ".bak")
-        except OSError:
-            pass
-    else:
-        try:
-            os.remove(alias)
-        except OSError:
-            pass
-    try:
-        os.symlink("yolo-box-editor", alias)
-    except OSError:
-        # Some filesystems (and Windows without privileges) cannot symlink; a
-        # plain copy of the launcher works just as well.
+    launcher = os.path.join(target_dir, primary_name)
+    text = render_launcher(os.path.join(opts.dir, "app", template_name), opts)
+    newline = "\r\n" if IS_WINDOWS else "\n"
+    with open(launcher, "w", encoding="utf-8", newline=newline) as handle:
+        handle.write(text)
+    if not IS_WINDOWS:
+        os.chmod(launcher, 0o755)
+
+    alias = os.path.join(target_dir, alias_name)
+    _replace_existing(alias)
+    if IS_WINDOWS:
         try:
             shutil.copy2(launcher, alias)
         except OSError:
             warn("could not create the ybe alias at %s" % alias)
-    say("Launchers: %s (and ybe)" % launcher)
-    if target_dir not in os.environ.get("PATH", "").split(os.pathsep):
-        warn("%s is not on your PATH; add it or use the full path." % target_dir)
-
-
-# --------------------------------------------------------------------------- #
-# running process management (mirrors ybe.launcher)
-# --------------------------------------------------------------------------- #
-def read_pid(path):
-    try:
-        with open(path, encoding="utf-8") as handle:
-            return int(handle.read().strip() or 0)
-    except (OSError, ValueError):
-        return 0
-
-
-def pid_is_app(pid, app_path):
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    cmdline = ""
-    try:
-        with open("/proc/%d/cmdline" % pid, "rb") as handle:
-            cmdline = handle.read().replace(b"\0", b" ").decode("utf-8", "replace")
-    except OSError:
+    else:
         try:
-            result = subprocess.run(
-                ["ps", "-ww", "-p", str(pid), "-o", "args="], capture_output=True, text=True
-            )
-            cmdline = result.stdout.strip()
+            os.symlink(primary_name, alias)
         except OSError:
-            cmdline = ""
-    return app_path in cmdline
+            # Some filesystems cannot symlink; a plain copy works just as well.
+            try:
+                shutil.copy2(launcher, alias)
+            except OSError:
+                warn("could not create the ybe alias at %s" % alias)
+    say("Launchers: %s (and %s)" % (launcher, alias_name))
+    _warn_or_add_to_path(target_dir)
+
+
+# --------------------------------------------------------------------------- #
+# running the installed launcher (single source of process logic)
+# --------------------------------------------------------------------------- #
+def run_launcher(opts, *args):
+    """Run the installed Python launcher; CompletedProcess, or None if absent.
+
+    Calling the venv Python on `app/launcher.py` directly (instead of the OS
+    shim) also works on Windows, where a `.cmd` cannot be executed without a
+    shell.
+    """
+    python = venv_python(os.path.join(opts.dir, ".venv"))
+    script = os.path.join(opts.dir, "app", "launcher.py")
+    if not (os.path.isfile(python) and os.path.isfile(script)):
+        return None
+    try:
+        return subprocess.run(
+            [python, script, "--home", opts.dir] + list(args),
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return None
 
 
 def stop_installed(opts):
-    pidfile = os.path.join(opts.dir, "ybe.pid")
-    pid = read_pid(pidfile)
-    if pid_is_app(pid, os.path.join(opts.dir, "app", "app.py")):
-        try:
-            os.kill(pid, 15)
-        except OSError:
-            pass
-        for _ in range(50):
-            if not pid_is_app(pid, os.path.join(opts.dir, "app", "app.py")):
-                break
-            time.sleep(0.1)
-        if pid_is_app(pid, os.path.join(opts.dir, "app", "app.py")):
-            try:
-                os.kill(pid, 9)
-            except OSError:
-                pass
-        say("Stopped the running app (pid %d)." % pid)
+    """Stop a running server via the launcher (which validates the pid)."""
+    result = run_launcher(opts, "stop")
+    if result is not None and result.returncode == 0 and "stopped." in (result.stdout or ""):
+        say("Stopped the running app.")
     try:
-        os.remove(pidfile)
+        os.remove(os.path.join(opts.dir, "ybe.pid"))
     except OSError:
         pass
 
 
 def remove_launchers(opts):
-    for path in (os.path.join(bin_dir(), "yolo-box-editor"), os.path.join(bin_dir(), "ybe")):
+    for name in launcher_names():
+        path = os.path.join(bin_dir(), name)
         if not (os.path.exists(path) or os.path.islink(path)):
             continue
         if os.path.islink(path):
@@ -503,6 +560,10 @@ def do_install(opts):
 
         say("Installing yolo-box-editor %s into %s" % (version, opts.dir))
         os.makedirs(opts.dir, exist_ok=True)
+        # Stop a running server first so Windows does not keep files locked
+        # while app/ is swapped (no-op on a fresh install).
+        if os.path.isfile(os.path.join(opts.dir, "app", "app.py")):
+            stop_installed(opts)
         place_app(app_src, opts.dir)
         for name in USER_DIRS:
             os.makedirs(os.path.join(opts.dir, name), exist_ok=True)
@@ -604,24 +665,22 @@ def maybe_start(opts):
     if not opts.start:
         print_run_hint()
         return
-    launcher = os.path.join(bin_dir(), "yolo-box-editor")
-    if not os.access(launcher, os.X_OK):
-        warn("launcher not found at %s; start it manually:" % launcher)
-        print('Run:         "%s" "%s"' % (venv_python(os.path.join(opts.dir, ".venv")), os.path.join(opts.dir, "app", "app.py")))
+    python = venv_python(os.path.join(opts.dir, ".venv"))
+    app = os.path.join(opts.dir, "app", "app.py")
+    status = run_launcher(opts, "status")
+    if status is None:
+        warn("launcher not found; start it manually:")
+        print('Run:         "%s" "%s" --home "%s"' % (python, app, opts.dir))
         return
-    pid = read_pid(os.path.join(opts.dir, "ybe.pid"))
-    command = "restart" if pid_is_app(pid, os.path.join(opts.dir, "app", "app.py")) else "start"
+    command = "restart" if status.returncode == 0 else "start"
     say("Starting yolo-box-editor...")
-    try:
-        result = subprocess.run([launcher, command], capture_output=True, text=True)
-    except OSError as exc:
-        warn("could not run the launcher: %s" % exc)
-        return
-    if result.returncode != 0:
-        if result.stdout:
-            sys.stdout.write(result.stdout)
-        if result.stderr:
-            sys.stderr.write(result.stderr)
+    result = run_launcher(opts, command)
+    if result is None or result.returncode != 0:
+        if result is not None:
+            if result.stdout:
+                sys.stdout.write(result.stdout)
+            if result.stderr:
+                sys.stderr.write(result.stderr)
         warn("could not %s; run 'ybe start' manually." % command)
         return
     print("Open:        http://127.0.0.1:5000")

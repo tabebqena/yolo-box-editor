@@ -36,9 +36,10 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   e.g. `./ybx.sh install --from .` or `python3 ybx.py install --from .`. It
   replaces only `<dir>/app/` atomically, refreshes `<dir>/ybx.py`, and leaves
   user files and `.venv` alone. It downloads with `urllib` (never curl) and is
-  stdlib-only. `ybx.sh` is a thin bootstrap that finds Python and runs `ybx.py`.
-  `app/launcher.sh.in` is the thin Unix `ybe` shim (a Windows `.cmd`/`.ps1` shim
-  is planned) that executes the Python launcher. (Replaces the old `install.sh`.)
+  stdlib-only. `ybx.sh` (Unix) and `ybx.ps1` (Windows) are thin bootstraps that
+  find Python and run `ybx.py`. `app/launcher.sh.in` and `app/launcher.cmd.in`
+  are the thin Unix/Windows `ybe` shims that execute the Python launcher.
+  (Replaces the old `install.sh`.)
 - Python tests (from repo root): `python -m pytest -q` (~320 tests); single test
   `python -m pytest tests/test_app.py::test_name -q`. `pytest.ini` puts `app/`
   on `pythonpath`.
@@ -58,15 +59,17 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   here even though their code lives in `ybe`.
 - `app/launcher.py` — the `ybe` command's entry point: puts `app/` on
   `sys.path` and calls `ybe.launcher.main`. The installed `yolo-box-editor` /
-  `ybe` command is only the three-line Unix shim `app/launcher.sh.in` (rendered
-  with `@DIR@`/`@VENV@` by the installer) that `exec`s the venv Python on this
-  file; a Windows `.cmd`/`.ps1` shim is planned for phase 2.
+  `ybe` command is only a three-line shim (rendered with `@DIR@`/`@VENV@` by the
+  installer): `app/launcher.sh.in` on Unix (`exec`s the venv Python) and
+  `app/launcher.cmd.in` on Windows. The installer picks the shim, writes it to
+  the OS bin dir and creates the `ybe` alias (symlink on Unix, copy of the
+  `.cmd` on Windows).
 - `ybx.py` (repo root) — the self-contained installer/updater (stdlib only):
   `urllib` downloads, `tarfile` extraction, atomic `app/` swap, venv setup,
-  self-copy to `<dir>/ybx.py` and launcher generation. `ybx.sh` is a thin
-  bootstrap that locates Python and runs `ybx.py` (a sibling copy, else one
-  fetched with `urllib`). Both are intentionally outside `app/` so an update can
-  replace the app while the installer keeps running.
+  self-copy to `<dir>/ybx.py` and launcher generation. `ybx.sh` / `ybx.ps1` are
+  thin bootstraps that locate Python and run `ybx.py` (a sibling copy, else one
+  fetched with `urllib`). The installer files stay outside `app/` so an update
+  can replace the app while the installer keeps running.
 - `app/ybe/` — the reusable package. Modules read shared values as
   `config.NAME` / `state.NAME` (never `from ybe.config import NAME`) so
   monkeypatching the owning module reaches every caller.
@@ -100,10 +103,14 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   - `logging_setup.py` — `setup_logging` and the presence access-log filter.
   - `secret_key.py` — the persistent, owner-only session-signing key.
   - `launcher.py` — the Python `ybe` commands: start/stop/restart/status/logs
-    (pid file + log in `YBX_HOME`, with stale/reused-PID detection: `/proc` on
-    Linux, `ps -ww` on macOS). version/check-update/update/upgrade/uninstall
-    delegate to `<YBX_HOME>/ybx.py`. Kept OS-neutral (no GNU-only shell tools)
-    so a Windows shim can reuse it; `start_new_session` detaches on POSIX.
+    (pid file + log in `YBX_HOME`, with stale/reused-PID detection via
+    `procutil`). version/check-update/update/upgrade/uninstall delegate to
+    `<YBX_HOME>/ybx.py`. Kept OS-neutral (no GNU-only shell tools) so the Unix
+    and Windows shims share it.
+  - `procutil.py` — the only OS-branching process code: pid liveness, reading a
+    process command line, detaching a background server and stopping it, with a
+    Linux (`/proc`) / macOS (`ps -ww`) / Windows (`OpenProcess`, PowerShell CIM,
+    `DETACHED_PROCESS`, `taskkill`) implementation of each.
   There is deliberately no `SCRIPTS_DIR` symbol: scripts are reached relatively
   (`scripts/…`, since cwd is the home) or as `{APP_DIR}/scripts/…`.
 - Frontend: `app/static/app.js` is the entry point only (login/account,
