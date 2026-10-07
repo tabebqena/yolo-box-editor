@@ -396,7 +396,7 @@ maybe_start() {
   if [ -f "$DIR/ybe.pid" ]; then
     pid=$(cat "$DIR/ybe.pid" 2>/dev/null || true)
   fi
-  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+  if [ -n "$pid" ] && pid_is_app "$pid"; then
     out=$("$launcher" restart 2>&1) || {
       printf '%s\n' "$out" >&2
       warn "could not restart; run 'ybe start' manually."
@@ -482,15 +482,32 @@ cmd_check_update() {
   exit "$rc"
 }
 
+# True only if PID $1 is alive AND is this app. Guards against a stale ybe.pid
+# whose PID was reused by an unrelated process after a crash/reboot.
+pid_is_app() {
+  local p="$1" cmd
+  [ -n "$p" ] || return 1
+  kill -0 "$p" 2>/dev/null || return 1
+  if [ -r "/proc/$p/cmdline" ]; then
+    cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)
+  else
+    cmd=$(ps -p "$p" -o args= 2>/dev/null || true)
+  fi
+  case "$cmd" in
+    *"$DIR/app/app.py"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 stop_installed() {
   local pid="" i=0
   if [ -f "$DIR/ybe.pid" ]; then
     pid=$(cat "$DIR/ybe.pid" 2>/dev/null || true)
   fi
-  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+  if [ -n "$pid" ] && pid_is_app "$pid"; then
     kill "$pid" 2>/dev/null || true
-    while [ "$i" -lt 50 ] && kill -0 "$pid" 2>/dev/null; do sleep 0.1; i=$((i + 1)); done
-    if kill -0 "$pid" 2>/dev/null; then kill -9 "$pid" 2>/dev/null || true; fi
+    while [ "$i" -lt 50 ] && pid_is_app "$pid"; do sleep 0.1; i=$((i + 1)); done
+    if pid_is_app "$pid"; then kill -9 "$pid" 2>/dev/null || true; fi
     say "Stopped the running app (pid $pid)."
   fi
   rm -f "$DIR/ybe.pid"

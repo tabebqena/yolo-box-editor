@@ -23,11 +23,29 @@ LOGFILE="$DIR/ybe.log"
 say() { printf '%s\n' "$*"; }
 die() { printf 'yolo-box-editor: %s\n' "$*" >&2; exit 1; }
 
+# True only if PID $1 is alive AND is this app. A stale ybe.pid can name an
+# unrelated process once the OS reuses the PID (after a crash or reboot); the
+# command-line check stops status/stop/restart from trusting such a PID.
+pid_is_app() {
+  local p="$1" cmd
+  [ -n "$p" ] || return 1
+  kill -0 "$p" 2>/dev/null || return 1
+  if [ -r "/proc/$p/cmdline" ]; then
+    cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)
+  else
+    cmd=$(ps -p "$p" -o args= 2>/dev/null || true)
+  fi
+  case "$cmd" in
+    *"$APP"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 pid_alive() {
   [ -f "$PIDFILE" ] || return 1
   local p
   p=$(cat "$PIDFILE" 2>/dev/null) || return 1
-  [ -n "$p" ] && kill -0 "$p" 2>/dev/null
+  pid_is_app "$p"
 }
 
 ensure_ybx() {

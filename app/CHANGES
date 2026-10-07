@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.14.0
+- Fixed: `ybe status` no longer reports the app as running when it is not. A leftover ybe.pid could point at an unrelated process that later reused the same PID; the launcher now confirms the process is really the app, so status, stop, upgrade and uninstall are accurate.
+
 ## 7.13.0
 - Dragging or drawing a box no longer redraws every other box: the image and untouched boxes are cached and only the active box is repainted, so the pointer stays fluid on images with hundreds of boxes.
 

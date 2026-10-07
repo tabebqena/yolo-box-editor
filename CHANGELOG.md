@@ -4,6 +4,17 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.14.0] - 2026-10-07
+
+### Fixed
+
+- **`ybe status` (and `ybe stop` / upgrade / uninstall) no longer trusts a stale
+  PID.** After a crash or reboot the launcher could leave `ybe.pid` behind; if
+  the OS reused that PID for an unrelated process, `ybe status` reported the app
+  as running and `stop` could signal the wrong process. The launcher now checks
+  that the PID's command line actually references the app before treating it as
+  running.
+
 ## [7.13.0] - 2026-10-05
 
 ### Changed
