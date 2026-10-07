@@ -14,8 +14,9 @@ reusable DOM/modal helpers live in `js/core.js`. **No build step**, and the
 modules share one global scope, so the load order in `index.html` and
 `tests/js/helpers/app.js` must stay in sync. No
 database. The `data.yaml` reader is hand-rolled — no PyYAML at
-runtime. User files live in `YBX_HOME` (below). `ybx.sh` copies `app/`
-wholesale, so `app/ybe/` and `app/static/js/` ship automatically.
+runtime. User files live in `YBX_HOME` (below). The installer (`ybx.py`, started
+by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
+`app/launcher.py` and `app/static/js/` ship automatically.
 
 ## Commands
 - Run: `python app/app.py --data /path/to/data.yaml` (optional `--readonly` to
@@ -30,12 +31,15 @@ wholesale, so `app/ybe/` and `app/static/js/` ship automatically.
   `--create-user NAME` (prompts for the password with `getpass`, no echo) and
   `--list-users`. Flask's interactive debugger and auto-reloader stay off unless
   `--flask-debug` is passed; `--debug` only affects browser-console logging.
-- Install/update/remove: `ybx.sh` (`install` / `upgrade` / `update` / `version` /
-  `check-update` / `uninstall`); e.g. `./ybx.sh install --from .`. It replaces
-  only `<dir>/app/` atomically and leaves user files and `.venv` alone.
-  `app/launcher.sh.in` is the `ybe` launcher template (start/stop/restart/status/
-  logs) that `ybx.sh` fills in. (Replaces the old `install.sh`.)
-- Python tests (from repo root): `python -m pytest -q` (~289 tests); single test
+- Install/update/remove: the self-contained Python installer `ybx.py`
+  (`install` / `upgrade` / `update` / `version` / `check-update` / `uninstall`);
+  e.g. `./ybx.sh install --from .` or `python3 ybx.py install --from .`. It
+  replaces only `<dir>/app/` atomically, refreshes `<dir>/ybx.py`, and leaves
+  user files and `.venv` alone. It downloads with `urllib` (never curl) and is
+  stdlib-only. `ybx.sh` is a thin bootstrap that finds Python and runs `ybx.py`.
+  `app/launcher.sh.in` is the thin Unix `ybe` shim (a Windows `.cmd`/`.ps1` shim
+  is planned) that executes the Python launcher. (Replaces the old `install.sh`.)
+- Python tests (from repo root): `python -m pytest -q` (~320 tests); single test
   `python -m pytest tests/test_app.py::test_name -q`. `pytest.ini` puts `app/`
   on `pythonpath`.
 - JavaScript tests: `npm ci` then `npm run test:js` (Node's `node --test` +
@@ -52,6 +56,17 @@ wholesale, so `app/ybe/` and `app/static/js/` ship automatically.
   runs the Flask app from `ybe.server`. It also re-exports every helper the tests
   and embedders import (`from app import ...`), so those names stay available
   here even though their code lives in `ybe`.
+- `app/launcher.py` — the `ybe` command's entry point: puts `app/` on
+  `sys.path` and calls `ybe.launcher.main`. The installed `yolo-box-editor` /
+  `ybe` command is only the three-line Unix shim `app/launcher.sh.in` (rendered
+  with `@DIR@`/`@VENV@` by the installer) that `exec`s the venv Python on this
+  file; a Windows `.cmd`/`.ps1` shim is planned for phase 2.
+- `ybx.py` (repo root) — the self-contained installer/updater (stdlib only):
+  `urllib` downloads, `tarfile` extraction, atomic `app/` swap, venv setup,
+  self-copy to `<dir>/ybx.py` and launcher generation. `ybx.sh` is a thin
+  bootstrap that locates Python and runs `ybx.py` (a sibling copy, else one
+  fetched with `urllib`). Both are intentionally outside `app/` so an update can
+  replace the app while the installer keeps running.
 - `app/ybe/` — the reusable package. Modules read shared values as
   `config.NAME` / `state.NAME` (never `from ybe.config import NAME`) so
   monkeypatching the owning module reaches every caller.
@@ -84,6 +99,11 @@ wholesale, so `app/ybe/` and `app/static/js/` ship automatically.
   - `update.py` — the GitHub version check and cached status.
   - `logging_setup.py` — `setup_logging` and the presence access-log filter.
   - `secret_key.py` — the persistent, owner-only session-signing key.
+  - `launcher.py` — the Python `ybe` commands: start/stop/restart/status/logs
+    (pid file + log in `YBX_HOME`, with stale/reused-PID detection: `/proc` on
+    Linux, `ps -ww` on macOS). version/check-update/update/upgrade/uninstall
+    delegate to `<YBX_HOME>/ybx.py`. Kept OS-neutral (no GNU-only shell tools)
+    so a Windows shim can reuse it; `start_new_session` detaches on POSIX.
   There is deliberately no `SCRIPTS_DIR` symbol: scripts are reached relatively
   (`scripts/…`, since cwd is the home) or as `{APP_DIR}/scripts/…`.
 - Frontend: `app/static/app.js` is the entry point only (login/account,
@@ -96,8 +116,9 @@ wholesale, so `app/ybe/` and `app/static/js/` ship automatically.
   `ESCAPE_CLOSERS` (it references the overlay closers defined in earlier
   modules). `js/core.js` holds the shared DOM/modal helpers and mutable state.
 - `YBX_HOME` resolution: `--home <dir>` > `$YBX_HOME` > the parent of `app.py`.
-  A clone and an install therefore behave the same; the folders are created at
-  startup and the path is logged (`[ybe] user dir: …`).
+  The launcher (`ybe.launcher.resolve_home`) resolves it the same way (from the
+  parent of the shipped `app/`), so a clone and an install behave the same; the
+  folders are created at startup and the path is logged (`[ybe] user dir: …`).
 - Extension files ship under `app/` and live (yours) under `YBX_HOME`, same
   names. The user copy is read after the shipped one and wins on a name clash;
   there is no `.a` variant:
@@ -178,6 +199,10 @@ wholesale, so `app/ybe/` and `app/static/js/` ship automatically.
 - Fixtures create real JPEGs (Pillow) in `tmp_path`; tests never touch the repo's
   own `app/actions/`, `shortcuts.txt`, `.recent_data_yamls.json`,
   `.settings.json`, `.view_state.json` or `users.json`.
+- `tests/test_launcher.py` and `tests/test_installer.py` cover the Python
+  launcher/installer: they spawn real child processes against a sleeping stub
+  `app.py` (never Flask) and exercise stale-PID detection plus the offline
+  install/uninstall paths with the venv and network mocked.
 - `tests/js/*.test.js` is the frontend suite; add a file there (it is picked up
   automatically). `tests/js/helpers/app.js` loads `app/templates/index.html`
   into jsdom, stubs `fetch`/canvas/`requestAnimationFrame`/`confirm`, runs the
