@@ -51,11 +51,13 @@ py -3 -c "import urllib.request; open('ybx.py','wb').write(urllib.request.urlope
 py -3 ybx.py install
 ```
 
-> **Platform support:** the app has only been used and tested on **Debian-based
-> Linux** (e.g. Ubuntu/Debian). macOS uses the same code but is untested, other
-> Linux distributions (Fedora, Arch, Alpine, …) are untested, and **Windows
-> support is new and has never been run on a real Windows machine** — it reuses
-> the same Python core through Windows APIs. Please report anything that fails.
+> **Try it anywhere — new platforms welcome.** So far the app has been used on
+> Debian-based Linux (Ubuntu/Debian). macOS and other Linux distributions
+> (Fedora, Arch, Alpine, …) run the same code, and Windows support is brand new:
+> it reuses that same, well-exercised Python core through Windows APIs. We just
+> haven't had a Windows machine to try it on yet, so you might be the first.
+> Nothing is hard to undo (`ybe uninstall` removes it cleanly), and a quick bug
+> report if something misbehaves would be very welcome.
 
 Already have Python? `pip install -r app/requirements.txt` then
 `python app/app.py --data /path/to/data.yaml`.

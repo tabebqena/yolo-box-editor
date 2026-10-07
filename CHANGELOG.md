@@ -18,9 +18,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Documentation
 
-- A **platform-support note** now says the app has only been used and tested on
-  Debian-based Linux; macOS and other Linux distributions are untested, and
-  Windows support is new and has never been run on a real Windows machine.
+- A **platform-support note** now says the app has so far been used on
+  Debian-based Linux; macOS and other Linux distributions run the same code, and
+  Windows support is brand new (it reuses the same Python core through Windows
+  APIs). Feedback is welcome, and `ybe uninstall` undoes an install cleanly.
 
 ## [7.16.0] - 2026-10-07
 

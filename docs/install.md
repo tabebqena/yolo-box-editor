@@ -32,11 +32,12 @@ cd yolo-box-editor
 
 On **Windows** (PowerShell) either bootstrap works:
 
-> **Platform support.** The app has only been used and tested on **Debian-based
-> Linux** (Ubuntu/Debian). macOS uses the same code but is untested; other Linux
-> distributions (Fedora, Arch, Alpine, …) are untested; and Windows support is
-> new and has **never been run on a real Windows machine** — it reuses the same
-> Python core through Windows APIs. Please report anything that fails.
+> **New platforms welcome.** So far the app has been used on Debian-based Linux
+> (Ubuntu/Debian). macOS and other Linux distributions (Fedora, Arch, Alpine, …)
+> run the same code, and Windows support is brand new — it reuses that same
+> Python core through Windows APIs. We just haven't had a Windows machine to try
+> it on yet, so you might be the first. It's easy to undo (`ybe uninstall`
+> removes it cleanly), and we'd love a bug report if anything misbehaves.
 
 ```powershell
 # save and run the PowerShell bootstrap
