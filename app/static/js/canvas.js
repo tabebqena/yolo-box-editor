@@ -221,6 +221,7 @@ function handlePoints(r) {
  * (new image, selection, box edit, toggle…).
  */
 function draw() {
+  fastDrawQueued = false; // a full draw supersedes any queued fast repaint
   paintScene(true);
   syncSidePanel();
 }
@@ -233,6 +234,26 @@ function draw() {
  */
 function drawFast() {
   paintScene(false);
+}
+
+// True while a fast repaint is queued for the next animation frame.
+let fastDrawQueued = false;
+
+/**
+ * Queue a fast repaint for the next animation frame. A burst of mousemove
+ * events coalesces into a single paint instead of painting once per event (and
+ * the input handler no longer paints synchronously). `draw()` cancels any queued
+ * fast repaint because its full repaint covers it.
+ * @returns {void}
+ */
+function scheduleFastDraw() {
+  if (fastDrawQueued) return;
+  fastDrawQueued = true;
+  requestAnimationFrame(() => {
+    if (!fastDrawQueued) return; // superseded by a full draw()
+    fastDrawQueued = false;
+    drawFast();
+  });
 }
 
 /**
@@ -628,7 +649,7 @@ function moveBox(p) {
     boxes[i] = { ...b, cx, cy };
   }
   moved = true;
-  drawFast(); // cached layer + the moved boxes; full draw() runs on mouse-up
+  scheduleFastDraw(); // cached layer + the moved boxes; full draw() runs on mouse-up
 }
 
 /**
@@ -670,7 +691,7 @@ function resizeBox(p) {
     h: clamp01(h / imgH),
   };
   moved = true;
-  drawFast(); // cached layer + this box only; full draw() runs on mouse-up
+  scheduleFastDraw(); // cached layer + this box only; full draw() runs on mouse-up
 }
 
 // How far each keyboard border nudge moves an edge, in normalized units.

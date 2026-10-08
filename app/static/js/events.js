@@ -159,7 +159,7 @@ function onWindowMouseMove(e) {
   }
   if (mode === 'drawing' && start) {
     mouse = clampToImage(p);
-    drawFast(); // no box changed: cached layer + the in-progress rectangle
+    scheduleFastDraw(); // no box changed: cached layer + the in-progress rectangle
   } else {
     mouse = p;
     if (mode === 'moving' && origBox) {

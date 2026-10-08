@@ -124,6 +124,36 @@ test('drawFast reuses the cached base layer and repaints only the dragged box', 
   assert.equal(count('strokeRect'), 1); // only the dragged box is repainted
 });
 
+test('scheduleFastDraw coalesces a mousemove burst into one animation frame', () => {
+  ready({ boxes: [box(), box()], selected: 0, imgW: 300, imgH: 150 });
+  app.set({ mode: 'moving' });
+  app.api.draw(); // seed the cached base layer for the drag
+  const queued = [];
+  app.window.requestAnimationFrame = (cb) => { queued.push(cb); return queued.length; };
+  const count = (name) => app.context2d.calls.filter(([n]) => n === name).length;
+  app.context2d.calls.length = 0;
+
+  app.api.scheduleFastDraw();
+  app.api.scheduleFastDraw();
+  app.api.scheduleFastDraw();
+  assert.equal(queued.length, 1); // burst -> a single queued paint
+  assert.equal(count('clearRect'), 0); // deferred, not painted per event
+
+  queued.shift()(0);
+  assert.equal(count('clearRect'), 1); // one paint for the whole burst
+});
+
+test('draw cancels a queued fast repaint', () => {
+  ready({ boxes: [box()], selected: 0, imgW: 300, imgH: 150 });
+  const queued = [];
+  app.window.requestAnimationFrame = (cb) => { queued.push(cb); return queued.length; };
+  app.api.scheduleFastDraw();
+  app.api.draw(); // full repaint supersedes the queued fast one
+  app.context2d.calls.length = 0;
+  queued.shift()(0); // queued callback must now be a no-op
+  assert.equal(app.context2d.calls.length, 0);
+});
+
 test('changing a row class edits the box and pushes an undo step', () => {
   ready({ selected: 0 });
   app.api.renderSidePanel();

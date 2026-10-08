@@ -416,6 +416,10 @@ canvas {
   background: #0d0e12;
   box-shadow: 0 0 0 1px var(--border);
   cursor: crosshair;
+  /* Own compositor layer: a canvas repaint during a drag stays on this layer
+     instead of re-painting the whole document. */
+  contain: paint;
+  will-change: transform;
 }
 /* Focused via app_focus_canvas (Space): a visible ring confirms keyboard mode. */
 canvas:focus-visible {

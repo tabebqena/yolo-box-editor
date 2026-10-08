@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.24.0] - 2026-10-08
+
+### Changed
+
+- **Smoother dragging and drawing.** The canvas is promoted to its own
+  compositor layer so repainting it during a drag no longer repaints the whole
+  page, and bursts of mouse-move events are coalesced into a single repaint per
+  animation frame instead of painting once per event. On a 120 Hz display this
+  removes most of the dropped frames seen while dragging a box.
+
 ## [7.23.0] - 2026-10-08
 
 ### Added
