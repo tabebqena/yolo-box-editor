@@ -30,7 +30,17 @@ app_escape    <Escape>    Ignore
 app_show_hide <.>         hide/show boxes
 app_box_details <,>       box details on/off (outlines only)
 app_isolate_box <I>       hide all boxes except the selected one
+app_focus_canvas <Space>  focus the canvas (so shortcuts keep working)
+app_select_all <Ctrl+A>   select all boxes
 app_fix_box  <F>          fix/unfix selected box
+app_widen_left  <Ctrl+ArrowLeft>   widen the selected box's left border
+app_widen_right <Ctrl+ArrowRight>  widen the selected box's right border
+app_widen_up    <Ctrl+ArrowUp>     widen the selected box's top border
+app_widen_down  <Ctrl+ArrowDown>   widen the selected box's bottom border
+app_narrow_left  <Ctrl+Shift+ArrowLeft>   narrow the selected box's left border
+app_narrow_right <Ctrl+Shift+ArrowRight>  narrow the selected box's right border
+app_narrow_up    <Ctrl+Shift+ArrowUp>     narrow the selected box's top border
+app_narrow_down  <Ctrl+Shift+ArrowDown>   narrow the selected box's bottom border
 # app_force_draw is a held modifier, not a key: hold it and drag to always
 # draw a new box (even on top of / inside an existing one). Use Ctrl or Meta on
 # Linux (Alt+drag is grabbed by many window managers); Shift stays reserved for

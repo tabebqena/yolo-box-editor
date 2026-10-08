@@ -33,7 +33,7 @@ test('ESCAPE_CLOSERS lists the overlays in priority order', () => {
   assert.deepEqual(
     plain(app.consts.ESCAPE_CLOSERS.map((entry) => entry[0])),
     ['helpModal', 'yamlEditorModal', 'actionResult', 'changelogModal', 'tipModal',
-      'loadDataModal', 'settingsModal', 'updateModal', 'notifPanel']
+      'loadDataModal', 'settingsModal', 'updateModal', 'classPicker', 'notifPanel']
   );
 });
 

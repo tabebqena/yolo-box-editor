@@ -78,6 +78,8 @@ function redo() {
 function deleteSelected() {
   const indices = selectionIndices();
   if (!indices.length) return;
+  // A single box is quick to redo; a whole selection is worth confirming.
+  if (indices.length > 1 && !confirm(`Delete ${indices.length} boxes?`)) return;
   pushUndo();
   // delete from the highest index down so the lower indices stay valid
   for (let k = indices.length - 1; k >= 0; k--) boxes.splice(indices[k], 1);
@@ -499,7 +501,32 @@ function openClassPicker(x, y) {
     classPicker.appendChild(btn);
   });
 
+  // Keyboard: Arrow keys move between classes, Enter picks the focused one,
+  // digits pick directly, Escape closes (see ESCAPE_CLOSERS).
+  const buttons = qsa('button', classPicker);
+  classPicker.onkeydown = (ev) => {
+    if (!buttons.length) return;
+    const cur = buttons.indexOf(document.activeElement);
+    if (ev.key === 'ArrowDown') {
+      ev.preventDefault();
+      buttons[(cur < 0 ? 0 : cur + 1) % buttons.length].focus();
+    } else if (ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      buttons[(cur <= 0 ? buttons.length : cur) - 1].focus();
+    } else if (ev.key === 'Home') {
+      ev.preventDefault();
+      buttons[0].focus();
+    } else if (ev.key === 'End') {
+      ev.preventDefault();
+      buttons[buttons.length - 1].focus();
+    } else if (/^[0-9]$/.test(ev.key)) {
+      const k = parseInt(ev.key, 10);
+      if (k < buttons.length) { ev.preventDefault(); buttons[k].click(); }
+    }
+  };
+
   openModal('classPicker');
+  if (buttons[0]) buttons[0].focus();
   const w = classPicker.offsetWidth;
   const h = classPicker.offsetHeight;
   const pad = 8;

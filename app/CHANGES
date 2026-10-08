@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.23.0
+- Full keyboard control: Ctrl+arrow widens a box border and Ctrl+Shift+arrow narrows it, Ctrl+A selects all boxes, and Space focuses the canvas so shortcuts keep working after typing in a field. The class list now navigates with the arrow keys (or number keys), and deleting several boxes asks you to confirm first.
+
 ## 7.22.0
 - Select several boxes at once: hold Ctrl and click boxes to add or remove them (Ctrl+click again to toggle). Drag any selected box to move the whole group, or press Delete to remove them all; class changes and the fix toggle apply to the whole selection. Ctrl still force-draws a new box when you drag.
 

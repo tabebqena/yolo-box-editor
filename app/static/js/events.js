@@ -11,6 +11,7 @@ const ESCAPE_CLOSERS = [
   ['loadDataModal', closeLoadDataModal],
   ['settingsModal', closeSettingsModal],
   ['updateModal', closeUpdateModal],
+  ['classPicker', closeClassPicker],
   ['notifPanel', () => toggleNotifPanel(false)],
 ];
 
@@ -377,6 +378,27 @@ const APP_SHORTCUT_HANDLERS = {
     e.preventDefault();
     toggleFixSelected();
   },
+  // Return keyboard focus to the canvas so the keyboard shortcuts work again
+  // after typing in a field (also handled before the input guard below).
+  app_focus_canvas: (e) => {
+    e.preventDefault();
+    canvas.focus({ preventScroll: true });
+    dbg('canvas focused');
+  },
+  app_select_all: (e) => {
+    e.preventDefault();
+    selectAllBoxes();
+  },
+  // Keyboard border editing for the selected box(es): Ctrl+arrow widens,
+  // Ctrl+Shift+arrow narrows the matching border.
+  app_widen_left: (e) => { e.preventDefault(); nudgeSelectedBox('left', true); },
+  app_widen_right: (e) => { e.preventDefault(); nudgeSelectedBox('right', true); },
+  app_widen_up: (e) => { e.preventDefault(); nudgeSelectedBox('top', true); },
+  app_widen_down: (e) => { e.preventDefault(); nudgeSelectedBox('bottom', true); },
+  app_narrow_left: (e) => { e.preventDefault(); nudgeSelectedBox('left', false); },
+  app_narrow_right: (e) => { e.preventDefault(); nudgeSelectedBox('right', false); },
+  app_narrow_up: (e) => { e.preventDefault(); nudgeSelectedBox('top', false); },
+  app_narrow_down: (e) => { e.preventDefault(); nudgeSelectedBox('bottom', false); },
   // app_force_draw is a held modifier, not a keydown action: it is matched on
   // canvas mousedown (see forceDrawActive), so this handler is intentionally a
   // no-op. It exists so the binding can be validated and shown in the bar.
@@ -545,6 +567,7 @@ function shortcutMatches(e, shortcut) {
   if (e.metaKey !== !!want.Meta) return false;
   if (/^[A-Z]$/.test(key)) return e.code === 'Key' + key;
   if (/^[0-9]$/.test(key)) return e.code === 'Digit' + key;
+  if (key === 'SPACE') return e.key === ' ';
   if ((key === 'DELETE' || key === 'BACKSPACE') && (e.key === 'Delete' || e.key === 'Backspace')) return true;
   return e.key.toUpperCase() === key;
 }
@@ -586,6 +609,14 @@ function onGlobalKeyDown(e) {
   const helpInfo = appShortcuts['app_help'];
   if (helpInfo && shortcutMatches(e, helpInfo.shortcut)) {
     runAppAction('app_help', e).catch((err) => console.error('[shortcut] app_help:', err));
+    return;
+  }
+  // Return focus to the canvas from anywhere (even a text field) so the
+  // keyboard shortcuts work again. A focused button keeps Space for activation.
+  const focusInfo = appShortcuts['app_focus_canvas'];
+  if (focusInfo && shortcutMatches(e, focusInfo.shortcut)
+      && !(e.target.matches && e.target.matches('button'))) {
+    runAppAction('app_focus_canvas', e).catch((err) => console.error('[shortcut] app_focus_canvas:', err));
     return;
   }
 

@@ -120,6 +120,10 @@ Full details: [install, update and run](docs/install.md).
 | `.` | hide / show boxes on the image |
 | `,` | toggle box details (outlines only) |
 | `I` | hide all boxes except the selected one |
+| `Space` | focus the canvas (so shortcuts work after typing) |
+| `Ctrl+A` | select all boxes |
+| `Ctrl+←` / `→` / `↑` / `↓` | widen the selected box's matching border |
+| `Ctrl+Shift+←` / `→` / `↑` / `↓` | narrow the selected box's matching border |
 | `Alt+1`…`Alt+9` | toggle a tag by number |
 
 **Ctrl+click** a box to add it to the selection (Ctrl+click again to remove it) —

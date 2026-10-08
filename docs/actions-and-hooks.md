@@ -55,7 +55,17 @@ references).
 | `app_show_hide` | `.` | toggle the box overlay (hidden boxes ignore the mouse) |
 | `app_box_details` | `,` | toggle the box handles, class label and `x` / `/` buttons (outlines only) |
 | `app_isolate_box` | `I` | hide every box except the selected one (needs a selection; hidden boxes ignore the mouse) |
+| `app_focus_canvas` | `Space` | return focus to the canvas so the keyboard shortcuts work again |
+| `app_select_all` | `Ctrl+A` | select every box |
 | `app_fix_box` | `F` | fix / unfix the selected box (transient: never saved) |
+| `app_widen_left` | `Ctrl+←` | widen the selected box's left border |
+| `app_widen_right` | `Ctrl+→` | widen the selected box's right border |
+| `app_widen_up` | `Ctrl+↑` | widen the selected box's top border |
+| `app_widen_down` | `Ctrl+↓` | widen the selected box's bottom border |
+| `app_narrow_left` | `Ctrl+Shift+←` | narrow the selected box's left border |
+| `app_narrow_right` | `Ctrl+Shift+→` | narrow the selected box's right border |
+| `app_narrow_up` | `Ctrl+Shift+↑` | narrow the selected box's top border |
+| `app_narrow_down` | `Ctrl+Shift+↓` | narrow the selected box's bottom border |
 | `app_force_draw` | `Ctrl` | held modifier: hold it and drag to always draw a new box |
 | `app_refresh_images_list` | — | re-scan the image folders; stay on the same image by path |
 | `app_reload_images_list` | — | re-read the server list **without** re-scanning the disk |

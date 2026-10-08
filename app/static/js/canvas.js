@@ -673,6 +673,50 @@ function resizeBox(p) {
   drawFast(); // cached layer + this box only; full draw() runs on mouse-up
 }
 
+// How far each keyboard border nudge moves an edge, in normalized units.
+const BOX_NUDGE_STEP = 0.005;
+
+/**
+ * Move one border of every selected box by the nudge step, keeping the opposite
+ * border fixed. Drives the app_widen_* / app_narrow_* shortcuts.
+ * @param {'left'|'right'|'top'|'bottom'} edge - Which border to move.
+ * @param {boolean} grow - True to widen (outward), false to narrow (inward).
+ */
+function nudgeSelectedBox(edge, grow) {
+  const indices = selectionIndices();
+  if (readonly || !indices.length) return;
+  const d = grow ? BOX_NUDGE_STEP : -BOX_NUDGE_STEP;
+  let changed = false;
+  for (const i of indices) {
+    const b = boxes[i];
+    let { cx, cy, w, h } = b;
+    if (edge === 'left' || edge === 'right') {
+      let x1 = cx - w / 2;
+      let x2 = cx + w / 2;
+      if (edge === 'right') x2 = Math.max(0, Math.min(1, x2 + d));
+      else x1 = Math.max(0, Math.min(1, x1 - d));
+      if (x2 - x1 < 0.001) continue;
+      cx = (x1 + x2) / 2;
+      w = x2 - x1;
+    } else {
+      let y1 = cy - h / 2;
+      let y2 = cy + h / 2;
+      if (edge === 'bottom') y2 = Math.max(0, Math.min(1, y2 + d));
+      else y1 = Math.max(0, Math.min(1, y1 - d));
+      if (y2 - y1 < 0.001) continue;
+      cy = (y1 + y2) / 2;
+      h = y2 - y1;
+    }
+    boxes[i] = { ...b, cx, cy, w, h };
+    changed = true;
+  }
+  if (!changed) return;
+  markDirty();
+  draw();
+  updateHistoryButtons();
+  runHook('on_box_edited');
+}
+
 // ------------------------------------------------------------------------- //
 // read-only mode
 // ------------------------------------------------------------------------- //

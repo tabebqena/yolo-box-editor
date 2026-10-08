@@ -659,6 +659,27 @@ def test_isolate_box_action_is_builtin_and_shipped():
     assert "<I>" in text
 
 
+def test_keyboard_box_actions_are_builtin_and_shipped():
+    for name in (
+        "app_focus_canvas",
+        "app_select_all",
+        "app_widen_left",
+        "app_widen_right",
+        "app_widen_up",
+        "app_widen_down",
+        "app_narrow_left",
+        "app_narrow_right",
+        "app_narrow_up",
+        "app_narrow_down",
+    ):
+        assert name in ybe.config.APP_ACTIONS
+    base = Path(ybe.config.BASE_DIR)
+    text = (base / "shortcuts.txt").read_text(encoding="utf-8")
+    assert "app_select_all" in text and "<Ctrl+A>" in text
+    assert "app_focus_canvas" in text and "<Space>" in text
+    assert "<Ctrl+ArrowLeft>" in text and "<Ctrl+Shift+ArrowLeft>" in text
+
+
 def test_help_content_and_shipped_shortcut_ship():
     base = Path(ybe.config.BASE_DIR)
     # The shipped binding: F1 opens help.

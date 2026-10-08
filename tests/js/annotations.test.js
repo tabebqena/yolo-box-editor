@@ -317,6 +317,61 @@ test('all selected rows are highlighted in the side panel', () => {
   assert.equal(rows[1].classList.contains('selected'), true);
 });
 
+test('app_select_all selects every box', () => {
+  ready({ boxes: [box(), box(), box()], selected: -1 });
+  app.api.runAppAction('app_select_all', { preventDefault() {} });
+  assert.deepEqual(plain(app.api.selectionIndices()), [0, 1, 2]);
+  assert.equal(app.state().selected, 2);
+});
+
+test('app_focus_canvas focuses the canvas element', () => {
+  ready({});
+  app.api.runAppAction('app_focus_canvas', { preventDefault() {} });
+  assert.equal(app.window.document.activeElement, app.$('canvas'));
+});
+
+test('deleting multiple boxes asks for confirmation', () => {
+  ready({ boxes: [box(), box(), box()], selected: 0 });
+  app.api.toggleBoxSelection(1);
+  app.window.confirm = () => false;
+  app.api.deleteSelected();
+  assert.equal(app.state().boxes.length, 3); // cancelled
+  app.window.confirm = () => true;
+  app.api.deleteSelected();
+  assert.equal(app.state().boxes.length, 1);
+});
+
+test('the widen/narrow actions nudge the selected box borders', () => {
+  ready({ imgW: 100, imgH: 100, selected: 0 });
+  app.api.runAppAction('app_widen_right', { preventDefault() {} });
+  assert.equal(Math.round(app.state().boxes[0].w * 1000), 205);
+  assert.equal(Math.round(app.state().boxes[0].cx * 10000), 5025);
+  app.api.runAppAction('app_narrow_right', { preventDefault() {} });
+  assert.equal(Math.round(app.state().boxes[0].w * 1000), 200);
+
+  app.api.runAppAction('app_widen_up', { preventDefault() {} });
+  assert.equal(Math.round(app.state().boxes[0].h * 1000), 205);
+  assert.equal(Math.round(app.state().boxes[0].cy * 10000), 4975);
+
+  app.set({ readonly: true });
+  app.api.runAppAction('app_widen_left', { preventDefault() {} });
+  assert.equal(Math.round(app.state().boxes[0].w * 1000), 200); // no-op
+});
+
+test('the class picker navigates with the arrow keys and digits', () => {
+  ready({ selected: 0, classes: ['cat', 'dog', 'bird'] });
+  app.api.openClassPicker(0, 0);
+  const picker = app.$('classPicker');
+  const buttons = picker.querySelectorAll('button');
+  assert.equal(app.window.document.activeElement, buttons[0]);
+  picker.dispatchEvent(new app.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  assert.equal(app.window.document.activeElement, buttons[1]);
+  picker.dispatchEvent(new app.window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+  assert.equal(app.window.document.activeElement, buttons[0]);
+  picker.dispatchEvent(new app.window.KeyboardEvent('keydown', { key: '2', bubbles: true }));
+  assert.equal(app.state().boxes[0].class, 2);
+});
+
 test('runAppAction rejects an unknown action name', async () => {
   await assert.rejects(() => app.api.runAppAction('app_nope', {}), /unknown app action/);
 });

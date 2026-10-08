@@ -103,7 +103,7 @@ test('fmtNum rounds to four decimals', () => {
 test('shortcutKeyFromEvent maps codes and named keys', () => {
   assert.equal(app.api.shortcutKeyFromEvent({ code: 'KeyA', key: 'a' }), 'A');
   assert.equal(app.api.shortcutKeyFromEvent({ code: 'Digit5', key: '5' }), '5');
-  assert.equal(app.api.shortcutKeyFromEvent({ code: 'Space', key: ' ' }), null);
+  assert.equal(app.api.shortcutKeyFromEvent({ code: 'Space', key: ' ' }), 'Space');
   assert.equal(app.api.shortcutKeyFromEvent({ code: 'Escape', key: 'Escape' }), 'Escape');
   assert.equal(app.api.shortcutKeyFromEvent({ code: 'F1', key: 'F1' }), null);
 });
@@ -115,6 +115,7 @@ test('shortcutMatches respects modifiers, letters, digits and named keys', () =>
   assert.equal(m({ ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, code: 'KeyS', key: 's' }, 'S'), true);
   assert.equal(m({ ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, code: 'Digit3', key: '3' }, '3'), true);
   assert.equal(m({ ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, code: 'Delete', key: 'Delete' }, 'Delete'), true);
+  assert.equal(m({ ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, code: 'Space', key: ' ' }, 'Space'), true);
   assert.equal(m({ ctrlKey: true, altKey: true, shiftKey: true, metaKey: false, code: 'KeyA', key: 'a' }, 'Ctrl+Alt+Shift+A'), true);
 });
 

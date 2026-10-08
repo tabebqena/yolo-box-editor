@@ -308,6 +308,21 @@ function afterBoxRemoved(k) {
   else justDrawn = false;
 }
 
+/**
+ * Select every box (Ctrl+A). Keeps the current primary when there is one, else
+ * uses the last box.
+ */
+function selectAllBoxes() {
+  if (!boxes.length) return;
+  const primary = selected >= 0 ? selected : boxes.length - 1;
+  selectedSet = new Set(boxes.map((_, i) => i));
+  selected = primary;
+  lastSelected = primary;
+  justDrawn = false;
+  syncClassSelect(selected);
+  draw();
+}
+
 // One id per tab, so the server can count concurrent clients (see /api/presence).
 // sessionStorage keeps it across reloads but not across tabs; fall back to a
 // random id when storage or crypto is unavailable.

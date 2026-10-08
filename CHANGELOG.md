@@ -4,6 +4,22 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.23.0] - 2026-10-08
+
+### Added
+
+- **Keyboard box editing.** `Ctrl`+arrow widens the selected box's matching
+  border and `Ctrl`+`Shift`+arrow narrows it (both apply to a whole
+  multi-selection). `Ctrl+A` selects every box, and `Space` returns focus to the
+  canvas so the shortcuts keep working after typing in a field.
+- **The class picker is keyboard-navigable**: Arrow keys move the highlight and
+  `Enter`, a number key or a click picks the class.
+
+### Changed
+
+- **Deleting more than one box now asks for confirmation** (a single box still
+  deletes immediately).
+
 ## [7.22.0] - 2026-10-08
 
 ### Added
