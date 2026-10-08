@@ -22,6 +22,13 @@ import time
 from ybe import procutil as proc
 
 
+INSTALL_DOCS_URL = "https://github.com/tabebqena/yolo-box-editor/blob/main/docs/install.md"
+INSTALL_ONELINER = (
+    "curl -fsSL "
+    "https://raw.githubusercontent.com/tabebqena/yolo-box-editor/main/ybx.sh | sh -s -- install"
+)
+
+
 def app_dir():
     """The shipped `app/` folder (this file's grandparent)."""
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -233,10 +240,27 @@ def do_logs(home, args):
 # --------------------------------------------------------------------------- #
 # delegated installer commands
 # --------------------------------------------------------------------------- #
+def missing_installer_error(path):
+    """Explain a missing `<home>/ybx.py` and how to recover.
+
+    Installs made before the launcher moved to Python (7.15.0) kept only the old
+    shell installer `ybx.sh`; that script copies itself, so it can never leave a
+    `ybx.py` behind. A reinstall is the fix (user files and venv are kept).
+    """
+    die(
+        "cannot find %s\n"
+        "This install was made with the old shell installer, which only saved "
+        "ybx.sh (not the ybx.py that 'ybe update' needs).\n"
+        "Reinstall to fix it; your dataset, extensions and venv are kept. For example:\n"
+        "  %s\n"
+        "Why this is required: %s" % (path, INSTALL_ONELINER, INSTALL_DOCS_URL)
+    )
+
+
 def delegate(home, command, args):
     installer = installer_path(home)
     if not os.path.isfile(installer):
-        die("cannot find %s (reinstall with the installer)" % installer)
+        missing_installer_error(installer)
     result = subprocess.run([sys.executable, installer, command, "--dir", home] + args)
     return result.returncode
 

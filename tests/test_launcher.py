@@ -113,3 +113,13 @@ def test_main_unknown_command_exits_two(tmp_path, capsys):
 def test_main_without_command_prints_usage(capsys):
     assert launcher.main([]) == 0
     assert "Usage:" in capsys.readouterr().out
+
+
+def test_delegate_missing_installer_explains_fix(tmp_path, capsys):
+    with pytest.raises(SystemExit) as exc:
+        launcher.delegate(str(tmp_path), "update", [])
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "ybx.py" in err
+    assert launcher.INSTALL_ONELINER in err
+    assert launcher.INSTALL_DOCS_URL in err
