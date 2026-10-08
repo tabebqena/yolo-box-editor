@@ -122,9 +122,12 @@ Full details: [install, update and run](docs/install.md).
 | `I` | hide all boxes except the selected one |
 | `Alt+1`…`Alt+9` | toggle a tag by number |
 
-`Ctrl`+drag forces a new box inside an existing one. Every action can be
-rebound in **Settings → Shortcuts → Edit** (or by hand in `shortcuts.txt`); see
-[actions and hooks](docs/actions-and-hooks.md#built-in-app-actions).
+**Ctrl+click** a box to add it to the selection (Ctrl+click again to remove it) —
+the same works on a row in the Boxes list. Drag any selected box to move them all
+together, or press `Delete` to remove them all; class changes and `F` apply to the
+whole selection. `Ctrl`+drag still forces a new box inside/over an existing one.
+Every action can be rebound in **Settings → Shortcuts → Edit** (or by hand in
+`shortcuts.txt`); see [actions and hooks](docs/actions-and-hooks.md#built-in-app-actions).
 
 ## Tags at a glance
 

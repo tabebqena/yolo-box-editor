@@ -30,7 +30,7 @@ const MODULE_FILES = [
 // reference instead, because reassigning a const would throw.)
 const LET_STATE = [
   'images', 'splits', 'filters', 'classes', 'currentIndex', 'activeSplit',
-  'activeFilters', 'boxes', 'selected', 'lastSelected', 'defaultClass',
+  'activeFilters', 'boxes', 'selected', 'selectedSet', 'lastSelected', 'defaultClass',
   'justDrawn', 'editingPoint', 'appShortcuts', 'actionShortcuts',
   'shortcutErrors', 'shortcutDefaults', 'userShortcutNames', 'shortcutEditMode',
   'shortcutDraft', 'shortcutResets', 'hookErrors', 'filterErrors', 'appActions',
@@ -43,6 +43,7 @@ const LET_STATE = [
   'debugMode', 'updateInfo', 'serverSettings', 'settingsSaveTimer',
   'pendingSettings', 'notifLog', 'notifUnread', 'autoModalCurrent', 'mode',
   'start', 'dragStart', 'mouse', 'origBox', 'handle', 'loadDataAutoOpened',
+  'dragIndices', 'dragOrigBoxes',
   'tipChecked', 'actionsExpanded', 'shownShortcutErrors', 'presenceTimer',
   'presenceDismissed', 'presenceToast', 'shortcutCapture', 'sidePanelOpen',
   'panelSide', 'settingsInitialized', 'appStarted',
@@ -72,6 +73,11 @@ ${stateKeys}
     }),
     set: (patch) => {
 ${setters}
+      // the app keeps selectedSet in sync with selected; tests that only
+      // patch selected mean a single selection
+      if ('selected' in patch && !('selectedSet' in patch)) {
+        selectedSet = new Set(selected >= 0 ? [selected] : []);
+      }
     },
     // Function declarations live on the window; the few lexical const arrow
     // helpers (el, qs, qsa) are added explicitly.

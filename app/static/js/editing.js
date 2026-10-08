@@ -43,7 +43,7 @@ function pushUndo() {
 function applySnapshot(snap, label) {
   boxes = snap.boxes;
   imageTags = snap.tags;
-  selected = -1;
+  clearBoxSelection();
   justDrawn = false;
   markDirty();
   syncClassSelect(-1);
@@ -73,30 +73,32 @@ function redo() {
 }
 
 /**
- * Delete the currently selected box and record the change.
+ * Delete every selected box and record the change.
  */
 function deleteSelected() {
-  if (selected >= 0) {
-    pushUndo();
-    dbg('box deleted', { index: selected, box: boxes[selected], remaining: boxes.length - 1 });
-    boxes.splice(selected, 1);
-    selected = -1;
-    justDrawn = false;
-    markDirty();
-    draw();
-    updateHistoryButtons();
-    runHook('on_box_deleted');
-  }
+  const indices = selectionIndices();
+  if (!indices.length) return;
+  pushUndo();
+  // delete from the highest index down so the lower indices stay valid
+  for (let k = indices.length - 1; k >= 0; k--) boxes.splice(indices[k], 1);
+  dbg('boxes deleted', { indices, remaining: boxes.length });
+  clearBoxSelection();
+  justDrawn = false;
+  markDirty();
+  draw();
+  updateHistoryButtons();
+  runHook('on_box_deleted');
 }
 
 /**
- * Fix / unfix the selected box. A fixed box ignores dragging (moving and
+ * Fix / unfix every selected box. A fixed box ignores dragging (moving and
  * resizing) but can still be clicked / selected and deleted. The flag is
  * transient UI state: it is never saved and is cleared when the image changes.
  */
 function toggleFixSelected() {
   if (readonly || selected < 0) return;
-  boxes[selected].fixed = !boxes[selected].fixed;
+  const fixed = !boxes[selected].fixed; // apply the primary's new state to all
+  for (const i of selectionIndices()) boxes[i].fixed = fixed;
   draw();
   updateSidePanelState();
 }
@@ -482,7 +484,8 @@ function openClassPicker(x, y) {
       if (selected >= 0) {
         const wasJustDrawn = justDrawn;
         if (!wasJustDrawn) pushUndo();
-        boxes[selected].class = i;
+        // apply to every selected box, not just the primary
+        for (const k of selectionIndices()) boxes[k].class = i;
         justDrawn = false;
         markDirty();
         syncClassSelect(selected);

@@ -14,6 +14,14 @@ const ESCAPE_CLOSERS = [
   ['notifPanel', () => toggleNotifPanel(false)],
 ];
 
+// Ctrl+click on a box toggles it in the selection on mouse-up. The same
+// force-draw modifier (app_force_draw, Ctrl by default) starts a new box when
+// the pointer actually drags, so the toggle is deferred until release.
+let ctrlClick = null;      // {index, start} while a Ctrl+click may be pending
+// A plain click on an already-selected box collapses a multi-selection to it,
+// unless the pointer moves first (then the whole group is dragged).
+let pendingCollapse = -1;
+
 // ------------------------------------------------------------------------- //
 // canvas interaction (draw / move / resize)
 // ------------------------------------------------------------------------- //
@@ -30,11 +38,22 @@ function onCanvasMouseDown(e) {
   const p = canvasPos(e);
   mouse = p;
   dragUndoPushed = false; // a new drag starts its own undo snapshot
-  // modifier held (app_force_draw): always start a new box, whatever is under
-  // the cursor — lets you draw inside / on top of an existing box.
+  pendingCollapse = -1;
+  const hit = hitTest(p);
+
+  // force-draw modifier (app_force_draw): draw a new box on top of whatever is
+  // under the cursor. On a box it clashes with Ctrl+click multi-select, so
+  // defer: a click toggles the box, a drag draws (handled on mouse-move/up).
   if (forceDrawActive(e)) {
+    const idx = hit.type === 'handle' ? selected : hit.index;
+    if ((e.ctrlKey || e.metaKey) && hit.type !== 'none' && idx >= 0) {
+      mode = 'ctrl-click';
+      ctrlClick = { index: idx, start: p };
+      dragStart = p;
+      return;
+    }
     mode = 'drawing';
-    selected = -1;
+    clearBoxSelection();
     justDrawn = false;
     moved = false;
     start = p;
@@ -44,14 +63,11 @@ function onCanvasMouseDown(e) {
     return;
   }
 
-  const hit = hitTest(p);
-
   if (hit.type === 'delete') {
     pushUndo();
     boxes.splice(hit.index, 1);
-    selected = -1;
-    justDrawn = false;
-    syncClassSelect(-1);
+    afterBoxRemoved(hit.index);
+    syncClassSelect(selected);
     markDirty();
     draw();
     updateHistoryButtons();
@@ -60,7 +76,7 @@ function onCanvasMouseDown(e) {
   }
 
   if (hit.type === 'class') {
-    selected = hit.index;
+    selectOnlyBox(hit.index);
     justDrawn = false;
     dirty = true;
     syncClassSelect(selected);
@@ -73,23 +89,44 @@ function onCanvasMouseDown(e) {
   if (hit.type === 'handle') {
     mode = 'resizing';
     handle = hit.handle;
-    selected = hit.index;
     justDrawn = false;
     moved = false;
     dragStart = p;
     origBox = { ...boxes[selected] };
+    dragIndices = [selected];
+    dragOrigBoxes = null;
   } else if (hit.type === 'box' && !boxes[hit.index].fixed) {
+    // Ctrl/Meta+click toggles the box in the selection (also reached here when
+    // app_force_draw is rebound away from Ctrl)
+    if (e.ctrlKey || e.metaKey) {
+      toggleBoxSelection(hit.index);
+      justDrawn = false;
+      syncClassSelect(selected);
+      draw();
+      updateHistoryButtons();
+      return;
+    }
     mode = 'moving';
-    selected = hit.index;
+    if (isBoxSelected(hit.index)) {
+      // keep a multi-selection so the drag moves the whole group; collapse to
+      // this box on mouse-up when the pointer does not move
+      selected = hit.index;
+      pendingCollapse = hit.index;
+    } else {
+      selectOnlyBox(hit.index);
+    }
     justDrawn = false;
     moved = false;
     dragStart = p;
     origBox = { ...boxes[selected] };
+    dragIndices = selectionIndices();
+    dragOrigBoxes = dragIndices.map((i) => ({ i, b: { ...boxes[i] } }));
   } else {
     // empty space, or a fixed box: a plain click selects a fixed box (so it
     // can be unfixed), a drag draws a new box on top of it.
     mode = 'drawing';
-    selected = hit.type === 'box' ? hit.index : -1;
+    if (hit.type === 'box') selectOnlyBox(hit.index);
+    else clearBoxSelection();
     justDrawn = false;
     moved = false;
     start = p;
@@ -107,6 +144,18 @@ function onCanvasMouseDown(e) {
  */
 function onWindowMouseMove(e) {
   const p = canvasPos(e);
+  if (mode === 'ctrl-click') {
+    // moved past the click threshold: the force-draw modifier wins after all
+    if (Math.hypot(p.x - dragStart.x, p.y - dragStart.y) > 4) {
+      mode = 'drawing';
+      start = dragStart;
+      mouse = clampToImage(p);
+      ctrlClick = null;
+      dirty = true;
+      draw();
+    }
+    return;
+  }
   if (mode === 'drawing' && start) {
     mouse = clampToImage(p);
     drawFast(); // no box changed: cached layer + the in-progress rectangle
@@ -129,6 +178,18 @@ function onWindowMouseMove(e) {
  * @returns {void}
  */
 function onWindowMouseUp(e) {
+  if (mode === 'ctrl-click' && ctrlClick) {
+    toggleBoxSelection(ctrlClick.index);
+    justDrawn = false;
+    syncClassSelect(selected);
+    draw();
+    updateHistoryButtons();
+    mode = 'idle';
+    ctrlClick = null;
+    dragStart = null;
+    updateCursor(canvasPos(e));
+    return;
+  }
   const edited = (mode === 'moving' || mode === 'resizing') && moved;
   let created = false;
   if (mode === 'drawing' && start) {
@@ -138,7 +199,7 @@ function onWindowMouseUp(e) {
       nb.class = defaultClass;
       pushUndo();
       boxes.push(nb);
-      selected = boxes.length - 1;
+      selectOnlyBox(boxes.length - 1);
       justDrawn = true;
       created = true;
       dbg('box created', { box: nb, total: boxes.length });
@@ -150,6 +211,14 @@ function onWindowMouseUp(e) {
   start = null;
   dragStart = null;
   origBox = null;
+  dragIndices = [];
+  dragOrigBoxes = null;
+  // a click (no drag) on an already-selected box collapses the selection to it
+  if (pendingCollapse >= 0 && !moved) {
+    selectOnlyBox(pendingCollapse);
+    syncClassSelect(selected);
+  }
+  pendingCollapse = -1;
   draw();
   updateCursor(canvasPos(e));
   updateHistoryButtons();
@@ -199,9 +268,9 @@ async function reloadImagesList(url, init, tag, label) {
 function selectRelativeBox(delta) {
   if (!boxes.length) return;
   if (selected < 0) {
-    selected = Math.min(Math.max(lastSelected, 0), boxes.length - 1);
+    selectOnlyBox(Math.min(Math.max(lastSelected, 0), boxes.length - 1));
   } else {
-    selected = (selected + delta + boxes.length) % boxes.length;
+    selectOnlyBox((selected + delta + boxes.length) % boxes.length);
   }
   justDrawn = false;
   syncClassSelect(selected);
@@ -221,7 +290,7 @@ const APP_SHORTCUT_HANDLERS = {
     if (justDrawn && selected >= 0) {
       // drop the box that was just drawn by mistake
       boxes.splice(selected, 1);
-      selected = -1;
+      clearBoxSelection();
       justDrawn = false;
       // creation pushed an undo snapshot; dropping the new box returns to it
       if (undoStack.length) undoStack.pop();
@@ -236,7 +305,7 @@ const APP_SHORTCUT_HANDLERS = {
       start = null;
       draw();
     } else if (selected >= 0) {
-      selected = -1;
+      clearBoxSelection();
       syncClassSelect(-1);
       draw();
     }
@@ -274,7 +343,7 @@ const APP_SHORTCUT_HANDLERS = {
     pushUndo();
     boxes = Array.isArray(data.boxes) ? data.boxes.map((b) => ({ ...b })) : [];
     imageTags = Array.isArray(data.tags) ? [...data.tags] : [];
-    selected = -1;
+    clearBoxSelection();
     justDrawn = false;
     markDirty();
     syncClassSelect(-1);
@@ -429,7 +498,7 @@ function escDeactivateRow(e) {
   if (e.target.matches && e.target.matches('.box-row-ctl')) {
     e.target.blur(); // clears the editing-point highlight
     if (selected >= 0) {
-      selected = -1;
+      clearBoxSelection();
       syncClassSelect(-1);
       draw();
     }
@@ -627,7 +696,8 @@ function wireEditingControls() {
       const v = parseInt(classSelectEl.value, 10);
       if (selected >= 0) {
         if (readonly) return;
-        boxes[selected].class = v;
+        // apply to every selected box, not just the primary
+        for (const i of selectionIndices()) boxes[i].class = v;
         justDrawn = false;
         markDirty();
         draw();

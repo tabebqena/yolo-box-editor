@@ -8,7 +8,7 @@
 function resetToEmptyImage() {
   currentIndex = -1;
   boxes = [];
-  selected = -1;
+  clearBoxSelection();
   imageTags = [];
   imgW = 0;
   imgH = 0;
@@ -227,7 +227,7 @@ function loadImage(i) {
   i = Math.max(0, Math.min(images.length - 1, i));
   currentIndex = i;
   const requested = i; // this image may be replaced before the fetches resolve
-  selected = -1;
+  clearBoxSelection();
   justDrawn = false;
   dirty = false;
   clearTimeout(autoSaveTimer); // a stale auto-save must not fire on the new image

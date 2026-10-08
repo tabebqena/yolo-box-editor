@@ -159,8 +159,10 @@ let activeFilters = [];         // active filter chain, run top to bottom
 let boxes = [];        // normalized: {class, cx, cy, w, h, fixed?}
                        // `fixed` is transient (never saved / reloaded): it is
                        // dropped when the image changes and is not written to labels
-// Index of the selected box, or -1.
+// Index of the primary selected box, or -1. `selectedSet` holds every selected
+// index (including the primary); plain clicks select one, Ctrl+click toggles.
 let selected = -1;
+let selectedSet = new Set(); // all selected box indices
 let lastSelected = 0; // most recent selected index; Shift resumes here after Esc
 // Default class index used when drawing a new box.
 let defaultClass = 0;
@@ -225,6 +227,86 @@ const CHANGELOG_SEEN_KEY = 'ybe_changelog_seen'; // localStorage: last version's
 const TIP_LAST_KEY = 'ybe_tip_last';   // localStorage: date the last tip was shown
 const TIPS_SEEN_KEY = 'ybe_tips_seen'; // localStorage: tip indices already shown
 const UPDATE_POLL_MS = [4000, 12000]; // retries to pick up the start-thread result
+
+// --- box selection helpers ------------------------------------------------ //
+// A plain click selects one box; Ctrl+click toggles a box into the selection.
+// The primary (`selected`) is the most recently picked one.
+
+/**
+ * Select exactly box `i` (or clear everything when `i` is negative).
+ * @param {number} i
+ */
+function selectOnlyBox(i) {
+  selectedSet = new Set(i >= 0 ? [i] : []);
+  selected = i;
+  if (i >= 0) lastSelected = i;
+}
+
+/**
+ * Clear the whole box selection.
+ */
+function clearBoxSelection() {
+  selectedSet = new Set();
+  selected = -1;
+}
+
+/**
+ * Toggle box `i` in the selection (Ctrl+click). When the primary is toggled
+ * off, another selected box becomes primary.
+ * @param {number} i
+ */
+function toggleBoxSelection(i) {
+  if (i < 0) return;
+  if (selectedSet.has(i)) {
+    selectedSet.delete(i);
+    if (selected === i) selected = selectedSet.size ? Math.max(...selectedSet) : -1;
+  } else {
+    selectedSet.add(i);
+    selected = i;
+    lastSelected = i;
+  }
+  if (selected < 0) justDrawn = false;
+}
+
+/**
+ * Selected box indices, ascending. Always includes the primary, so callers see
+ * a single box even if a code path only set `selected`.
+ * @returns {number[]}
+ */
+function selectionIndices() {
+  const s = new Set(selectedSet);
+  if (selected >= 0) s.add(selected);
+  s.delete(-1);
+  return [...s].sort((a, b) => a - b);
+}
+
+/**
+ * True when box `i` is part of the selection.
+ * @param {number} i
+ * @returns {boolean}
+ */
+function isBoxSelected(i) {
+  return i === selected || selectedSet.has(i);
+}
+
+/**
+ * Re-map the selection after the box at index `k` was removed (indices above
+ * `k` shift down by one).
+ * @param {number} k
+ */
+function afterBoxRemoved(k) {
+  const next = new Set();
+  for (const i of selectedSet) {
+    if (i === k) continue;
+    next.add(i > k ? i - 1 : i);
+  }
+  selectedSet = next;
+  if (!selectedSet.has(selected)) {
+    selected = selectedSet.size ? Math.max(...selectedSet) : -1;
+  }
+  if (selected >= 0) lastSelected = selected;
+  else justDrawn = false;
+}
 
 // One id per tab, so the server can count concurrent clients (see /api/presence).
 // sessionStorage keeps it across reloads but not across tabs; fall back to a

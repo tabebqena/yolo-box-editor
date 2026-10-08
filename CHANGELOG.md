@@ -4,6 +4,19 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.22.0] - 2026-10-08
+
+### Added
+
+- **Multi-select boxes.** Hold **Ctrl** and click boxes on the canvas (or their
+  rows in the Boxes list) to add them to the selection; Ctrl+click again to
+  toggle one off. Dragging any selected box moves the whole group, and
+  **Delete** removes every selected box. Class changes (the `/` picker, the top
+  class select and a row's class) and the fix toggle apply to the whole
+  selection, and `app_isolate_box` shows all selected boxes. Because **Ctrl** is
+  also the force-draw modifier, a Ctrl+**click** toggles while a Ctrl+**drag**
+  still draws a new box.
+
 ## [7.21.0] - 2026-10-08
 
 ### Added

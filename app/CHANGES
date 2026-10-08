@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.22.0
+- Select several boxes at once: hold Ctrl and click boxes to add or remove them (Ctrl+click again to toggle). Drag any selected box to move the whole group, or press Delete to remove them all; class changes and the fix toggle apply to the whole selection. Ctrl still force-draws a new box when you drag.
+
 ## 7.21.0
 - New shortcut: press `I` to hide every box except the selected one, so a single box is easy to inspect among many. Hidden boxes ignore the mouse; press `I` again (or deselect) to show them all. Rebindable like any other shortcut.
 

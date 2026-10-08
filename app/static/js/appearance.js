@@ -589,14 +589,17 @@ function initAppearance() {
 }
 
 /**
- * Select a box from the side panel and refresh the canvas.
+ * Select a box from the side panel and refresh the canvas. Ctrl+click toggles
+ * the box in the selection.
  * @param {number} i - Box index.
+ * @param {MouseEvent} [e] - The click event (for the Ctrl/Meta modifier).
  */
-function selectFromPanel(i) {
+function selectFromPanel(i, e) {
   closeClassPicker();
-  selected = i;
+  if (e && (e.ctrlKey || e.metaKey)) toggleBoxSelection(i);
+  else selectOnlyBox(i);
   justDrawn = false;
-  syncClassSelect(i);
+  syncClassSelect(selected);
   draw();
 }
 
@@ -677,12 +680,14 @@ function renderSidePanel() {
 
     row.addEventListener('click', (e) => {
       if (e.target.closest('select, input, button')) return;
-      selectFromPanel(i);
+      selectFromPanel(i, e);
     });
     cls.addEventListener('change', () => {
       if (readonly) return;
       pushUndo();
-      boxes[i].class = parseInt(cls.value, 10);
+      // a change on a selected row applies to the whole selection
+      const targets = isBoxSelected(i) ? selectionIndices() : [i];
+      for (const k of targets) boxes[k].class = parseInt(cls.value, 10);
       justDrawn = false;
       markDirty();
       draw();
@@ -736,12 +741,7 @@ function renderSidePanel() {
       if (readonly) return;
       pushUndo();
       boxes.splice(i, 1);
-      if (selected === i) {
-        selected = -1;
-        justDrawn = false;
-      } else if (selected > i) {
-        selected -= 1;
-      }
+      afterBoxRemoved(i);
       syncClassSelect(selected);
       markDirty();
       draw();
@@ -764,7 +764,7 @@ function updateSidePanelRow(row, i) {
   const b = boxes[i];
   if (!b) return;
   const on = i === selected && !readonly;
-  row.classList.toggle('selected', i === selected);
+  row.classList.toggle('selected', isBoxSelected(i));
   row.classList.toggle('fixed', !!b.fixed);
   const idx = row.querySelector('.box-row-idx');
   if (idx) idx.textContent = i;

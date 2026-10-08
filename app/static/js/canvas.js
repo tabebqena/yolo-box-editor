@@ -9,6 +9,12 @@ let mouse = null;      // canvas px
 let origBox = null;    // normalized snapshot at drag start
 // active resize-handle name (nw, n, …) during a resize
 let handle = null;
+// Indices left out of the cached base layer while interacting (the boxes being
+// moved/resized); empty when idle. Group moves leave every selected box out.
+let dragIndices = [];
+// Normalized snapshots of the boxes being moved, so a group move applies the
+// same delta to each of them.
+let dragOrigBoxes = null;
 
 // Offscreen layer holding the image and every box except the one being
 // dragged, so a per-mousemove redraw can blit it and repaint only the active
@@ -16,7 +22,7 @@ let handle = null;
 // with many boxes). Built lazily and re-sized with the main canvas.
 let baseCanvas = null;
 let baseCtx = null;
-let baseExclude = -1;   // box index left out of the layer (-1 = none)
+let baseExclude = '';   // key of the box-index set left out of the layer ('' = none)
 let baseReady = false;  // layer matches the current scene
 
 // The decoded frame currently on screen, preferred over `imageEl`. It is a
@@ -72,7 +78,7 @@ function blankImage() {
   canvas.height = 0;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   boxes = [];
-  selected = -1;
+  clearBoxSelection();
   imageTags = [];
   draw();
 }
@@ -236,15 +242,19 @@ function drawFast() {
  */
 function paintScene(forceBase) {
   const interacting = mode === 'moving' || mode === 'resizing';
-  // while dragging, the layer must not contain the box being dragged
-  const exclude = interacting ? selected : -1;
-  ensureBase(exclude, forceBase);
+  // while dragging, the layer must not contain the box(es) being dragged
+  const excludes = interacting
+    ? (dragIndices.length ? dragIndices : selectionIndices())
+    : [];
+  ensureBase(excludes, forceBase);
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(baseCanvas, 0, 0);
 
-  if (interacting && selected >= 0 && boxes[selected]) {
-    paintBox(ctx, boxes[selected], selected);
+  if (interacting) {
+    for (const i of excludes) {
+      if (boxes[i]) paintBox(ctx, boxes[i], i);
+    }
   }
 
   // a coordinate input highlight only survives while that input keeps focus
@@ -268,10 +278,10 @@ function paintScene(forceBase) {
  * Make sure the base layer is the right size and holds the current scene with
  * `exclude` left out. Rebuilds only when forced, invalidated, or the excluded
  * box changed.
- * @param {number} exclude - Box index to leave out (-1 for all of them).
+ * @param {number[]} excludes - Box indices to leave out ([] for all of them).
  * @param {boolean} force - Rebuild even when the layer looks current.
  */
-function ensureBase(exclude, force) {
+function ensureBase(excludes, force) {
   if (!baseCanvas) {
     baseCanvas = document.createElement('canvas');
     baseCtx = baseCanvas.getContext('2d');
@@ -281,29 +291,32 @@ function ensureBase(exclude, force) {
     baseCanvas.height = canvas.height;
     force = true; // resizing a canvas clears it
   }
-  if (force || !baseReady || baseExclude !== exclude) {
-    renderBase(exclude);
-    baseExclude = exclude;
+  const key = excludes.join(',');
+  if (force || !baseReady || baseExclude !== key) {
+    renderBase(excludes);
+    baseExclude = key;
     baseReady = true;
   }
 }
 
 /**
- * True when box `idx` must stay hidden: `app_isolate_box` is on and a box is
- * selected, so every box other than the selected one is neither drawn nor
+ * True when box `idx` must stay hidden: `app_isolate_box` is on and a selection
+ * exists, so every box other than the selected ones is neither drawn nor
  * hit-tested.
  * @param {number} idx
  * @returns {boolean}
  */
 function boxHidden(idx) {
-  return isolateSelected && selected >= 0 && idx !== selected;
+  if (!isolateSelected) return false;
+  if (selected < 0 && selectedSet.size === 0) return false;
+  return !isBoxSelected(idx);
 }
 
 /**
- * Draw the image and every box (except `exclude`) into the base layer.
- * @param {number} exclude - Box index to skip (-1 for none).
+ * Draw the image and every box (except `excludes`) into the base layer.
+ * @param {number[]} excludes - Box indices to skip.
  */
-function renderBase(exclude) {
+function renderBase(excludes) {
   baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
   if (currentBitmap) {
     baseCtx.drawImage(currentBitmap, 0, 0);
@@ -311,8 +324,10 @@ function renderBase(exclude) {
     baseCtx.drawImage(imageEl, 0, 0);
   }
   if (!boxesVisible) return;
+  const skip = excludes.length ? new Set(excludes) : null;
   boxes.forEach((b, idx) => {
-    if (idx === exclude || boxHidden(idx)) return;
+    if (skip && skip.has(idx)) return;
+    if (boxHidden(idx)) return;
     paintBox(baseCtx, b, idx);
   });
 }
@@ -325,7 +340,7 @@ function renderBase(exclude) {
  */
 function paintBox(g, b, idx) {
   const r = toPx(b);
-  const active = idx === selected;
+  const active = isBoxSelected(idx);
   const fixed = !!b.fixed;
   // fixed boxes: muted dashed outline, no resize handles (they ignore dragging
   // but can still be clicked / selected)
@@ -600,13 +615,20 @@ function moveBox(p) {
   if (!dragUndoPushed) { pushUndo(); dragUndoPushed = true; }
   const dx = (p.x - dragStart.x) / imgW;
   const dy = (p.y - dragStart.y) / imgH;
-  // clamp the centre so the whole box stays inside the image, not just its
-  // centre point (the window-level drag can report coordinates off-canvas)
-  const cx = Math.max(origBox.w / 2, Math.min(1 - origBox.w / 2, origBox.cx + dx));
-  const cy = Math.max(origBox.h / 2, Math.min(1 - origBox.h / 2, origBox.cy + dy));
-  boxes[selected] = { ...origBox, cx, cy };
+  // Move every selected box (a plain click selects one; Ctrl+click adds more).
+  const list = dragOrigBoxes && dragOrigBoxes.length
+    ? dragOrigBoxes
+    : [{ i: selected, b: origBox }];
+  for (const { i, b } of list) {
+    if (!b) continue;
+    // clamp the centre so the whole box stays inside the image, not just its
+    // centre point (the window-level drag can report coordinates off-canvas)
+    const cx = Math.max(b.w / 2, Math.min(1 - b.w / 2, b.cx + dx));
+    const cy = Math.max(b.h / 2, Math.min(1 - b.h / 2, b.cy + dy));
+    boxes[i] = { ...b, cx, cy };
+  }
   moved = true;
-  drawFast(); // cached layer + this box only; full draw() runs on mouse-up
+  drawFast(); // cached layer + the moved boxes; full draw() runs on mouse-up
 }
 
 /**
@@ -673,7 +695,7 @@ function applyReadonly() {
 el('readonlySw').addEventListener('change', (e) => {
   readonly = e.target.checked;
   if (readonly) {
-    selected = -1;
+    clearBoxSelection();
     clearTimeout(autoSaveTimer); // no writes in read-only mode
     autoSaveTimer = null;
   }

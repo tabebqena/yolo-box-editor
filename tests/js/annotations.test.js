@@ -265,6 +265,58 @@ test('app_isolate_box keeps only the selected box hit-testable', () => {
   assert.equal(app.api.hitTest({ x: 10, y: 10 }).type, 'none'); // other hidden
 });
 
+test('toggleBoxSelection adds and removes boxes (Ctrl+click)', () => {
+  ready({ boxes: [box(), box(), box()] });
+  app.api.selectOnlyBox(0);
+  assert.deepEqual(plain(app.api.selectionIndices()), [0]);
+  app.api.toggleBoxSelection(2);
+  assert.deepEqual(plain(app.api.selectionIndices()), [0, 2]);
+  assert.equal(app.state().selected, 2);
+
+  app.api.toggleBoxSelection(0); // remove the non-primary
+  assert.deepEqual(plain(app.api.selectionIndices()), [2]);
+  assert.equal(app.state().selected, 2);
+
+  app.api.toggleBoxSelection(2); // remove the primary -> nothing selected
+  assert.deepEqual(plain(app.api.selectionIndices()), []);
+  assert.equal(app.state().selected, -1);
+});
+
+test('deleteSelected removes every selected box', () => {
+  ready({ boxes: [box(), box(), box()], selected: 0 });
+  app.api.toggleBoxSelection(1);
+  app.api.deleteSelected();
+  assert.equal(app.state().boxes.length, 1);
+  assert.equal(app.state().selected, -1);
+  assert.deepEqual(plain(app.api.selectionIndices()), []);
+});
+
+test('dragging a box moves the whole selection', () => {
+  ready({
+    imgW: 100, imgH: 100, selected: 0,
+    boxes: [box({ cx: 0.2 }), box({ cx: 0.5 }), box({ cx: 0.8 })],
+  });
+  app.api.toggleBoxSelection(1); // select boxes 0 and 1 (not 2)
+  app.set({
+    dragStart: { x: 0, y: 0 },
+    dragUndoPushed: true,
+    dragOrigBoxes: app.api.selectionIndices().map((i) => ({ i, b: { ...app.state().boxes[i] } })),
+  });
+  app.api.moveBox({ x: 10, y: 0 }); // +0.1 in normalized x
+  assert.equal(Math.round(app.state().boxes[0].cx * 100), 30);
+  assert.equal(Math.round(app.state().boxes[1].cx * 100), 60);
+  assert.equal(Math.round(app.state().boxes[2].cx * 100), 80); // untouched
+});
+
+test('all selected rows are highlighted in the side panel', () => {
+  ready({ boxes: [box(), box()], selected: 0 });
+  app.api.toggleBoxSelection(1);
+  app.api.renderSidePanel();
+  const rows = app.$('boxList').querySelectorAll('.box-row');
+  assert.equal(rows[0].classList.contains('selected'), true);
+  assert.equal(rows[1].classList.contains('selected'), true);
+});
+
 test('runAppAction rejects an unknown action name', async () => {
   await assert.rejects(() => app.api.runAppAction('app_nope', {}), /unknown app action/);
 });
