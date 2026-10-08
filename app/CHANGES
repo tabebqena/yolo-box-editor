@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.21.0
+- New shortcut: press `I` to hide every box except the selected one, so a single box is easy to inspect among many. Hidden boxes ignore the mouse; press `I` again (or deselect) to show them all. Rebindable like any other shortcut.
+
 ## 7.20.0
 - Login is now opt-in. A fresh install has no account and opens with no sign-in, so a local, single-user setup gets no password prompt. To protect a shared or LAN instance, add an account with `--create-user NAME`; then sign-in is required until you delete `users.json`. The public `admin` / `admin` default account is gone.
 

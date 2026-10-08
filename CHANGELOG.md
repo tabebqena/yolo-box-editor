@@ -4,6 +4,20 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.21.0] - 2026-10-08
+
+### Added
+
+- **Isolate the selected box** (`app_isolate_box`, default key `I`): hide every
+  box except the selected one to inspect it among many; hidden boxes ignore the
+  mouse. Press `I` again — or deselect — to show them all. Rebindable in
+  **Settings → Shortcuts** and remembered per browser.
+
+### Fixed
+
+- The README keyboard cheat sheet now lists `F1` (open help) and `,` (toggle box
+  details), which were missing.
+
 ## [7.20.0] - 2026-10-08
 
 ### Changed

@@ -38,7 +38,7 @@ const LET_STATE = [
   'actionDefs', 'hookDefs', 'filterDefs', 'yamlEditor', 'undoStack', 'redoStack',
   'moved', 'dragUndoPushed', 'imgW', 'imgH', 'dirty', 'readonly',
   'datasetLoaded', 'availableTags', 'imageTags', 'boxesVisible',
-  'boxDetailsVisible',
+  'boxDetailsVisible', 'isolateSelected',
   'currentDataYaml', 'hooksByName', 'hookInFlight', 'autoSave', 'autoSaveTimer',
   'debugMode', 'updateInfo', 'serverSettings', 'settingsSaveTimer',
   'pendingSettings', 'notifLog', 'notifUnread', 'autoModalCurrent', 'mode',
@@ -53,7 +53,7 @@ const CONST_NAMES = [
   'APP_SHORTCUT_ORDER', 'EXT_TYPE_LABELS', 'SHORTCUT_MODIFIERS',
   'DOCK_LOCATIONS', 'TOAST_MAX', 'NOTIF_LOG_MAX', 'FILTER_CHAIN_MAX',
   'LAST_IMAGE_KEY', 'VIEW_KEY', 'SHOW_BOXES_KEY', 'CLIENT_ID',
-  'SHOW_BOX_DETAILS_KEY',
+  'SHOW_BOX_DETAILS_KEY', 'ISOLATE_BOX_KEY',
 ];
 
 function bridgeSource() {

@@ -119,6 +119,7 @@ Full details: [install, update and run](docs/install.md).
 | `F` | fix / unfix the selected box |
 | `.` | hide / show boxes on the image |
 | `,` | toggle box details (outlines only) |
+| `I` | hide all boxes except the selected one |
 | `Alt+1`…`Alt+9` | toggle a tag by number |
 
 `Ctrl`+drag forces a new box inside an existing one. Every action can be

@@ -247,6 +247,24 @@ test('app_box_details hides the corner buttons and handles from hit-testing', ()
   assert.equal(app.api.hitTest({ x: 40, y: 40 }).type, 'box');
 });
 
+test('app_isolate_box toggles the isolate flag', () => {
+  ready({ isolateSelected: false });
+  app.api.runAppAction('app_isolate_box', { preventDefault() {} });
+  assert.equal(app.state().isolateSelected, true);
+  app.api.runAppAction('app_isolate_box', { preventDefault() {} });
+  assert.equal(app.state().isolateSelected, false);
+});
+
+test('app_isolate_box keeps only the selected box hit-testable', () => {
+  const other = box({ cx: 0.1, cy: 0.1, w: 0.2, h: 0.2 }); // spans x/y 0..20
+  ready({ imgW: 100, imgH: 100, boxes: [box(), other], selected: 0, boxDetailsVisible: false });
+  assert.equal(app.api.hitTest({ x: 50, y: 50 }).type, 'box'); // selected
+  assert.equal(app.api.hitTest({ x: 10, y: 10 }).type, 'box'); // other, still shown
+  app.set({ isolateSelected: true });
+  assert.equal(app.api.hitTest({ x: 50, y: 50 }).type, 'box'); // selected stays
+  assert.equal(app.api.hitTest({ x: 10, y: 10 }).type, 'none'); // other hidden
+});
+
 test('runAppAction rejects an unknown action name', async () => {
   await assert.rejects(() => app.api.runAppAction('app_nope', {}), /unknown app action/);
 });

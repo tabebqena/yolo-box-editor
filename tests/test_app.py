@@ -651,6 +651,14 @@ def test_app_help_action_is_builtin():
     assert "app_help" in ybe.config.APP_ACTIONS
 
 
+def test_isolate_box_action_is_builtin_and_shipped():
+    assert "app_isolate_box" in ybe.config.APP_ACTIONS
+    base = Path(ybe.config.BASE_DIR)
+    text = (base / "shortcuts.txt").read_text(encoding="utf-8")
+    assert "app_isolate_box" in text
+    assert "<I>" in text
+
+
 def test_help_content_and_shipped_shortcut_ship():
     base = Path(ybe.config.BASE_DIR)
     # The shipped binding: F1 opens help.

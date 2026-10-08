@@ -54,6 +54,7 @@ references).
 | `app_escape` | `Esc` | deactivate the focused row control |
 | `app_show_hide` | `.` | toggle the box overlay (hidden boxes ignore the mouse) |
 | `app_box_details` | `,` | toggle the box handles, class label and `x` / `/` buttons (outlines only) |
+| `app_isolate_box` | `I` | hide every box except the selected one (needs a selection; hidden boxes ignore the mouse) |
 | `app_fix_box` | `F` | fix / unfix the selected box (transient: never saved) |
 | `app_force_draw` | `Ctrl` | held modifier: hold it and drag to always draw a new box |
 | `app_refresh_images_list` | — | re-scan the image folders; stay on the same image by path |

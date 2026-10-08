@@ -295,6 +295,14 @@ const APP_SHORTCUT_HANDLERS = {
     settingsSet(SHOW_BOX_DETAILS_KEY, boxDetailsVisible ? '1' : '0');
     draw();
   },
+  // Hide every box but the selected one (needs a selection to take effect; with
+  // none selected all boxes stay visible). Hidden boxes are not hit-tested.
+  app_isolate_box: (e) => {
+    e.preventDefault();
+    isolateSelected = !isolateSelected;
+    settingsSet(ISOLATE_BOX_KEY, isolateSelected ? '1' : '0');
+    draw();
+  },
   app_fix_box: (e) => {
     if (readonly || selected < 0) return;
     e.preventDefault();
@@ -544,6 +552,7 @@ function initSettings() {
   autoSave = el('autoSaveSw').checked;
   boxesVisible = settingsGet(SHOW_BOXES_KEY) !== '0';
   boxDetailsVisible = settingsGet(SHOW_BOX_DETAILS_KEY) !== '0';
+  isolateSelected = settingsGet(ISOLATE_BOX_KEY) === '1';
   el('tipsSw').checked = settingsGet('ybe_tips_enabled') !== '0';
 }
 

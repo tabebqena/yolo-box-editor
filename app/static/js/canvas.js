@@ -289,6 +289,17 @@ function ensureBase(exclude, force) {
 }
 
 /**
+ * True when box `idx` must stay hidden: `app_isolate_box` is on and a box is
+ * selected, so every box other than the selected one is neither drawn nor
+ * hit-tested.
+ * @param {number} idx
+ * @returns {boolean}
+ */
+function boxHidden(idx) {
+  return isolateSelected && selected >= 0 && idx !== selected;
+}
+
+/**
  * Draw the image and every box (except `exclude`) into the base layer.
  * @param {number} exclude - Box index to skip (-1 for none).
  */
@@ -301,7 +312,7 @@ function renderBase(exclude) {
   }
   if (!boxesVisible) return;
   boxes.forEach((b, idx) => {
-    if (idx === exclude) return;
+    if (idx === exclude || boxHidden(idx)) return;
     paintBox(baseCtx, b, idx);
   });
 }
@@ -504,12 +515,14 @@ function hitTest(p) {
   if (h) return { type: 'handle', handle: h, index: selected };
   if (boxDetailsVisible) {
     for (let i = boxes.length - 1; i >= 0; i--) {
+      if (boxHidden(i)) continue;
       const d = deleteBtnRect(toPx(boxes[i]));
       if (p.x >= d.x && p.x <= d.x + d.w && p.y >= d.y && p.y <= d.y + d.h) {
         return { type: 'delete', index: i };
       }
     }
     for (let i = boxes.length - 1; i >= 0; i--) {
+      if (boxHidden(i)) continue;
       const c = classBtnRect(toPx(boxes[i]));
       if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
         return { type: 'class', index: i };
@@ -517,6 +530,7 @@ function hitTest(p) {
     }
   }
   for (let i = boxes.length - 1; i >= 0; i--) {
+    if (boxHidden(i)) continue;
     const r = toPx(boxes[i]);
     if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
       return { type: 'box', index: i };

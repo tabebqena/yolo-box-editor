@@ -127,6 +127,7 @@ APP_ACTIONS = {
     "app_escape",
     "app_show_hide",
     "app_box_details",
+    "app_isolate_box",
     "app_fix_box",
     "app_force_draw",
     "app_refresh_images_list",
