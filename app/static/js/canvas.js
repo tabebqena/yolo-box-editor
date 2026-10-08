@@ -262,6 +262,12 @@ function scheduleFastDraw() {
  * @param {boolean} forceBase - Rebuild the base layer even if it looks valid.
  */
 function paintScene(forceBase) {
+  // A zero-sized canvas (no image yet, or a failed load blanked it) has nothing
+  // to compose; blitting the matching zero-sized base layer would throw.
+  if (!canvas.width || !canvas.height) {
+    baseReady = false;
+    return;
+  }
   const interacting = mode === 'moving' || mode === 'resizing';
   // while dragging, the layer must not contain the box(es) being dragged
   const excludes = interacting

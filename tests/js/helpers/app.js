@@ -113,7 +113,15 @@ function makeContext() {
       if (typeof prop === 'symbol') return obj[prop];
       if (prop in obj) return obj[prop];
       if (prop in props) return props[prop];
-      const fn = (...args) => { calls.push([String(prop), args]); };
+      const fn = (...args) => {
+        // Mirror the browser: blitting a zero-sized canvas element throws.
+        if (prop === 'drawImage' && args[0] && args[0].nodeName === 'CANVAS'
+            && (!args[0].width || !args[0].height)) {
+          throw new Error("Failed to execute 'drawImage' on 'CanvasRenderingContext2D':"
+            + ' The image argument is a canvas element with a width or height of 0.');
+        }
+        calls.push([String(prop), args]);
+      };
       return fn;
     },
     set(obj, prop, value) {

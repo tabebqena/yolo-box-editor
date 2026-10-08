@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.24.1] - 2026-10-08
+
+### Fixed
+
+- Fixed a browser error ("The image argument is a canvas element with a width
+  or height of 0") that could appear after applying a filter chain from
+  Settings > Filters. When an image failed to load — for example after a filter
+  changed the image list — blanking the canvas tried to blit the empty offscreen
+  layer, which the browser rejects.
+
 ## [7.24.0] - 2026-10-08
 
 ### Changed

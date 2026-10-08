@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.24.1
+- Fixed a browser error that could appear after applying a filter chain from Settings > Filters: if an image then failed to load, the empty editor tried to draw its empty canvas layer, which the browser rejects.
+
 ## 7.24.0
 - Dragging and drawing boxes is smoother on high-refresh displays: the canvas now repaints on its own compositor layer, and a burst of mouse moves paints once per frame instead of on every event. This removes most of the stutter seen while dragging a box at 120 Hz.
 

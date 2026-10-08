@@ -154,6 +154,17 @@ test('draw cancels a queued fast repaint', () => {
   assert.equal(app.context2d.calls.length, 0);
 });
 
+test('drawing a blanked (0x0) canvas does not blit the empty base layer', () => {
+  const canvas = app.bridge.canvasEl();
+  canvas.width = 0;
+  canvas.height = 0;
+  app.context2d.calls.length = 0;
+  // The browser throws when drawImage gets a zero-sized canvas argument; a
+  // blanked image must not reach that path.
+  assert.doesNotThrow(() => app.api.blankImage());
+  assert.equal(app.context2d.calls.some(([n]) => n === 'drawImage'), false);
+});
+
 test('changing a row class edits the box and pushes an undo step', () => {
   ready({ selected: 0 });
   app.api.renderSidePanel();
