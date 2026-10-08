@@ -98,8 +98,6 @@ and run `python app/app.py`:
 ```bash
 python app/app.py --data /path/to/data.yaml
 python app/app.py --data /path/to/data.yaml --readonly   # viewer only
-python app/app.py --create-user alice                   # register a login user (prompts), exit
-python app/app.py --list-users                           # show registered users, then exit
 python app/app.py --data /path/to/data.yaml --debug      # verbose browser console
 python app/app.py --no-resume                            # Load-a-dataset dialog, no auto-open
 python app/app.py --data /path/to/data.yaml --keep-pipe  # keep each run's {PIPE_PATH} file
@@ -108,6 +106,16 @@ python app/app.py --data /path/to/data.yaml --home ./my-user-files  # custom use
 python app/app.py --no-update-check                      # never check GitHub for updates
 python app/app.py --flask-debug                          # dev only: Werkzeug debugger + auto-reloader
 python app/app.py --data /path/to/data.yaml --log-file ./ybe.log  # log to a file
+```
+
+Login accounts are managed with the `ybe users` command (it edits `users.json`
+directly, so it also works while the app is running):
+
+```bash
+ybe users                    # list the registered users
+ybe users --create alice     # register alice (prompts for a password), then exit
+ybe users --update alice     # change alice's password
+ybe users --delete alice     # remove alice
 ```
 
 Open <http://127.0.0.1:5000>. You can also leave out `--data`: a **Load a
@@ -125,13 +133,13 @@ unhandled promise rejections.
 
 Login is **opt-in**. A fresh install has no account, so `ybe start` opens straight
 into the app with no sign-in — the right default for a local, single-user setup.
-To protect a shared or LAN instance, register an account: `--create-user NAME`
-creates a user (or resets an existing password) and exits, prompting for the
-password twice with no echo so it never reaches the shell history or process
-list; `--list-users` prints the registered names. Once any account exists the app
-asks you to sign in, and **Sign out** and **Settings → Account → Change
-password** (the current password is required) manage the session from the UI.
-Delete `users.json` to turn login back off.
+To protect a shared or LAN instance, register an account: `ybe users --create NAME`
+creates a user and exits, prompting for the password twice with no echo so it
+never reaches the shell history or process list; `ybe users` prints the
+registered names, and `--update`/`--delete` change or remove one. Once any
+account exists the app asks you to sign in, and **Sign out** and
+**Settings → Account → Change password** (the current password is required)
+manage the session from the UI. Delete `users.json` to turn login back off.
 
 Accounts are stored as salted hashes (never plaintext) in `users.json` in your
 user folder, and the file is owner-only. This is a convenience gate, **not strong

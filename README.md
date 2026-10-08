@@ -89,9 +89,9 @@ Full details: [install, update and run](docs/install.md).
 - **Undo / Redo / Save**, plus optional **auto-save** so navigation never asks.
 - **Read-only mode** (`--readonly`) to browse a dataset safely.
 - **Optional login** for a shared or LAN instance (off by default — a local
-  install opens with no sign-in). Add an account with `--create-user NAME`; then
-  Sign out and Change password live in **Settings → Account**, and `--list-users`
-  prints the hashed store. A convenience gate, not strong security — see
+  install opens with no sign-in). Add an account with `ybe users --create NAME`;
+  then Sign out and Change password live in **Settings → Account**, and
+  `ybe users` lists the accounts. A convenience gate, not strong security — see
   [install](docs/install.md).
 - **Arrange the UI**: put the panel left or right, and float or dock the Tags,
   Boxes, Actions, Navigation and Save widgets. The layout is remembered.

@@ -4,8 +4,8 @@
 startup. Passwords are only ever stored hashed (werkzeug PBKDF2); the file is
 owner-only (`0600`) because the hashes are the keys to the accounts. Login is
 opt-in: an empty store means no login, and registering any account (with
-`--create-user`, or from a signed-in browser) turns the gate on. The Flask
-session wiring (the cookie, the before_request gate) lives in `server.py`.
+`ybe users --create NAME`, or from a signed-in browser) turns the gate on. The
+Flask session wiring (the cookie, the before_request gate) lives in `server.py`.
 """
 
 import getpass
@@ -66,6 +66,31 @@ def set_user(username, password):
     if not _write_users():
         raise OSError(f"could not write {config.USERS_FILE}")
     return "updated" if existed else "created"
+
+
+def create_user(username, password):
+    """Register a brand-new user; refuse a name that already exists."""
+    if str(username) in state.USERS:
+        raise ValueError(f"user {username!r} already exists")
+    return set_user(username, password)
+
+
+def update_user(username, password):
+    """Change an existing user's password; the user must exist."""
+    if str(username) not in state.USERS:
+        raise KeyError(username)
+    return set_user(username, password)
+
+
+def delete_user(username):
+    """Remove a user; the user must exist."""
+    name = str(username)
+    if name not in state.USERS:
+        raise KeyError(name)
+    del state.USERS[name]
+    if not _write_users():
+        raise OSError(f"could not write {config.USERS_FILE}")
+    return "deleted"
 
 
 def _prompt_password():

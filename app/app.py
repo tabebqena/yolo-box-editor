@@ -34,7 +34,6 @@ those names stay importable from `app.py` even though their code lives in the
 
 import argparse
 import os
-import sys
 
 # Re-exports only (see the note above): everything below is defined in `ybe`.
 from ybe.parsing import (
@@ -62,8 +61,11 @@ from ybe.auth import (
     _prompt_password,
     _valid_username,
     auth_enabled,
+    create_user,
+    delete_user,
     load_users,
     set_user,
+    update_user,
     verify_user,
 )
 from ybe.commands import (
@@ -221,17 +223,6 @@ def main():
         help="serve as a read-only viewer (no saving labels)",
     )
     parser.add_argument(
-        "--create-user",
-        metavar="NAME",
-        help="create a user (or reset a password) in the user store, prompting "
-        "for the password, then exit",
-    )
-    parser.add_argument(
-        "--list-users",
-        action="store_true",
-        help="list registered users, then exit",
-    )
-    parser.add_argument(
         "--debug",
         action="store_true",
         help="log verbose messages to the browser console (see /api/config)",
@@ -316,31 +307,9 @@ def main():
     state.STATE["no_update_check"] = args.no_update_check
 
     # Load the login store. An empty store means no login (the local default);
-    # registering an account with --create-user turns the login gate on.
+    # register an account with `ybe users --create NAME` to turn the login gate
+    # on (`ybe users` lists them, and those commands work while the app runs).
     load_users()
-
-    # Admin commands manage the user store and exit before the server starts.
-    if args.list_users:
-        for name in sorted(state.USERS):
-            print(name)
-        if not state.USERS:
-            print(f"(no users registered in {config.USERS_FILE})")
-        return
-
-    if args.create_user:
-        username = args.create_user
-        if not _valid_username(username):
-            parser.error("--create-user NAME must be non-empty and contain no ':'")
-        password = _prompt_password()
-        if password is None:
-            sys.exit(1)
-        try:
-            action = set_user(username, password)
-        except OSError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            sys.exit(1)
-        print(f"{action} user {username!r} in {config.USERS_FILE}")
-        return
 
     # Background update check (a no-op with --no-update-check).
     start_update_checker()

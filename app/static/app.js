@@ -3,8 +3,8 @@
 
 // ---------------------------------------------------------------------------
 // login / change password
-// Accounts live in the server-side user store (managed with --create-user /
-// --list-users); the UI does sign in, sign out and password changes.
+// Accounts live in the server-side user store (managed with the `ybe users`
+// command); the UI does sign in, sign out and password changes.
 // ---------------------------------------------------------------------------
 // Guards startApp so the app is built only once after login.
 let appStarted = false;

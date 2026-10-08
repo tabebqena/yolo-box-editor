@@ -3429,6 +3429,32 @@ def test_set_user_updates_password(clean_state):
     assert not ybe.verify_user("alice", "first")
 
 
+def test_create_user_rejects_existing_name(clean_state):
+    assert ybe.create_user("alice", "first") == "created"
+    with pytest.raises(ValueError):
+        ybe.create_user("alice", "second")
+    # The original password is untouched.
+    assert ybe.verify_user("alice", "first")
+
+
+def test_update_user_requires_existing(clean_state):
+    with pytest.raises(KeyError):
+        ybe.update_user("alice", "pw")
+    ybe.create_user("alice", "first")
+    assert ybe.update_user("alice", "second") == "updated"
+    assert ybe.verify_user("alice", "second")
+
+
+def test_delete_user_requires_existing(clean_state):
+    with pytest.raises(KeyError):
+        ybe.delete_user("alice")
+    ybe.create_user("alice", "pw")
+    assert ybe.delete_user("alice") == "deleted"
+    ybe.state.USERS = {}
+    ybe.load_users()
+    assert not ybe.auth_enabled()
+
+
 def test_users_persist_across_reload(clean_state):
     ybe.set_user("alice", "s3cret")
     ybe.state.USERS = {}  # simulate a fresh process

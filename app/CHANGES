@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 8.0.0
+- Login accounts now live behind a single `ybe users` command: run `ybe users` to list them, `ybe users --create NAME` to add one, `--update NAME` to change a password, and `--delete NAME` to remove one. It works even while the app is running. The old `--create-user` / `--list-users` flags are gone.
+
 ## 7.24.1
 - Fixed a browser error that could appear after applying a filter chain from Settings > Filters: if an image then failed to load, the empty editor tried to draw its empty canvas layer, which the browser rejects.
 

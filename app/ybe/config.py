@@ -57,8 +57,8 @@ VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")  # active split/filter pe
 SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")  # cross-browser UI prefs
 # Login accounts: {"version": 1, "users": {"name": "<password_hash>"}}. Login is
 # opt-in: an empty/absent store means no login, and any entry turns it on. The
-# file is owner-only (0600) because it holds password hashes. Managed with
-# --create-user / --list-users (there is no default account).
+# file is owner-only (0600) because it holds password hashes. Managed with the
+# `ybe users` command (there is no default account).
 USERS_FILE = os.path.join(YBX_HOME, "users.json")
 # The Flask session-signing key, generated once and reused across restarts (and
 # app updates) so a signed-in browser stays signed in. Owner-only (0600) because

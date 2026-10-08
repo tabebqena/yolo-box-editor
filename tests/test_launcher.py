@@ -123,3 +123,68 @@ def test_delegate_missing_installer_explains_fix(tmp_path, capsys):
     assert "ybx.py" in err
     assert launcher.INSTALL_ONELINER in err
     assert launcher.INSTALL_DOCS_URL in err
+
+
+def _isolate_users(tmp_path, monkeypatch, password="s3cret"):
+    """Point the account store at `tmp_path` without touching the real home."""
+    from ybe import auth as ybe_auth, config as ybe_config
+
+    monkeypatch.setattr(launcher, "app_py", lambda: str(tmp_path / "app.py"))
+    monkeypatch.setattr(ybe_config, "configure_home", lambda path: None)
+    monkeypatch.setattr(ybe_config, "USERS_FILE", str(tmp_path / "users.json"))
+    monkeypatch.setattr(ybe_auth, "_prompt_password", lambda: password)
+
+
+def test_do_users_create_list_update_delete(tmp_path, monkeypatch, capsys):
+    _isolate_users(tmp_path, monkeypatch)
+    home = str(tmp_path)
+
+    assert launcher.do_users(home, []) == 0
+    assert "no users" in capsys.readouterr().out
+
+    assert launcher.do_users(home, ["--create", "alice"]) == 0
+    assert "created user 'alice'" in capsys.readouterr().out
+
+    assert launcher.do_users(home, []) == 0
+    assert capsys.readouterr().out.strip() == "alice"
+
+    assert launcher.do_users(home, ["--update", "alice"]) == 0
+    assert "updated user 'alice'" in capsys.readouterr().out
+
+    assert launcher.do_users(home, ["--delete", "alice"]) == 0
+    assert "deleted user 'alice'" in capsys.readouterr().out
+
+    assert launcher.do_users(home, []) == 0
+    assert "no users" in capsys.readouterr().out
+
+
+def test_do_users_create_rejects_duplicate(tmp_path, monkeypatch, capsys):
+    _isolate_users(tmp_path, monkeypatch)
+    home = str(tmp_path)
+    launcher.do_users(home, ["--create", "alice"])
+    with pytest.raises(SystemExit) as exc:
+        launcher.do_users(home, ["--create", "alice"])
+    assert exc.value.code == 1
+    assert "already exists" in capsys.readouterr().err
+
+
+def test_do_users_update_and_delete_require_existing(tmp_path, monkeypatch, capsys):
+    _isolate_users(tmp_path, monkeypatch)
+    home = str(tmp_path)
+    for flag in ("--update", "--delete"):
+        with pytest.raises(SystemExit) as exc:
+            launcher.do_users(home, [flag, "ghost"])
+        assert exc.value.code == 1
+        assert "no such user" in capsys.readouterr().err
+
+
+def test_do_users_lists_while_a_server_is_running(tmp_path, monkeypatch, capsys):
+    _isolate_users(tmp_path, monkeypatch)
+    monkeypatch.setattr(launcher, "pid_is_app", lambda pid, python_app=None: True)
+    home = str(tmp_path)
+
+    launcher.do_users(home, ["--create", "alice"])
+    assert "run 'ybe restart'" in capsys.readouterr().out
+
+    assert launcher.do_users(home, []) == 0
+    assert capsys.readouterr().out.strip() == "alice"

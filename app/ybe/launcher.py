@@ -9,6 +9,8 @@ shim later.
 Commands:
     start / stop / restart / status / logs
         manage the background server (pid file + log file in the user folder).
+    users
+        list/add/update/delete login accounts in `users.json` directly.
     version / check-update / update / upgrade / uninstall
         delegated to the standalone installer `<home>/ybx.py`, which owns all
         install logic and downloads (via Python's urllib, never curl).
@@ -238,6 +240,91 @@ def do_logs(home, args):
 
 
 # --------------------------------------------------------------------------- #
+# login accounts
+# --------------------------------------------------------------------------- #
+USERS_USAGE = """manage login accounts
+
+Usage:
+  ybe users                 list the registered users
+  ybe users --create NAME   register a new user (the name must be unique)
+  ybe users --update NAME   change an existing user's password
+  ybe users --delete NAME   remove a user
+
+The password is read interactively (no echo) and only its hash is stored.
+Edits touch users.json directly, so they work while the app is running; restart
+the app ('ybe restart') for a change to take effect.
+"""
+
+
+def _warn_if_running(home):
+    if pid_is_app(read_pid(pid_file(home)), app_py()):
+        say("note: the app is running; run 'ybe restart' to apply the change.")
+
+
+def do_users(home, args):
+    """List/register/update/delete login accounts in `users.json`."""
+    # Imported lazily so the other launcher commands never need the Flask stack.
+    from ybe import auth, config, state
+
+    config.configure_home(home)
+    auth.load_users()
+
+    action = None
+    name = None
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ("-h", "--help"):
+            print(USERS_USAGE, end="")
+            return 0
+        if arg in ("--create", "--update", "--delete"):
+            if action is not None:
+                die("use only one of --create, --update or --delete")
+            if i + 1 >= len(args):
+                die("%s needs a NAME" % arg)
+            action, name = arg[2:], args[i + 1]
+            i += 2
+            continue
+        die("unknown option %r; try 'ybe users --help'" % arg)
+
+    if action is None:
+        for username in sorted(state.USERS):
+            say(username)
+        if not state.USERS:
+            say("(no users registered in %s)" % config.USERS_FILE)
+        return 0
+
+    if not auth._valid_username(name):
+        die("invalid user name %r (must be non-empty and contain no ':')" % name)
+    if action == "create" and name in state.USERS:
+        die("user %r already exists (use --update to change the password)" % name)
+    if action == "update" and name not in state.USERS:
+        die("no such user: %s (use --create to add one)" % name)
+
+    if action == "delete":
+        try:
+            auth.delete_user(name)
+        except KeyError:
+            die("no such user: %s" % name)
+        except OSError as exc:
+            die(str(exc))
+        say("deleted user %r in %s" % (name, config.USERS_FILE))
+        _warn_if_running(home)
+        return 0
+
+    password = auth._prompt_password()
+    if password is None:
+        return 1
+    try:
+        outcome = auth.create_user(name, password) if action == "create" else auth.update_user(name, password)
+    except OSError as exc:
+        die(str(exc))
+    say("%s user %r in %s" % (outcome, name, config.USERS_FILE))
+    _warn_if_running(home)
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # delegated installer commands
 # --------------------------------------------------------------------------- #
 def missing_installer_error(path):
@@ -278,6 +365,7 @@ Usage:
   ybe restart [OPTIONS]       stop, then start again
   ybe status                  report whether it is running
   ybe logs [-f]               show the last log lines (or follow with -f)
+  ybe users                   manage login accounts (see 'ybe users --help')
   ybe version                 print the installed version
   ybe check-update            check for a newer version
   ybe update                  update in place, keeping your files and venv
@@ -286,8 +374,6 @@ Usage:
 OPTIONS are the app's flags, e.g.:
   --data /path/to/data.yaml   dataset to open
   --readonly                  viewer only (no saving)
-  --create-user name          register or reset a login user (prompts), then exit
-  --list-users                list registered users, then exit
   --debug                     verbose browser-console logging
   --host 0.0.0.0 --port 5000  bind address
   --no-resume                 skip reopening the last dataset
@@ -335,6 +421,8 @@ def main(argv=None):
         return do_status(home)
     if command == "logs":
         return do_logs(home, args)
+    if command in ("users", "user"):
+        return do_users(home, args)
     if command in ("version", "check-update", "update", "upgrade", "uninstall"):
         return delegate(home, command, args)
     if command in ("help", "-h", "--help"):

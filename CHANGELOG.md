@@ -4,6 +4,22 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [8.0.0] - 2026-10-08
+
+### Added
+
+- **`ybe users` manages login accounts.** Run `ybe users` to list the registered
+  names, `ybe users --create NAME` to register one (the name must be unique),
+  `ybe users --update NAME` to change a password, and `ybe users --delete NAME`
+  to remove one. The password is prompted for twice with no echo, and the
+  commands edit `users.json` directly so they also work while the app is running
+  (restart the app for a change to take effect).
+
+### Removed
+
+- The `--create-user` and `--list-users` flags on `python app/app.py`, replaced
+  by the `ybe users` command.
+
 ## [7.24.1] - 2026-10-08
 
 ### Fixed
