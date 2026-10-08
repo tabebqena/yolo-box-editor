@@ -107,6 +107,7 @@ Full details: [install, update and run](docs/install.md).
 
 | Key | Does |
 | --- | ---- |
+| `F1` | open help / tutorials |
 | `←` / `→` | previous / next image |
 | `S` | save |
 | `Z` / `Y` | undo / redo |
@@ -117,6 +118,7 @@ Full details: [install, update and run](docs/install.md).
 | `Tab` | cycle the selected row's fields |
 | `F` | fix / unfix the selected box |
 | `.` | hide / show boxes on the image |
+| `,` | toggle box details (outlines only) |
 | `Alt+1`…`Alt+9` | toggle a tag by number |
 
 `Ctrl`+drag forces a new box inside an existing one. Every action can be
