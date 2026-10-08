@@ -8,7 +8,7 @@ plain `app/ybe/` package — `server.py` holds the Flask app object and all
 routes, the rest are the reusable pieces (`config`, `state`, `parsing`, `auth`,
 `dataset`, `extensions`, …). The UI is plain `app/templates/index.html` +
 `app/static/style.css` + classic-script modules under `app/static/js/` (`core`,
-`canvas`, `navigation`, `extensions`, `shortcuts`, `images`, `editing`,
+`api`, `canvas`, `navigation`, `extensions`, `shortcuts`, `images`, `editing`,
 `appearance`, `help`, `events`), finished by the `app/static/app.js` entry point;
 small reusable DOM/modal helpers live in `js/core.js`. The built-in help ships as
 HTML fragments under `app/static/help/` (`beginner`, `intermediate`, `expert`,
@@ -42,7 +42,7 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   find Python and run `ybx.py`. `app/launcher.sh.in` and `app/launcher.cmd.in`
   are the thin Unix/Windows `ybe` shims that execute the Python launcher.
   (Replaces the old `install.sh`.)
-- Python tests (from repo root): `python -m pytest -q` (~340 tests); single test
+- Python tests (from repo root): `python -m pytest -q` (~335 tests); single test
   `python -m pytest tests/test_app.py::test_name -q`. `pytest.ini` puts `app/`
   on `pythonpath`.
 - JavaScript tests: `npm ci` then `npm run test:js` (Node's `node --test` +
@@ -55,7 +55,7 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
 
 ## Layout / entrypoints
 - `app/app.py` — the command-line entrypoint only: parses flags, resolves
-  `YBX_HOME`, loads/creates the session secret key, seeds the default admin, then
+  `YBX_HOME`, loads/creates the session secret key and the login store, then
   runs the Flask app from `ybe.server`. It also re-exports every helper the tests
   and embedders import (`from app import ...`), so those names stay available
   here even though their code lives in `ybe`.
@@ -118,8 +118,9 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
 - Frontend: `app/static/app.js` is the entry point only (login/account,
   `startApp`, `boot`, final event wiring). Everything else lives in
   `app/static/js/` as classic scripts loaded by `index.html` in dependency
-  order: `core`, `canvas`, `navigation`, `extensions`, `shortcuts`, `images`,
-  `editing`, `appearance`, `help`, `events`. They share one global lexical scope,
+  order: `core`, `api`, `canvas`, `navigation`, `extensions`, `shortcuts`,
+  `images`, `editing`, `appearance`, `help`, `events`. They share one global
+  lexical scope,
   so top-level `let`/`const`/functions are visible across files and the order in
   `index.html` and `tests/js/helpers/app.js` must match. `js/events.js` owns
   `ESCAPE_CLOSERS` (it references the overlay closers defined in earlier
@@ -145,7 +146,7 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
     Reach them explicitly with `{USER_SCRIPT_DIR}/…` (yours) or
     `{APP_SCRIPT_DIR}/…` (shipped), or relatively as `scripts/…` (cwd is
     `YBX_HOME`). Shipped helpers: `class_filter.py`, `example.py`,
-    `example_filter.py`, `tag_image.py`.
+    `example_filter.py`, `tag_filter.py`, `tag_image.py`.
   - `shortcuts.txt` — `ACTION_NAME <KEY> label`.
 - Tags: `tags.yaml` beside `data.yaml` (a plain `- tag` list) is the required
   available-tag list; an image's own tags live in a sibling tag file and are
