@@ -29,10 +29,10 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   `--log-file`, `--no-reload`, `--flask-debug` (enable the Werkzeug interactive
   debugger + auto-reloader; off by default — development only), `--allow-root`
   (running as root is refused by default; this overrides for, e.g., containers).
-  Auth admin commands (run, print and exit):
-  `--create-user NAME` (prompts for the password with `getpass`, no echo) and
-  `--list-users`. Flask's interactive debugger and auto-reloader stay off unless
-  `--flask-debug` is passed; `--debug` only affects browser-console logging.
+  Login accounts are managed by the launcher instead (`ybe users`; see below), not
+  by an `app.py` flag. Flask's interactive debugger and auto-reloader stay off
+  unless `--flask-debug` is passed; `--debug` only affects browser-console
+  logging.
 - Install/update/remove: the self-contained Python installer `ybx.py`
   (`install` / `upgrade` / `update` / `version` / `check-update` / `uninstall`);
   e.g. `./ybx.sh install --from .` or `python3 ybx.py install --from .`. It
@@ -100,13 +100,16 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   - `userconfig.py` — `config.json` (recent datasets, view, settings, disabled
     extensions).
   - `commands.py` — the action queue, backend actions and shell command runner.
-  - `auth.py` — the account store (`users.json`) and password hashing.
+  - `auth.py` — the account store (`users.json`) and password hashing, plus the
+    `create_user`/`update_user`/`delete_user` used by `ybe users`.
   - `update.py` — the GitHub version check and cached status.
   - `logging_setup.py` — `setup_logging` and the presence access-log filter.
   - `secret_key.py` — the persistent, owner-only session-signing key.
   - `launcher.py` — the Python `ybe` commands: start/stop/restart/status/logs
     (pid file + log in `YBX_HOME`, with stale/reused-PID detection via
-    `procutil`). version/check-update/update/upgrade/uninstall delegate to
+    `procutil`), and `users` (list/`--create`/`--update`/`--delete` login
+    accounts, editing `users.json` directly so it works while the server runs).
+    version/check-update/update/upgrade/uninstall delegate to
     `<YBX_HOME>/ybx.py`. Kept OS-neutral (no GNU-only shell tools) so the Unix
     and Windows shims share it.
   - `procutil.py` — the only OS-branching process code: pid liveness, reading a
@@ -175,7 +178,7 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   and Change password live in **Settings → Account** (that tab appears only when
   login is enabled). Routes: `GET /api/session`, `POST /api/login`,
   `POST /api/logout`, `POST /api/password`. Account admin is CLI-only
-  (`--create-user`/`--list-users`); there is no users tab in the UI. The session
+  (`ybe users`; see the launcher); there is no users tab in the UI. The session
   cookie is signed with `SECRET_KEY_FILE` (`secret_key.py`): a random 256-bit key
   written `0600` on first run and reused so sign-in survives restarts and updates
   (delete the file to invalidate every session).
