@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 7.20.0
+- Login is now opt-in. A fresh install has no account and opens with no sign-in, so a local, single-user setup gets no password prompt. To protect a shared or LAN instance, add an account with `--create-user NAME`; then sign-in is required until you delete `users.json`. The public `admin` / `admin` default account is gone.
+
 ## 7.18.0
 - The app now ships a built-in help with a 3-level tutorial (Beginner, Intermediate, Expert) and task-focused "How to?" recipes. Open it with F1 or the ? button in the top panel.
 

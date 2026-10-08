@@ -88,10 +88,10 @@ Full details: [install, update and run](docs/install.md).
   every tag; click one to toggle it. See [tags](docs/tags.md).
 - **Undo / Redo / Save**, plus optional **auto-save** so navigation never asks.
 - **Read-only mode** (`--readonly`) to browse a dataset safely.
-- **Login** for a shared or LAN instance: sign in as `admin` / `admin` (shipped
-  default — change it), with Sign out and Change password in **Settings →
-  Account**, and `--create-user` / `--list-users` to manage the hashed store from
-  the command line. A convenience gate, not strong security — see
+- **Optional login** for a shared or LAN instance (off by default — a local
+  install opens with no sign-in). Add an account with `--create-user NAME`; then
+  Sign out and Change password live in **Settings → Account**, and `--list-users`
+  prints the hashed store. A convenience gate, not strong security — see
   [install](docs/install.md).
 - **Arrange the UI**: put the panel left or right, and float or dock the Tags,
   Boxes, Actions, Navigation and Save widgets. The layout is remembered.

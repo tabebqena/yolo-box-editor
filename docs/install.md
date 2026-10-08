@@ -123,20 +123,20 @@ the loaded config, image loads, saves, tag writes, user actions / `after_success
 chains, hook runs, rescans and box edits. It also surfaces uncaught errors and
 unhandled promise rejections.
 
-The app ships with a ready-to-use account so `ybe start` works with no extra
-setup: sign in as **`admin`** with password **`admin`**, then change the password
-in **Settings → Account → Change password** (the current password is required).
-**Sign out** ends the session. Accounts can also be managed from the
-command line: `--create-user NAME` registers a user (or resets an existing
-password) and exits, prompting for the password twice with no echo so it never
-reaches the shell history or process list; `--list-users` prints the registered
-names.
+Login is **opt-in**. A fresh install has no account, so `ybe start` opens straight
+into the app with no sign-in — the right default for a local, single-user setup.
+To protect a shared or LAN instance, register an account: `--create-user NAME`
+creates a user (or resets an existing password) and exits, prompting for the
+password twice with no echo so it never reaches the shell history or process
+list; `--list-users` prints the registered names. Once any account exists the app
+asks you to sign in, and **Sign out** and **Settings → Account → Change
+password** (the current password is required) manage the session from the UI.
+Delete `users.json` to turn login back off.
 
 Accounts are stored as salted hashes (never plaintext) in `users.json` in your
 user folder, and the file is owner-only. This is a convenience gate, **not strong
-security**: over plain `http://` the password is sent in clear text, and the
-default `admin` password is public until you change it. Use it on localhost or a
-trusted network, or behind an HTTPS reverse proxy.
+security**: over plain `http://` the password is sent in clear text. Use it on
+localhost or a trusted network, or behind an HTTPS reverse proxy.
 
 ## Changelog and releases
 

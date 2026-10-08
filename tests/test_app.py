@@ -3437,16 +3437,11 @@ def test_login_is_noop_when_auth_off(clean_state):
     assert resp.get_json()["auth_required"] is False
 
 
-def test_ensure_default_admin_seeds_when_empty(clean_state):
-    assert ybe.ensure_default_admin() is True
-    assert ybe.verify_user("admin", "admin")
-    assert Path(ybe.config.USERS_FILE).is_file()
-
-
-def test_ensure_default_admin_keeps_existing_users(clean_state):
-    ybe.set_user("alice", "s3cret")
-    assert ybe.ensure_default_admin() is False
-    assert not ybe.verify_user("admin", "admin")
+def test_fresh_home_has_no_login(clean_state):
+    # A brand-new install ships no account: login is off until one is added.
+    assert not ybe.auth_enabled()
+    assert not Path(ybe.config.USERS_FILE).exists()
+    assert ybe.app.test_client().get("/api/config").status_code == 200
 
 
 def test_change_password(clean_state):

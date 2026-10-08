@@ -2,9 +2,10 @@
 
 `state.USERS` maps username -> password hash, loaded from `users.json` at
 startup. Passwords are only ever stored hashed (werkzeug PBKDF2); the file is
-owner-only (`0600`) because the hashes are the keys to the accounts. An empty
-store means login is off, any entry turns it on. The Flask session wiring (the
-cookie, the before_request gate) lives in `server.py`.
+owner-only (`0600`) because the hashes are the keys to the accounts. Login is
+opt-in: an empty store means no login, and registering any account (with
+`--create-user`, or from a signed-in browser) turns the gate on. The Flask
+session wiring (the cookie, the before_request gate) lives in `server.py`.
 """
 
 import getpass
@@ -15,12 +16,6 @@ import sys
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from ybe import config, state
-
-# Shipped default account, created on first run so `ybe start` is usable with no
-# extra setup. Change it from the UI (Change password) or with --create-user.
-DEFAULT_ADMIN_USER = "admin"
-DEFAULT_ADMIN_PASSWORD = "admin"
-
 
 def _valid_username(username):
     """A username may not be empty, contain ':', or include control chars."""
@@ -71,14 +66,6 @@ def set_user(username, password):
     if not _write_users():
         raise OSError(f"could not write {config.USERS_FILE}")
     return "updated" if existed else "created"
-
-
-def ensure_default_admin():
-    """Seed the shipped admin/admin account when no users exist; True if created."""
-    if state.USERS:
-        return False
-    set_user(DEFAULT_ADMIN_USER, DEFAULT_ADMIN_PASSWORD)
-    return True
 
 
 def _prompt_password():

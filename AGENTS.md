@@ -164,21 +164,20 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   `hook_events`, `app_actions`, `backend_actions`,
    `action_defs`/`hook_defs`/`filter_defs` (each with `source`, `api_version`,
    `status`) and `extension_api_version`.
-- Auth: accounts are a `{username: password_hash}` map in `users.json`
-  (`USERS_FILE`, owner-only `0600`, hashed via `werkzeug.security`). `main()`
-  calls `ensure_default_admin()`, which seeds `admin`/`admin`
-  (`DEFAULT_ADMIN_USER`/`DEFAULT_ADMIN_PASSWORD`) when the store is empty, so a
-  fresh install is usable with no setup. A non-empty `USERS` turns login on:
-  `before_request` returns 401 for `/api/*` without a signed session, while `/`,
-  `/static/*` and `/api/{session,login,logout}` stay public. The UI shows a
-  sign-in form; Sign out and Change password live in **Settings → Account**
-  (that tab appears only when login is enabled). Routes: `GET
-  /api/session`, `POST /api/login`, `POST /api/logout`, `POST /api/password`.
-  Account admin is CLI-only (`--create-user`/`--list-users`); there is no users
-  tab in the UI. The session cookie is signed with `SECRET_KEY_FILE`
-  (`secret_key.py`): a random 256-bit key written `0600` on first run and reused
-  so sign-in survives restarts and updates (delete the file to invalidate every
-  session).
+- Auth: login is **opt-in**. Accounts are a `{username: password_hash}` map in
+  `users.json` (`USERS_FILE`, owner-only `0600`, hashed via
+  `werkzeug.security`). An empty/absent store means no login (the local default);
+  any entry turns it on. `main()` only loads the store (`load_users()`); there is
+  no seeded/default account. A non-empty `USERS` makes `before_request` return
+  401 for `/api/*` without a signed session, while `/`, `/static/*` and
+  `/api/{session,login,logout}` stay public. The UI shows a sign-in form; Sign out
+  and Change password live in **Settings → Account** (that tab appears only when
+  login is enabled). Routes: `GET /api/session`, `POST /api/login`,
+  `POST /api/logout`, `POST /api/password`. Account admin is CLI-only
+  (`--create-user`/`--list-users`); there is no users tab in the UI. The session
+  cookie is signed with `SECRET_KEY_FILE` (`secret_key.py`): a random 256-bit key
+  written `0600` on first run and reused so sign-in survives restarts and updates
+  (delete the file to invalidate every session).
 - `app/VERSION`, `app/CHANGES` (per-version "what's new" notes shown once per
   installed version) and `CHANGELOG.md` (Keep a Changelog); `README.md`,
   `TUTORIAL.md` (the 3-level tutorial) and `docs/` (`actions-and-hooks.md`,

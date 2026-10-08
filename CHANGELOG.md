@@ -4,6 +4,22 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [7.20.0] - 2026-10-08
+
+### Changed
+
+- **Login is now opt-in.** The app no longer ships a default `admin`/`admin`
+  account, so a fresh install (and any install with an empty `users.json`) opens
+  with no sign-in — the right default for a local, single-user setup. Register an
+  account with `--create-user NAME` to require sign-in for a shared or LAN
+  instance; delete `users.json` to turn it back off. This removes the previously
+  seeded public default password.
+
+### Removed
+
+- The `ensure_default_admin()` seed and the `DEFAULT_ADMIN_USER` /
+  `DEFAULT_ADMIN_PASSWORD` constants.
+
 ## [7.18.0] - 2026-10-07
 
 ### Added

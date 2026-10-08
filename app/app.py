@@ -59,12 +59,9 @@ from ybe.parsing import (
 
 from ybe import auth, config, state, update
 from ybe.auth import (
-    DEFAULT_ADMIN_PASSWORD,
-    DEFAULT_ADMIN_USER,
     _prompt_password,
     _valid_username,
     auth_enabled,
-    ensure_default_admin,
     load_users,
     set_user,
     verify_user,
@@ -318,16 +315,9 @@ def main():
     state.STATE["keep_filter_pipes"] = args.keep_filter_pipes
     state.STATE["no_update_check"] = args.no_update_check
 
-    # Load the login store; seed the default admin/admin on a brand-new install
-    # so `ybe start` is usable immediately.
+    # Load the login store. An empty store means no login (the local default);
+    # registering an account with --create-user turns the login gate on.
     load_users()
-    if ensure_default_admin():
-        log.warning(
-            "no users found: created the default account %r (password %r) — "
-            "change it from the UI or with --create-user",
-            DEFAULT_ADMIN_USER,
-            DEFAULT_ADMIN_PASSWORD,
-        )
 
     # Admin commands manage the user store and exit before the server starts.
     if args.list_users:
