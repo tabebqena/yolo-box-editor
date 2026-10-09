@@ -4,6 +4,18 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.6.0] - 2026-10-09
+
+### Changed
+
+- **`api_version` is enforced honestly.** Older or unversioned extension files
+  are still read (backward compatible) and flagged `outdated`. Files written for
+  a **newer** extension format are now skipped with an explaining error —
+  *"written for extension format vN, but this app supports vM — update
+  yolo-box-editor to use it"* — surfaced in the actions/hooks/filters/widgets
+  error banner and, for packages, in Settings → Extensions. The raw editor can
+  still open such a file to read it, and newer UI panels stay unmounted.
+
 ## [10.5.0] - 2026-10-09
 
 ### Added

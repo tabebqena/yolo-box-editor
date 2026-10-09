@@ -356,6 +356,8 @@ function applyExtensionConfig(cfg) {
   filterDefs = cfg.filter_defs || [];
   widgetDefs = cfg.widget_defs || [];
   widgetErrors = cfg.widget_errors || [];
+  actionErrors = cfg.action_errors || [];
+  packageErrors = cfg.package_errors || [];
   extensionPackages = cfg.extension_packages || [];
   extensionAppActions = cfg.extension_app_actions || [];
   pluginApiVersion = cfg.plugin_api_version || 1;

@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.6.0
+- Extension `api_version` is now handled honestly: files written for an **older** format still load (and show an "outdated" badge), while files written for a **newer** format are skipped with a clear message ("written for extension format vN, but this app supports vM — update yolo-box-editor to use it") shown in the extension error banner and Settings > Extensions. You can still open a newer file in the raw editor to read it.
+
 ## 10.5.0
 - Extensions now declare what they use in a `permissions.yaml` (the YBE capabilities, whether they ship a backend/panel, and the routes/actions/hooks/filters/widgets/scripts they add). The app explains each permission, flags anything a package ships without declaring it, and a panel can only call the YBE methods it declared. Install an extension with `ybe install-extension /path` (it prints the declarations and a trust warning first); list with `ybe extensions`, remove with `ybe remove-extension <id>`. Only install from authors you trust.
 

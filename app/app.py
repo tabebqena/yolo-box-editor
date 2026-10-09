@@ -116,6 +116,7 @@ from ybe.extensions import (
     extension_file_for,
     is_hook_name,
     load_actions,
+    load_actions_report,
     load_filters,
     load_hooks,
     resolve_filter_options,

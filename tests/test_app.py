@@ -2734,6 +2734,67 @@ def test_api_version_status():
     assert ybe.api_version_status(ybe.config.EXTENSION_API_VERSION + 1) == "newer"
 
 
+def test_older_extension_files_still_load(clean_state):
+    # A file with no/lower api_version is read (backward compatible).
+    write_action(clean_state, "Old.yaml", "steps:\n  - echo hi\n")
+    assert "Old" in [a["name"] for a in ybe.load_actions()]
+    write_action(clean_state, "Older.yaml",
+                 "api_version: 1\nname: Older\nsteps:\n  - echo hi\n")
+    assert "Older" in [a["name"] for a in ybe.load_actions()]
+
+
+def test_newer_extension_files_are_skipped_with_an_error(clean_state):
+    nxt = ybe.config.EXTENSION_API_VERSION + 1
+    write_action(clean_state, "Future.yaml",
+                 f"api_version: {nxt}\nname: Future\nsteps:\n  - echo hi\n")
+    write_hook(clean_state, "on_after_save.yaml",
+               f"api_version: {nxt}\nsteps:\n  - echo hi\n")
+    write_filter(clean_state, "FutureF.yaml",
+                 f"api_version: {nxt}\nname: FutureF\nsteps:\n  - echo hi\n")
+    write_widget(clean_state, "future.yaml",
+                 f"api_version: {nxt}\nname: FutureW\ntitle: W\ncontrols:\n"
+                 "  - type: button\n    label: Go\n    steps:\n      - echo hi\n")
+
+    actions, action_errors = ybe.load_actions_report()
+    assert "Future" not in [a["name"] for a in actions]
+    assert any("written for extension format" in e for e in action_errors)
+
+    hooks, hook_errors = ybe.load_hooks()
+    assert all(h["name"] != "on_after_save" for h in hooks)
+    assert any("written for extension format" in e for e in hook_errors)
+
+    filters, filter_errors = ybe.load_filters()
+    assert "FutureF" not in filters
+    assert any("written for extension format" in e for e in filter_errors)
+
+    widgets, widget_errors = ybe.load_widgets()
+    assert "FutureW" not in widgets
+    assert any("written for extension format" in e for e in widget_errors)
+
+    # ...but the raw editor can still resolve it, so it can explain the error.
+    found = ybe.extension_file_for("action", "Future")
+    assert found is not None and found["api_version"] == nxt
+    assert ybe.api_version_status(found["api_version"]) == "newer"
+
+
+def test_newer_package_is_skipped_with_an_error(clean_state):
+    nxt = ybe.config.EXTENSION_API_VERSION + 1
+    write_package(clean_state, "future", f"api_version: {nxt}\nname: Future\n")
+    pkgs, errors = ybe.load_packages()
+    assert all(p["id"] != "future" for p in pkgs)
+    assert any("written for extension format" in e for e in errors)
+
+
+def test_api_config_reports_version_errors(clean_state):
+    nxt = ybe.config.EXTENSION_API_VERSION + 1
+    write_action(clean_state, "Future.yaml",
+                 f"api_version: {nxt}\nname: Future\nsteps:\n  - echo hi\n")
+    write_package(clean_state, "future", f"api_version: {nxt}\nname: Future\n")
+    cfg = ybe.app.test_client().get("/api/config").get_json()
+    assert any("written for extension format" in e for e in cfg["action_errors"])
+    assert any("written for extension format" in e for e in cfg["package_errors"])
+
+
 def test_dump_action_file_round_trips():
     text = ybe._dump_action_file(["rm {IMAGE_PATH}"], ["app_refresh_image"])
     parsed = ybe._parse_action_file(text)

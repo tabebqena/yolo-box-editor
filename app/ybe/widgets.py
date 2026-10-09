@@ -244,19 +244,30 @@ def _widget_files(dirpath):
     return paths
 
 
-def load_widgets():
+def _is_newer(version):
+    return isinstance(version, int) and version > config.EXTENSION_API_VERSION
+
+
+def load_widgets(include_newer=False):
     """Parse the widgets/ folders into (widgets, errors) (read fresh).
 
     One widget per `.yaml` file; its name is the `name:` key, else the file name.
-    `active: false` and files with no usable controls are skipped. The shipped
-    app/widgets/ folder is read first, the user's <home>/widgets/ second (it wins
-    on a name clash).
+    `active: false` and files with no usable controls are skipped. A file written
+    for a newer extension format is skipped with an explaining error unless
+    `include_newer` is set. The shipped app/widgets/ folder is read first, the
+    user's <home>/widgets/ second (it wins on a name clash).
     """
     merged, errors = {}, []
     for source, dirpath, pkg in extension_sources("widget"):
         for path in _widget_files(dirpath):
             fname = os.path.basename(path)
             data = _parse_widget_file(_read_text(path))
+            if not include_newer and _is_newer(data.get("api_version")):
+                errors.append(
+                    "'widgets/%s': written for extension format v%s, but this app "
+                    "supports v%s — update yolo-box-editor to use it" % (
+                        fname, data.get("api_version"), config.EXTENSION_API_VERSION))
+                continue
             if not data["active"] or not data["controls"]:
                 continue  # inactive, or a comments-only template
             widget, widget_errors = _validate_widget(fname, data)
@@ -270,9 +281,9 @@ def load_widgets():
     return merged, errors
 
 
-def widget_file_for(name):
+def widget_file_for(name, include_newer=False):
     """Resolve a loaded widget to its winning file, or None."""
-    widget = load_widgets()[0].get(name)
+    widget = load_widgets(include_newer)[0].get(name)
     if widget is None:
         return None
     return {

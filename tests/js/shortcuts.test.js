@@ -137,6 +137,17 @@ test('renderShortcutErrors surfaces errors once and honours dismissal', () => {
   app2.cleanup();
 });
 
+test('renderShortcutErrors includes action/package version errors', () => {
+  app.window.sessionStorage.removeItem('dismissedShortcutErrors');
+  ready({
+    actionErrors: ["'actions/Future.yaml': written for extension format v6"],
+    packageErrors: ["'extensions/future/extension.yaml': written for extension format v6"],
+  });
+  app.api.renderShortcutErrors();
+  assert.equal(app.state().notifLog.length, 1);
+  assert.match(app.$('toasts').textContent, /written for extension format/);
+});
+
 test('renderPresenceWarning warns on overlap and clears when alone', () => {
   app.api.renderPresenceWarning(2);
   assert.equal(app.$('toasts').children.length, 1);

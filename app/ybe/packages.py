@@ -334,6 +334,12 @@ def load_packages():
             pid = (data["id"] or entry).strip()
             if not pid:
                 continue
+            if isinstance(data["api_version"], int) and data["api_version"] > config.EXTENSION_API_VERSION:
+                errors.append(
+                    "'extensions/%s/extension.yaml': written for extension format "
+                    "v%s, but this app supports v%s — update yolo-box-editor to "
+                    "use it" % (entry, data["api_version"], config.EXTENSION_API_VERSION))
+                continue
             merged[pid] = {
                 "id": pid,
                 "name": (data["name"] or pid).strip(),

@@ -55,6 +55,7 @@ from ybe.extensions import (
     api_version_status,
     extension_file_for,
     load_actions,
+    load_actions_report,
     load_filters,
     load_hooks,
     resolve_filter_options,
@@ -254,7 +255,7 @@ def _extension_ui_payload(ui):
 @app.route("/api/config")
 def api_config():
     app_shortcuts, user_shortcuts, shortcut_errors = split_shortcuts(load_shortcuts())
-    actions = load_actions()
+    actions, action_errors = load_actions_report()
     hooks, hook_errors = load_hooks()
     filters, filter_errors = load_filters()
     widgets, widget_errors = load_widgets()
@@ -373,6 +374,7 @@ def api_config():
             "tips": config.TIPS,
             "actions": [a["name"] for a in actions if a["name"] not in disabled["action"]],
             "action_defs": action_defs,
+            "action_errors": action_errors,
             "hooks": [h["name"] for h in hooks if h["name"] not in disabled["hook"]],
             "hook_defs": hook_defs,
             "hook_errors": hook_errors,

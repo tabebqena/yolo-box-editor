@@ -53,6 +53,19 @@ def api_version_status(version):
     return "current"
 
 
+def _newer_error(kind, path, version):
+    """A clear message for a file written for a newer extension format.
+
+    Such files are not loaded (the app cannot be sure it understands them); the
+    message tells the user to update the app rather than silently misbehaving.
+    """
+    return (
+        "'%s/%s': written for extension format v%s, but this app supports v%s — "
+        "update yolo-box-editor to use it" % (
+            kind, os.path.basename(path), version, config.EXTENSION_API_VERSION)
+    )
+
+
 def is_hook_name(name):
     """True when `name` looks like a hook name (`on_*`)."""
     return bool(name) and name.startswith(config.HOOK_PREFIX)
@@ -141,18 +154,23 @@ def _action_name(path, explicit):
     return fname[: -len(".yaml")]
 
 
-def load_actions():
-    """Parse the actions/ folders into entries (read fresh).
+def load_actions_report(include_newer=False):
+    """Parse the actions/ folders into (actions, errors) (read fresh).
 
-    One action per `.yaml` file (name from its `name:` key or the file name).
-    Returns [{"name": ..., "steps": [...], "after_success": [...]}]; entries with
-    neither steps nor after_success are dropped. The shipped app/actions/ folder
-    is read first, the user's <home>/actions/ second (it wins on a name clash).
+    One action per `.yaml` file (name from its `name:` key or the file name);
+    entries with neither steps nor after_success are dropped. A file written for
+    a newer extension format is skipped with an explaining error unless
+    `include_newer` is set (used only to resolve a file for the raw editor).
+    The shipped app/actions/ folder is read first, the user's <home>/actions/
+    second (it wins on a name clash).
     """
-    merged = {}
+    merged, errors = {}, []
     for source, dirpath, pkg in extension_sources("action"):
         for path in _action_files(dirpath):
             data = _parse_action_file(_read_text(path))
+            if not include_newer and api_version_status(data["api_version"]) == "newer":
+                errors.append(_newer_error("actions", path, data["api_version"]))
+                continue
             name = _action_name(path, data["name"])
             if not name:
                 continue
@@ -166,7 +184,12 @@ def load_actions():
                     "package": pkg,
                     "path": path,
                 }
-    return list(merged.values())
+    return list(merged.values()), errors
+
+
+def load_actions(include_newer=False):
+    """The loaded actions (see `load_actions_report`)."""
+    return load_actions_report(include_newer)[0]
 
 
 def _hook_event(path, data):
@@ -187,22 +210,26 @@ def _hook_event(path, data):
     return None
 
 
-def load_hooks():
+def load_hooks(include_newer=False):
     """Parse the hooks/ directory into (hooks, errors) (read fresh).
 
     One hook per `.yaml` file; its name is the canonical `on_<event>` and the
     event comes from the file name or the `event_name:` key. `active: false`
     hooks are skipped. Templates (files with neither `steps` nor
     `after_success`, e.g. hooks/example.yaml) are ignored silently; a file that
-    does define steps but names no known event is reported in `errors`. The
-    shipped app/hooks/ folder is read first, the user's <home>/hooks/ second (it
-    wins on an event clash).
+    does define steps but names no known event is reported in `errors`. A file
+    written for a newer extension format is skipped with an explaining error
+    unless `include_newer` is set. The shipped app/hooks/ folder is read first,
+    the user's <home>/hooks/ second (it wins on an event clash).
     """
     merged = {}
     errors = []
     for source, dirpath, pkg in extension_sources("hook"):
         for path in _action_files(dirpath):
             data = _parse_action_file(_read_text(path))
+            if not include_newer and api_version_status(data["api_version"]) == "newer":
+                errors.append(_newer_error("hooks", path, data["api_version"]))
+                continue
             event = _hook_event(path, data)
             has_body = bool(data["steps"] or data["after_success"])
             if event is None:
@@ -414,19 +441,24 @@ def _filter_files(dirpath):
     return paths
 
 
-def load_filters():
+def load_filters(include_newer=False):
     """Parse the filters/ folders into (filters, errors) (read fresh).
 
     One filter per `.yaml` file; its name is the `name:` key, else the file name.
     `active: false` and files with no `steps` are skipped. An argument that is
     invalid or shadows a reserved placeholder drops the filter and is reported in
-    `errors`. The shipped app/filters/ folder is read first, the user's
-    <home>/filters/ second (it wins on a name clash).
+    `errors`. A file written for a newer extension format is skipped with an
+    explaining error unless `include_newer` is set. The shipped app/filters/
+    folder is read first, the user's <home>/filters/ second (it wins on a name
+    clash).
     """
     merged, errors = {}, []
     for source, dirpath, pkg in extension_sources("filter"):
         for path in _filter_files(dirpath):
             data = _parse_filter_file(_read_text(path))
+            if not include_newer and api_version_status(data["api_version"]) == "newer":
+                errors.append(_newer_error("filters", path, data["api_version"]))
+                continue
             fname = os.path.basename(path)
             name = (data["name"] or "").strip() or fname[: -len(".yaml")]
             if not name or not data["active"] or not data["steps"]:
@@ -678,14 +710,14 @@ def extension_file_for(kind, name):
     """
     entry = None
     if kind == "action":
-        entry = next((a for a in load_actions() if a["name"] == name), None)
+        entry = next((a for a in load_actions(include_newer=True) if a["name"] == name), None)
     elif kind == "hook":
-        entry = next((h for h in load_hooks()[0] if h["name"] == name), None)
+        entry = next((h for h in load_hooks(include_newer=True)[0] if h["name"] == name), None)
     elif kind == "filter":
-        entry = load_filters()[0].get(name)
+        entry = load_filters(include_newer=True)[0].get(name)
     elif kind == "widget":
         from ybe.widgets import widget_file_for
-        return widget_file_for(name)
+        return widget_file_for(name, include_newer=True)
     if entry is None:
         return None
     return {

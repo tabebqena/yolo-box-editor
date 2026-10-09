@@ -109,7 +109,8 @@ let shownShortcutErrors = '';
 function renderShortcutErrors() {
   const dismissed = JSON.parse(sessionStorage.getItem('dismissedShortcutErrors') || '[]');
   // messages are self-describing ("'shortcuts.txt': ..." / "'hooks/x.yaml': ...")
-  const all = shortcutErrors.concat(hookErrors, filterErrors);
+  const all = shortcutErrors.concat(
+    actionErrors, hookErrors, filterErrors, widgetErrors, packageErrors);
   const visible = all.filter((msg) => !dismissed.includes(msg));
   if (!visible.length) return;
   const msg = visible.join(' | ');

@@ -28,6 +28,23 @@ extensions/my-tools/
 Shipped packages live in `app/extensions/`; yours live in `<home>/extensions/`.
 The user folder is read after the shipped one and wins on an id clash.
 
+## Versioning (`api_version`)
+
+Every extension file may declare `api_version:`. It is compared with the app's
+`EXTENSION_API_VERSION` and handled honestly:
+
+- **older / missing** — the file is **read** (backward compatible); it is flagged
+  `outdated` in the UI.
+- **newer** — the file is **skipped** and an explaining error is shown (in the
+  actions/hooks/filters/widgets error banner and, for packages, in the Extensions
+  tab): *"written for extension format vN, but this app supports vM — update
+  yolo-box-editor to use it"*. A newer UI panel is likewise not mounted, and a
+  newer file cannot be saved over. The raw editor can still open it so you can
+  read it.
+
+When you save an edited file from the UI its `api_version` is bumped to the
+current value.
+
 ## Permissions and installing
 
 Extensions are code, so an extension must ship a **`permissions.yaml`** that
