@@ -21,7 +21,7 @@ from flask import (
     send_from_directory,
     session,
 )
-from ybe import compat, config, extension_flags, permissions, state
+from ybe import compat, config, envs, extension_flags, permissions, state
 from ybe.auth import auth_enabled, set_user, verify_user
 from ybe.commands import (
     _advance_execution,
@@ -353,6 +353,7 @@ def api_config():
             "ui": _extension_ui_payload(p["ui"]),
             "api_version": p["api_version"],
             "status": api_version_status(p["api_version"]),
+            "environment": envs.resolve(p),
         }
         for p in packages
     ]
@@ -720,7 +721,8 @@ def api_widget_run():
     if control is None:
         return jsonify({"ok": False, "error": "unknown widget button"}), 400
     label = f"{widget_name}: {control.get('label') or 'Run'}"
-    return _execute_control(control, label, target, data.get("values"))
+    return _execute_control(control, label, target, data.get("values"),
+                            widget.get("package"))
 
 
 @app.route("/api/extensions/run", methods=["POST"])
@@ -742,7 +744,7 @@ def api_extensions_run():
         return jsonify({"ok": False, "error": "unknown package button"}), 400
     label = f"{pkg['name']}: {control.get('label') or 'Run'}"
     return _execute_control(control, label, (data.get("target") or "").strip(),
-                            data.get("values"))
+                            data.get("values"), pid)
 
 
 def _pick_control(controls, raw_index):
@@ -759,7 +761,7 @@ def _pick_control(controls, raw_index):
     return control
 
 
-def _execute_control(control, name, target, raw_values):
+def _execute_control(control, name, target, raw_values, package=None):
     """Run a widget/package button through the action engine."""
     entry = _entry_by_key(target)
     if entry is None:
@@ -779,6 +781,7 @@ def _execute_control(control, name, target, raw_values):
         "name": name,
         "steps": list(control.get("steps") or []),
         "after_success": list(control.get("after_success") or []),
+        "package": package,
     }
     if control.get("action"):
         # A named action: expand its steps/after_success here, so the button
@@ -788,6 +791,8 @@ def _execute_control(control, name, target, raw_values):
             return jsonify({"ok": False, "error": f"unknown action: {control['action']}"}), 400
         action["steps"] = list(named["steps"]) + action["steps"]
         action["after_success"] = list(named["after_success"]) + action["after_success"]
+        # Prefer the named action's own package so {EXT_*} resolves correctly.
+        action["package"] = named.get("package") or package
 
     pipe_path = create_pipe()
     run_values = _image_action_values(entry, split)
@@ -1132,6 +1137,34 @@ def api_extension_active():
         extension_flags.set_flag(pid, False)
         loaded = False
     return jsonify({"ok": True, "package": pid, "active": active, "loaded": loaded})
+
+
+@app.route("/api/extensions/env", methods=["POST"])
+def api_extension_env():
+    """Build (or refresh) a package's Python environment.
+
+    Body `{"package": "<id>"}`. Creates the package's virtualenv and installs its
+    `requirements:` (or installs into the interpreter the manifest names). This
+    can take a while (pip/network), so the UI shows a spinner. Like the active
+    toggle this is a user preference, not a dataset write, so read-only does not
+    block it.
+    """
+    data = request.get_json(silent=True) or {}
+    pid = (data.get("package") or "").strip()
+    pkg = next((p for p in load_packages()[0] if p["id"] == pid), None)
+    if pkg is None:
+        return jsonify({"ok": False, "error": f"unknown package: {pid}"}), 400
+    result = envs.setup(pkg)
+    payload = {
+        "ok": result["ok"],
+        "mode": result["mode"],
+        "environment": envs.resolve(pkg),
+        "log": result["log"],
+    }
+    if not result["ok"]:
+        payload["error"] = result["error"]
+        return jsonify(payload), 500
+    return jsonify(payload)
 
 
 @app.route("/api/extensions/call", methods=["POST"])

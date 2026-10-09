@@ -22,6 +22,7 @@ extensions/my-tools/
   filters/*.yaml          # same format as a flat filter
   widgets/*.yaml          # same format as a flat widget
   scripts/*.py            # optional helper scripts your steps call
+  requirements.txt        # optional, if the manifest names it
   README.md               # optional
 ```
 
@@ -93,6 +94,7 @@ permission and warns you before copying:
 ybe install-extension /path/to/my-extension      # prompts for confirmation
 ybe install-extension /path/to/my-extension --yes
 ybe extensions                                   # list installed extensions
+ybe extension-env my-extension                   # build its Python environment
 ybe remove-extension my-extension
 ```
 
@@ -108,9 +110,16 @@ name: My Tools
 description: A short summary shown in the Extensions tab.
 version: 1.0.0
 author: you
-active: true              # false keeps the package listed but loads nothing from it
-prefix: mytool            # optional URL prefix for this package's routes (default: id)
-backend: backend.py       # optional backend plugin (see extension-actions.md)
+active: true               # false keeps the package listed but loads nothing from it
+prefix: mytool             # optional URL prefix for this package's routes (default: id)
+backend: backend.py        # optional backend plugin (see extension-actions.md)
+
+# Optional Python environment for this package's steps (see below). A package
+# that needs packages the app does not ship declares them here.
+python: venv               # venv (default) | current | /path/to/python
+requirements:              # optional inline pip specs
+  - ultralytics>=8.0
+requirements_file: requirements.txt   # optional, relative to the package
 
 # Optional extension-defined app actions, used as ext.<package>.<name>.
 app_actions:
@@ -140,6 +149,43 @@ events: []
 
 The `parts` shown in the app are discovered automatically from the package's
 subfolders, so `provides:` is not required.
+
+## Python environments
+
+A package's scripts often need packages the app does not ship (for example a
+model runtime). The manifest can declare them:
+
+```yaml
+python: venv                 # venv (default) | current | /path/to/python
+requirements:
+  - ultralytics>=8.0
+requirements_file: requirements.txt   # optional, relative to the package
+```
+
+- `python: venv` (the default when any requirements are declared) builds a
+  **dedicated virtualenv** at `<home>/extension_envs/<id>/`, so the app's own
+  environment stays clean and the env survives app updates.
+- `python: current` installs the requirements into the app's interpreter.
+- `python: /path/to/python` uses that interpreter as-is.
+
+Inside the package's steps, use `{EXT_PYTHON}` to run with the package's
+interpreter (it falls back to `{PYTHON}` for loose files), `{EXT_ENV_DIR}` for
+the virtualenv folder and `{EXT_DIR}` for the package folder:
+
+```yaml
+steps:
+  - {EXT_PYTHON} {EXT_DIR}/scripts/annotate.py {IMAGE_PATH}
+```
+
+The environment is **never built behind your back**:
+
+- `ybe install-extension` prints what the package needs and offers to build it
+  (`--env` builds without asking, `--no-env` skips);
+- `ybe extension-env <id>` builds or refreshes it later (`--status` just prints
+  the state, `--python CMD` chooses the base interpreter);
+- Settings → Extensions shows the status and a **Set up environment** button.
+
+Building runs `pip`, so it needs network access and may take a while.
 
 ## Enabling and disabling
 

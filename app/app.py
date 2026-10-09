@@ -128,6 +128,13 @@ from ybe.packages import (
     package_script_path,
     plugin_api_status,
 )
+from ybe.envs import (
+    env_dir as extension_env_dir,
+    placeholder_values as extension_placeholder_values,
+    requirements_for as extension_requirements,
+    resolve as resolve_package_env,
+    setup as setup_extension_env,
+)
 from ybe.plugins import install as install_plugins
 from ybe.widgets import (
     _parse_widget_file,

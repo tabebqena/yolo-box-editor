@@ -157,7 +157,15 @@ Leave them unquoted; the app shell-quotes each value for you.
 | `{APP_SCRIPT_DIR}` | shipped helper scripts (`app/scripts/`) |
 | `{USER_SCRIPT_DIR}` | your helper scripts (`<home>/scripts/`) |
 | `{PYTHON}` | the Python interpreter running the app (`sys.executable`) |
+| `{EXT_DIR}` | the folder of the package that owns the step (empty for loose files) |
+| `{EXT_PYTHON}` | the interpreter for that package's environment (falls back to `{PYTHON}`) |
+| `{EXT_ENV_DIR}` | that package's virtualenv folder (empty when it has none) |
 | `{PIPE_PATH}` | path of the run's scratch file (may be empty) |
+
+An extension package can ship its own Python environment (see
+[extension packages](extensions.md)); inside that package's steps use
+`{EXT_PYTHON}` to run with its interpreter and `{EXT_DIR}` to reach its files,
+e.g. `{EXT_PYTHON} {EXT_DIR}/scripts/annotate.py {IMAGE_PATH}`.
 
 Reach a script **explicitly** with `{USER_SCRIPT_DIR}/helper.py` (yours) or
 `{APP_SCRIPT_DIR}/helper.py` (shipped). Start a Python step with `{PYTHON}`

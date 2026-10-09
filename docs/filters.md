@@ -80,6 +80,9 @@ pipe paths and each argument:
 | `{APP_SCRIPT_DIR}` | the shipped helper scripts (`app/scripts/`) |
 | `{USER_SCRIPT_DIR}` | your helper scripts (`<home>/scripts/`) |
 | `{PYTHON}` | the Python interpreter running the app (`sys.executable`) |
+| `{EXT_DIR}` | the folder of the package that owns the filter (empty for loose files) |
+| `{EXT_PYTHON}` | the interpreter for that package's environment (falls back to `{PYTHON}`) |
+| `{EXT_ENV_DIR}` | that package's virtualenv folder (empty when it has none) |
 | `{<ARG>}` | each declared argument, upper-cased (`threshold` -> `{THRESHOLD}`) |
 
 Write your filter logic as a helper script under `<home>/scripts/` (shipped

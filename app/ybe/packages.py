@@ -82,6 +82,7 @@ def _parse_manifest(text):
         "author": None, "active": True, "api_version": None, "prefix": None,
         "settings": None, "events": [], "ui": None,
         "backend": None, "app_actions": [],
+        "python": None, "requirements": [], "requirements_file": None,
     }
     lines = text.splitlines(keepends=True)
     for raw in lines:
@@ -94,7 +95,8 @@ def _parse_manifest(text):
         key, value = key.strip(), _strip_comment(value)
         if key == "api_version":
             data["api_version"] = _parse_api_version(value)
-        elif key in ("id", "name", "description", "version", "author", "backend", "prefix"):
+        elif key in ("id", "name", "description", "version", "author", "backend",
+                     "prefix", "python", "requirements_file"):
             if value:
                 data[key] = _yaml_scalar(value)
         elif key == "active":
@@ -126,6 +128,15 @@ def _parse_manifest(text):
                 name = _yaml_scalar(line[2:].strip())
                 if name and name not in data["events"]:
                     data["events"].append(name)
+
+    requirements_block = _indented_block(text, "requirements")
+    if requirements_block:
+        for line in requirements_block.splitlines():
+            line = line.strip()
+            if line.startswith("- "):
+                req = _yaml_scalar(line[2:].strip())
+                if req and req not in data["requirements"]:
+                    data["requirements"].append(req)
 
     ui_block = _indented_block(text, "ui")
     if ui_block:
@@ -353,6 +364,9 @@ def load_packages():
                 "ui": data["ui"],
                 "backend": data["backend"],
                 "app_actions": data["app_actions"],
+                "python": data["python"],
+                "requirements": data["requirements"],
+                "requirements_file": data["requirements_file"],
                 "prefix": (data["prefix"] or "").strip() or None,
                 "parts": _discover_parts(path),
                 "source": source,

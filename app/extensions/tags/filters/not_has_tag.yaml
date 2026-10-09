@@ -1,5 +1,5 @@
 # Keep only the images that do NOT have the chosen tag.
-api_version: 5
+api_version: 6
 name: Does not have tag
 description: Keep only images that do not have the chosen tag.
 arguments:

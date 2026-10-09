@@ -1,0 +1,2 @@
+# Fixture requirements for the v6 env package.
+anotherpkg==2.0

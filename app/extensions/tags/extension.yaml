@@ -4,7 +4,7 @@
 # tags.yaml, the per-image tag files and the tags folder, and a sandboxed UI
 # panel (`panel.js`) that renders the tag bar. It is shipped `active: false`, so
 # nothing loads until you enable it under Settings > Extensions.
-api_version: 5
+api_version: 6
 id: tags
 name: Tags
 description: Label whole images with tags from tags.yaml (tag bar, Alt+1..9).

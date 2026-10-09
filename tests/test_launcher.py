@@ -168,6 +168,38 @@ def test_do_users_create_rejects_duplicate(tmp_path, monkeypatch, capsys):
     assert "already exists" in capsys.readouterr().err
 
 
+def _isolate_extensions(tmp_path, monkeypatch):
+    """Point the extension folders at `tmp_path` without touching the real home."""
+    from ybe import config as ybe_config
+
+    monkeypatch.setattr(launcher, "app_py", lambda: str(tmp_path / "app.py"))
+    monkeypatch.setattr(ybe_config, "configure_home", lambda path: None)
+    monkeypatch.setattr(ybe_config, "EXTENSIONS_DIR", str(tmp_path / "app-extensions"))
+    monkeypatch.setattr(ybe_config, "USER_EXTENSIONS_DIR", str(tmp_path / "extensions"))
+    monkeypatch.setattr(ybe_config, "EXTENSION_ENVS_DIR", str(tmp_path / "extension_envs"))
+
+
+def test_do_extension_env_status(tmp_path, monkeypatch, capsys):
+    _isolate_extensions(tmp_path, monkeypatch)
+    pkg = tmp_path / "extensions" / "p"
+    pkg.mkdir(parents=True)
+    (pkg / "extension.yaml").write_text(
+        "api_version: 6\nid: p\npython: venv\nrequirements:\n  - ultralytics>=8\n",
+        encoding="utf-8")
+    assert launcher.do_extension_env(str(tmp_path), ["p", "--status"]) == 0
+    out = capsys.readouterr().out
+    assert "p: missing" in out
+    assert "ultralytics>=8" in out
+
+
+def test_do_extension_env_unknown_id(tmp_path, monkeypatch, capsys):
+    _isolate_extensions(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit) as exc:
+        launcher.do_extension_env(str(tmp_path), ["ghost"])
+    assert exc.value.code == 1
+    assert "unknown extension" in capsys.readouterr().err
+
+
 def test_do_users_update_and_delete_require_existing(tmp_path, monkeypatch, capsys):
     _isolate_users(tmp_path, monkeypatch)
     home = str(tmp_path)

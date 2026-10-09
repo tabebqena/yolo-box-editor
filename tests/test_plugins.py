@@ -103,8 +103,8 @@ def test_resolve_entry_accepts_extension_app_actions(tmp_path, monkeypatch):
     ext = _tags_package(tmp_path)
     monkeypatch.setattr(ybe.config, "EXTENSIONS_DIR", str(ext))
     monkeypatch.setattr(ybe.config, "USER_EXTENSIONS_DIR", str(tmp_path / "none"))
-    assert ybe._resolve_entry("ext.tags.clear_tags", {}) == ("app", "ext.tags.clear_tags")
-    kind, msg = ybe._resolve_entry("ext.tags.bogus", {})
+    assert ybe._resolve_entry("ext.tags.clear_tags", {}) == ("app", "ext.tags.clear_tags", None)
+    kind, msg, _pkg = ybe._resolve_entry("ext.tags.bogus", {})
     assert kind == "bad" and "unknown extension app action" in msg
 
 

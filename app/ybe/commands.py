@@ -9,7 +9,7 @@ Also holds the server-side built-in action registry.
 import subprocess
 import sys
 
-from ybe import config, state
+from ybe import config, envs, state
 from ybe.dataset import scan_images
 from ybe.extensions import load_actions
 from ybe.filters import _clear_filter, apply_filters
@@ -54,7 +54,7 @@ def _run_command(run, command):
     return "ok"
 
 
-def _resolve_entry(entry, actions_by_name):
+def _resolve_entry(entry, actions_by_name, package=None):
     """Resolve one `steps` / `after_success` entry into a work-queue item.
 
     Both lists share one syntax:
@@ -63,26 +63,27 @@ def _resolve_entry(entry, actions_by_name):
       - `action_<Name>` known action   -> ("action", dict)  run inline
       - anything else                  -> ("cmd", entry)    shell command
     An unknown `app_*`, `backend_*` or `action_*` name becomes a
-    ("bad", message) item.
+    ("bad", message) item. The owning `package` id rides along so a command can
+    resolve its `{EXT_*}` placeholders from that package's environment.
     """
     if entry in config.APP_ACTIONS:
-        return ("app", entry)
+        return ("app", entry, package)
     if entry.startswith(config.EXTENSION_ACTION_PREFIX):
         if entry in extension_app_action_ids():
-            return ("app", entry)
-        return ("bad", f"unknown extension app action: {entry}")
+            return ("app", entry, package)
+        return ("bad", f"unknown extension app action: {entry}", package)
     if entry.startswith("app_"):
-        return ("bad", f"unknown app action: {entry}")
+        return ("bad", f"unknown app action: {entry}", package)
     if entry in config.BACKEND_ACTION_NAMES:
-        return ("backend", entry)
+        return ("backend", entry, package)
     if entry.startswith("backend_"):
-        return ("bad", f"unknown backend action: {entry}")
+        return ("bad", f"unknown backend action: {entry}", package)
     if entry.startswith(config.ACTION_REF_PREFIX):
         name = entry[len(config.ACTION_REF_PREFIX):]
         if name in actions_by_name:
-            return ("action", actions_by_name[name])
-        return ("bad", f"unknown action: {name}")
-    return ("cmd", entry)
+            return ("action", actions_by_name[name], package)
+        return ("bad", f"unknown action: {name}", package)
+    return ("cmd", entry, package)
 
 
 def _action_items(action):
@@ -95,8 +96,9 @@ def _action_items(action):
     actions_by_name = {
         a["name"]: a for a in load_actions() if a["name"] not in disabled
     }
+    package = action.get("package")
     entries = list(action.get("steps") or []) + list(action.get("after_success") or [])
-    return [_resolve_entry(entry, actions_by_name) for entry in entries]
+    return [_resolve_entry(entry, actions_by_name, package) for entry in entries]
 
 
 def _advance_execution(run):
@@ -110,7 +112,7 @@ def _advance_execution(run):
         ("error", msg)    an unknown action / bad after_success / cascade limit
     """
     while run["queue"]:
-        kind, value = run["queue"].pop(0)
+        kind, value, package = run["queue"].pop(0)
         if kind == "app":  # frontend action: pause for the client
             return "client", value
         if kind == "bad":
@@ -131,8 +133,13 @@ def _advance_execution(run):
             if error:
                 return "error", error
             continue
-        # Anything else is a shell command.
-        status = _run_command(run, build_command(value, run["values"]))
+        # Anything else is a shell command. Its {EXT_*} placeholders resolve
+        # from the package that owns the step (empty/`{PYTHON}` for loose files).
+        values = run["values"]
+        ext = envs.placeholder_values(package)
+        if ext:
+            values = {**values, **ext}
+        status = _run_command(run, build_command(value, values))
         if status != "ok":
             return status, None
     return "done", None

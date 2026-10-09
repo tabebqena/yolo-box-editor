@@ -103,10 +103,68 @@ function buildPackagePanel(pkg) {
     panel.appendChild(mk('p', 'hint', 'UI panel: ' + (pkg.ui.title || pkg.id) + note));
   }
   panel.appendChild(buildPackagePermissions(pkg));
+  if (pkg.environment && pkg.environment.declared) {
+    panel.appendChild(buildPackageEnvironment(pkg));
+  }
   if (pkg.settings && (pkg.settings.controls || []).length) {
     panel.appendChild(buildPackageSettings(pkg));
   }
   return panel;
+}
+
+/**
+ * Build the Python-environment section for a package that declares one
+ * (`python:` / `requirements:` in its manifest). Offers to build it.
+ * @param {object} pkg - The package definition.
+ * @returns {HTMLElement}
+ */
+function buildPackageEnvironment(pkg) {
+  const env = pkg.environment || {};
+  const sec = mk('div', 'package-environment');
+  sec.appendChild(mk('div', 'settings-group-title', 'Python environment'));
+  const statusText = {
+    ready: 'ready',
+    missing: 'not built yet',
+    none: 'none needed',
+  }[env.status] || env.status || 'unknown';
+  sec.appendChild(mk('p', 'hint',
+    'Status: ' + statusText + (env.mode ? ' (' + env.mode + ')' : '')));
+  if ((env.requirements || []).length) {
+    sec.appendChild(mk('p', 'hint', 'Requires: ' + env.requirements.join(', ')));
+  }
+  if (env.env_dir) sec.appendChild(mk('p', 'hint', 'Virtualenv: ' + env.env_dir));
+  const actions = mk('div', 'ext-def-actions');
+  const btn = mk('button', 'ext-open',
+    env.status === 'ready' ? 'Rebuild environment' : 'Set up environment');
+  btn.type = 'button';
+  btn.title = 'Create the virtualenv and install the requirements';
+  btn.addEventListener('click', () => setupPackageEnv(pkg, btn));
+  actions.appendChild(btn);
+  sec.appendChild(actions);
+  return sec;
+}
+
+/**
+ * Build (or refresh) a package's Python environment on the server.
+ * @param {object} pkg - The package definition.
+ * @param {HTMLButtonElement} btn - The button that was clicked.
+ * @returns {Promise<void>}
+ */
+async function setupPackageEnv(pkg, btn) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Building\u2026 (this can take a while)';
+  try {
+    const { res, data } = await apiPost('/api/extensions/env', { package: pkg.id });
+    if (!res.ok || data.ok === false) throw new Error(data.error || 'setup failed');
+    toast('Environment ready for ' + pkg.name, { type: 'success' });
+    await refreshExtensions();
+  } catch (e) {
+    dbgWarn('environment setup failed', e);
+    toast('Environment setup failed: ' + e.message, { type: 'error' });
+    btn.disabled = false;
+    btn.textContent = original;
+  }
 }
 
 /**

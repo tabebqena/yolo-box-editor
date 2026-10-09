@@ -151,3 +151,38 @@ test('runPackageControl posts to /api/extensions/run', async () => {
   assert.equal(body.control, 1);
   assert.equal(body.target, 'train/a.jpg');
 });
+
+const ENV_PACKAGE = Object.assign({}, PACKAGE, {
+  environment: {
+    declared: true,
+    status: 'missing',
+    mode: 'venv',
+    requirements: ['ultralytics>=8'],
+    env_dir: '/home/extension_envs/mypack',
+  },
+});
+
+test('a package with an environment shows its status and a Set up button', () => {
+  app.set({ extensionPackages: [ENV_PACKAGE] });
+  app.api.renderExtensionsTab();
+  const sec = app.$('extensionTabBody').querySelector('.package-environment');
+  assert.ok(sec);
+  assert.match(sec.textContent, /not built yet/);
+  assert.match(sec.textContent, /ultralytics>=8/);
+  assert.match(sec.querySelector('button').textContent, /Set up environment/);
+});
+
+test('the Set up environment button posts to /api/extensions/env', async () => {
+  app.set({ extensionPackages: [ENV_PACKAGE] });
+  app.api.renderExtensionsTab();
+  let body = null;
+  app.fetchMock.on('/api/extensions/env', (url, method, entry) => {
+    body = JSON.parse(entry.body);
+    return { body: { ok: true } };
+  });
+  const btn = app.$('extensionTabBody').querySelector('.package-environment button');
+  btn.dispatchEvent(new app.window.Event('click', { bubbles: true }));
+  await app.flush();
+  assert.deepEqual(body, { package: 'mypack' });
+});
+

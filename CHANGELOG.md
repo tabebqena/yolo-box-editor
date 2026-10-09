@@ -4,6 +4,26 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.12.0] - 2026-10-10
+
+### Added
+
+- **Extensions can ship their own Python environment.** A package manifest may
+  now declare `requirements:` (inline specs) and/or `requirements_file:` (a file
+  inside the package), plus a `python:` strategy: `venv` (the default — a
+  dedicated virtualenv under `<home>/extension_envs/<id>/`), `current` (the
+  app's interpreter) or an explicit interpreter path. The package's steps reach
+  it through three new placeholders: `{EXT_PYTHON}` (its interpreter, falling
+  back to `{PYTHON}` for loose files), `{EXT_ENV_DIR}` (its virtualenv folder)
+  and `{EXT_DIR}` (the package folder). Building is explicit: `ybe
+  install-extension` prints what the package needs and offers to build it
+  (`--env`/`--no-env`), `ybe extension-env <id>` builds or refreshes it later
+  (`--status`, `--python CMD`), and Settings → Extensions shows the status with a
+  **Set up environment** button backed by `POST /api/extensions/env`.
+- The extension format version is now **v6**; the new manifest keys are
+  backward-compatible, so v5 packages keep loading (with an "outdated" badge
+  prompting an update). The support window is now `v4..v6`.
+
 ## [10.11.0] - 2026-10-09
 
 ### Changed

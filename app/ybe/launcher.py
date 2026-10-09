@@ -342,12 +342,22 @@ Usage:
   ybe install-extension <path>   install the extension folder at <path>
       --yes                      do not prompt (still shows the permissions)
       --force                    install over a built-in id / replace an existing copy
+      --env                      build the Python environment without prompting
+      --no-env                   do not offer to build the Python environment
   ybe remove-extension <id>      remove an installed extension
+  ybe extension-env <id>         build/refresh an extension's Python environment
+      --python CMD               base interpreter for a new virtualenv
+      --status                   only print the environment status
 
 Before installing, the extension's permissions.yaml is printed with an
 explanation of each permission and a trust warning. The folder is copied to
 <home>/extensions/<id>/ and enabled; restart the app ('ybe restart') if it is
 running.
+
+An extension may declare Python packages it needs (`requirements:`) and how to
+run them (`python: venv|current|/path`). 'ybe extension-env <id>' builds a
+dedicated virtualenv under <home>/extension_envs/<id>/ (the default) or
+installs into the app's interpreter. Its steps reach it as {EXT_PYTHON}.
 """
 
 
@@ -361,16 +371,20 @@ def _read_text(path):
 
 def do_install_extension(home, args):
     """Install an extension folder after showing what it declares and asks for."""
-    from ybe import config, extension_flags, permissions
+    from ybe import config, envs, extension_flags, permissions
     from ybe.packages import _parse_manifest
 
-    assume_yes = force = False
+    assume_yes = force = build_env = no_env = False
     source = None
     for arg in args:
         if arg in ("-y", "--yes"):
             assume_yes = True
         elif arg in ("-f", "--force"):
             force = True
+        elif arg == "--env":
+            build_env = True
+        elif arg == "--no-env":
+            no_env = True
         elif arg in ("-h", "--help"):
             print(EXTENSION_USAGE, end="")
             return 0
@@ -403,6 +417,16 @@ def do_install_extension(home, args):
             "uses (use --force to install anyway)" % source)
     dest = os.path.join(config.USER_EXTENSIONS_DIR, pid)
 
+    # The environment view is computed against the source folder (still present
+    # during install); after copying we reuse it to offer the build.
+    pkg_like = {
+        "id": pid, "path": source,
+        "python": manifest["python"],
+        "requirements": manifest["requirements"],
+        "requirements_file": manifest["requirements_file"],
+    }
+    info = envs.resolve(pkg_like)
+
     version = (" v" + manifest["version"]) if manifest["version"] else ""
     say("Extension: %s (%s)%s" % (manifest["name"] or pid, pid, version))
     if manifest["description"]:
@@ -417,6 +441,17 @@ def do_install_extension(home, args):
         unknown = permissions.unknown_ybe_permissions(perms)
         if unknown:
             say("  ! unknown permissions (check the file): %s" % ", ".join(unknown))
+    if info["declared"]:
+        say("")
+        say("Python environment:")
+        if info["requirements"]:
+            say("  requires: " + ", ".join(info["requirements"]))
+        if info["mode"] == envs.MODE_VENV:
+            say("  strategy: dedicated virtualenv at %s" % info["env_dir"])
+        elif info["mode"] == envs.MODE_CURRENT:
+            say("  strategy: install into the app's interpreter (%s)" % info["python"])
+        else:
+            say("  strategy: use interpreter %s" % info["python"])
     say("")
     say(EXTENSION_INSTALL_WARNING)
 
@@ -437,6 +472,28 @@ def do_install_extension(home, args):
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     extension_flags.set_flag(pid, True)
     say("Installed '%s' into %s (enabled)." % (pid, dest))
+
+    if info["declared"] and not no_env:
+        do_build = build_env
+        if not build_env and not assume_yes:
+            try:
+                answer = input("\nBuild the Python environment now? [y/N] ").strip().lower()
+            except EOFError:
+                answer = ""
+            do_build = answer in ("y", "yes")
+        if do_build:
+            say("")
+            # Build against the installed copy so requirements_file resolves.
+            installed = dict(pkg_like, path=dest)
+            result = envs.setup(installed, log=lambda message: say("  " + message))
+            if result["ok"]:
+                say("Environment ready.")
+            else:
+                say("Environment setup failed: %s" % result["error"])
+                say("Re-run later with: ybe extension-env %s" % pid)
+        else:
+            say("Skipped environment setup; run 'ybe extension-env %s' later." % pid)
+
     _warn_if_running(home)
     return 0
 
@@ -463,9 +520,62 @@ def do_remove_extension(home, args):
     return 0
 
 
+def do_extension_env(home, args):
+    """Build or inspect an extension's Python environment."""
+    from ybe import config, envs
+    from ybe.packages import load_packages
+
+    config.configure_home(home)
+    base = None
+    status_only = False
+    pid = None
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ("-h", "--help"):
+            print(EXTENSION_USAGE, end="")
+            return 0
+        if arg == "--status":
+            status_only = True
+        elif arg == "--python":
+            i += 1
+            base = args[i] if i < len(args) else None
+        elif arg.startswith("--python="):
+            base = arg.split("=", 1)[1]
+        elif arg.startswith("-"):
+            die("unknown option %r; try 'ybe extension-env --help'" % arg)
+        elif pid is None:
+            pid = arg
+        else:
+            die("extension-env takes one id")
+        i += 1
+
+    if not pid:
+        die("usage: ybe extension-env <id> [--python CMD] [--status]")
+    pkg = next((p for p in load_packages()[0] if p["id"] == pid), None)
+    if pkg is None:
+        die("unknown extension '%s'" % pid)
+
+    info = envs.resolve(pkg)
+    if status_only:
+        say("%s: %s" % (pid, info["status"]))
+        if info["requirements"]:
+            say("  requires: " + ", ".join(info["requirements"]))
+        if info["env_dir"]:
+            say("  env: %s" % info["env_dir"])
+        return 0
+
+    result = envs.setup(pkg, base_python=base, log=lambda message: say("  " + message))
+    if not result["ok"]:
+        say("Environment setup failed: %s" % result["error"])
+        return 1
+    say("Environment ready for '%s' (%s)." % (pid, result["mode"]))
+    return 0
+
+
 def do_extensions(home, args):
     """List installed extensions, or dispatch `install`/`remove` subcommands."""
-    from ybe import config
+    from ybe import config, envs
     from ybe.packages import load_packages
 
     config.configure_home(home)
@@ -487,7 +597,9 @@ def do_extensions(home, args):
         perms = "permissions: yes" if pkg["permissions"] else "permissions: MISSING"
         issues = (" (%d issue(s))" % len(pkg["permission_errors"])
                   if pkg["permission_errors"] else "")
-        say("%-20s %-8s %s%s" % (pkg["id"], status, perms, issues))
+        env_status = envs.resolve(pkg)["status"]
+        env = "" if env_status == "none" else " env: %s" % env_status
+        say("%-20s %-8s %s%s%s" % (pkg["id"], status, perms, issues, env))
     return 0
 
 
@@ -536,6 +648,7 @@ Usage:
   ybe install-extension PATH  install an extension (see the trust prompt)
   ybe extensions              list installed extensions
   ybe remove-extension ID     remove an installed extension
+  ybe extension-env ID        build/refresh an extension's Python environment
   ybe version                 print the installed version
   ybe check-update            check for a newer version
   ybe update                  update in place, keeping your files and venv
@@ -599,6 +712,8 @@ def main(argv=None):
         return do_remove_extension(home, args)
     if command in ("extensions", "extension"):
         return do_extensions(home, args)
+    if command in ("extension-env", "ext-env"):
+        return do_extension_env(home, args)
     if command in ("version", "check-update", "update", "upgrade", "uninstall"):
         return delegate(home, command, args)
     if command in ("help", "-h", "--help"):

@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 
-from ybe import config, state
+from ybe import config, envs, state
 from ybe.dataset import _split_by_name, read_classes
 from ybe.extensions import (
     effective_filter_arguments,
@@ -94,6 +94,8 @@ def _filter_placeholder_values(flt, data_yaml, split, input_pipe, output_pipe, a
         "INPUT_PIPE": input_pipe,
         "OUTPUT_PIPE": output_pipe,
     }
+    # {EXT_*} resolve from the package that owns the filter (empty for loose files).
+    values.update(envs.placeholder_values(flt.get("package")))
     effective = effective_filter_arguments(flt, arguments)
     for arg in flt["arguments"]:
         key = arg["name"].upper()

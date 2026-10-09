@@ -1,0 +1,8 @@
+api_version: 6
+id: envpack
+name: Env Pack
+version: 1.0.0
+python: venv
+requirements:
+  - examplepkg>=1.0
+requirements_file: requirements.txt

@@ -2,7 +2,7 @@
 #
 # Shipped by the tags extension package. The helper reads the dataset's tags
 # folder (including a per-dataset override) when `--tags-dir` is not given.
-api_version: 5
+api_version: 6
 name: Has tag
 description: Keep only images that have the chosen tag.
 arguments:

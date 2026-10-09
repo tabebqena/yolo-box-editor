@@ -47,6 +47,9 @@ USER_WIDGETS_DIR = os.path.join(YBX_HOME, "widgets")
 USER_EXTENSIONS_DIR = os.path.join(YBX_HOME, "extensions")
 USER_SCRIPT_DIR = os.path.join(YBX_HOME, "scripts")
 USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
+# Per-extension virtual environments (one folder per package id), built from a
+# package's `requirements:`. Kept in YBX_HOME so they survive app updates.
+EXTENSION_ENVS_DIR = os.path.join(YBX_HOME, "extension_envs")
 # One JSON file holds all per-user config: recent datasets, per-dataset views
 # (split/filter/disabled + last image) and cross-browser UI settings. It
 # sits in YBX_HOME, outside `app/`, so app updates never touch it.
@@ -92,7 +95,7 @@ def configure_home(path):
     global USER_WIDGETS_DIR, USER_EXTENSIONS_DIR
     global USER_SCRIPT_DIR, USER_SHORTCUTS_FILE, RECENT_FILE, VIEW_FILE
     global SETTINGS_FILE, UPDATE_CHECK_FILE, CONFIG_FILE, USERS_FILE
-    global SECRET_KEY_FILE
+    global SECRET_KEY_FILE, EXTENSION_ENVS_DIR
     YBX_HOME = os.path.abspath(os.path.expanduser(path))
     USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
     USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
@@ -101,6 +104,7 @@ def configure_home(path):
     USER_EXTENSIONS_DIR = os.path.join(YBX_HOME, "extensions")
     USER_SCRIPT_DIR = os.path.join(YBX_HOME, "scripts")
     USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
+    EXTENSION_ENVS_DIR = os.path.join(YBX_HOME, "extension_envs")
     CONFIG_FILE = os.path.join(YBX_HOME, "config.json")
     RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
     VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")
@@ -115,6 +119,7 @@ def ensure_user_dirs():
     for dirpath in (
         USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR,
         USER_WIDGETS_DIR, USER_EXTENSIONS_DIR, USER_SCRIPT_DIR,
+        EXTENSION_ENVS_DIR,
     ):
         try:
             os.makedirs(dirpath, exist_ok=True)
@@ -247,8 +252,10 @@ HOOK_EVENTS = (
 # against this to flag files that predate (or postdate) the format it understands.
 # v2 added custom widgets; v3 added extension packages; v4 added sandboxed UI
 # panels (`ui:` in an extension manifest); v5 added backend plugins
-# (`backend:`) and extension-defined app actions (`app_actions:`).
-EXTENSION_API_VERSION = 5
+# (`backend:`) and extension-defined app actions (`app_actions:`); v6 added
+# per-package Python environments (`python:`, `requirements:`,
+# `requirements_file:`).
+EXTENSION_API_VERSION = 6
 # What each extension format version added. This is the declared semantics list
 # the app keeps so a future release can support or drop a version on purpose
 # (see `ybe/compat.py`).
@@ -258,6 +265,7 @@ EXTENSION_API_HISTORY = (
     (3, "extension packages"),
     (4, "sandboxed UI panels (ui:)"),
     (5, "backend plugins (backend:) and app_actions"),
+    (6, "per-package Python environments (python:, requirements:)"),
 )
 # Versions the app no longer parses at all. Empty now; a future release adds one
 # here to drop support explicitly (files are then always skipped).
@@ -298,6 +306,9 @@ ACTION_PLACEHOLDERS = (
     ("APP_SCRIPT_DIR", "the shipped helper scripts (app/scripts/)"),
     ("USER_SCRIPT_DIR", "your helper scripts (<home>/scripts/)"),
     ("PYTHON", "the Python interpreter running the app"),
+    ("EXT_DIR", "the folder of the package that owns this step (empty for loose files)"),
+    ("EXT_PYTHON", "the interpreter for that package's environment (falls back to {PYTHON})"),
+    ("EXT_ENV_DIR", "that package's virtualenv folder (empty when it has none)"),
     ("PIPE_PATH", "the per-run scratch file shared by the run's steps"),
 )
 FILTER_PLACEHOLDERS = (
@@ -311,4 +322,7 @@ FILTER_PLACEHOLDERS = (
     ("APP_SCRIPT_DIR", "the shipped helper scripts (app/scripts/)"),
     ("USER_SCRIPT_DIR", "your helper scripts (<home>/scripts/)"),
     ("PYTHON", "the Python interpreter running the app"),
+    ("EXT_DIR", "the folder of the package that owns this filter (empty for loose files)"),
+    ("EXT_PYTHON", "the interpreter for that package's environment (falls back to {PYTHON})"),
+    ("EXT_ENV_DIR", "that package's virtualenv folder (empty when it has none)"),
 )

@@ -1,0 +1,5 @@
+# Extension format v6: per-package Python environments (python:, requirements:).
+api_version: 6
+name: Greet6
+steps:
+  - echo hello

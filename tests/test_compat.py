@@ -66,7 +66,7 @@ def test_versions_in_window_load(version, tmp_path, monkeypatch):
     assert ybe.load_filters()[1] == []
     assert ybe.load_widgets()[1] == []
     if version >= 3:
-        expected = {3: "oldpack", 4: "panelpack", 5: "backendpack"}[version]
+        expected = {3: "oldpack", 4: "panelpack", 5: "backendpack", 6: "envpack"}[version]
         assert expected in [p["id"] for p in ybe.load_packages()[0]]
 
 

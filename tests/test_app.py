@@ -121,6 +121,7 @@ def clean_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe.config, "USER_EXTENSIONS_DIR", str(tmp_path / "extensions"))
     monkeypatch.setattr(ybe.config, "APP_SCRIPT_DIR", str(tmp_path / "app-scripts"))
     monkeypatch.setattr(ybe.config, "USER_SCRIPT_DIR", str(tmp_path / "scripts"))
+    monkeypatch.setattr(ybe.config, "EXTENSION_ENVS_DIR", str(tmp_path / "extension_envs"))
     monkeypatch.setattr(ybe.config, "SHORTCUTS_FILE", str(tmp_path / "app-shortcuts.txt"))
     monkeypatch.setattr(ybe.config, "USER_SHORTCUTS_FILE", str(tmp_path / "shortcuts.txt"))
     monkeypatch.setattr(ybe.config, "PIPE_DIR", str(tmp_path / "pipes"))
@@ -656,7 +657,7 @@ def test_refresh_image_actions_are_builtin():
         "app_refresh_image_all",
     ):
         assert name in ybe.config.APP_ACTIONS
-        assert ybe._resolve_entry(name, {}) == ("app", name)
+        assert ybe._resolve_entry(name, {}) == ("app", name, None)
 
 
 def test_app_help_action_is_builtin():
@@ -3421,7 +3422,7 @@ def write_widget(root, fname, body, subdir="widgets"):
 
 
 WIDGET_YAML = """\
-api_version: 5
+api_version: 6
 name: Tools
 title: Tools
 controls:

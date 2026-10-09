@@ -1427,6 +1427,13 @@ button.is-loading::after {
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }
+.package-environment {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
 
 /* 16. sandboxed extension UI panels -------------------------------------- */
 .panel-iframe {
