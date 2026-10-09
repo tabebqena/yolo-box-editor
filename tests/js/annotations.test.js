@@ -270,6 +270,46 @@ test('runAppAction dispatches the built-in action handlers', async () => {
   assert.equal(app.state().boxes.length, 2);
 });
 
+test('app_refresh_image_labels reloads boxes from the server', async () => {
+  ready({ boxes: [box()], imageTags: ['old'], dirty: true });
+  app.fetchMock.onPrefix('/api/annotations', () => ({
+    body: { boxes: [box({ cx: 0.25 }), box({ cx: 0.75 })], tags: ['new'] },
+  }));
+  await app.api.runAppAction('app_refresh_image_labels', { preventDefault() {} });
+  assert.equal(app.state().boxes.length, 2);
+  assert.equal(app.state().boxes[0].cx, 0.25);
+  assert.deepEqual(app.state().imageTags, ['old']); // labels only
+  assert.equal(app.state().dirty, false);
+});
+
+test('app_refresh_image_tags reloads tags from the server', async () => {
+  ready({ boxes: [box()], imageTags: ['old'] });
+  app.fetchMock.onPrefix('/api/annotations', () => ({
+    body: { boxes: [box({ cx: 0.9 })], tags: ['fire', 'review'] },
+  }));
+  await app.api.runAppAction('app_refresh_image_tags', { preventDefault() {} });
+  assert.deepEqual(plain(app.state().imageTags), ['fire', 'review']);
+  assert.equal(app.state().boxes[0].cx, 0.5); // tags only
+});
+
+test('app_refresh_image_all reloads boxes and tags', async () => {
+  ready({ boxes: [box()], imageTags: ['old'] });
+  app.fetchMock.onPrefix('/api/annotations', () => ({
+    body: { boxes: [box({ cx: 0.3 })], tags: ['a', 'b'] },
+  }));
+  await app.api.runAppAction('app_refresh_image_all', { preventDefault() {} });
+  assert.equal(app.state().boxes[0].cx, 0.3);
+  assert.deepEqual(plain(app.state().imageTags), ['a', 'b']);
+});
+
+test('app_refresh_image_labels is a no-op without an image', async () => {
+  ready({ currentIndex: -1 });
+  let fetched = false;
+  app.fetchMock.onPrefix('/api/annotations', () => { fetched = true; return { body: {} }; });
+  await app.api.runAppAction('app_refresh_image_labels', { preventDefault() {} });
+  assert.equal(fetched, false);
+});
+
 test('app_box_details toggles the details flag', () => {
   ready({ boxDetailsVisible: true });
   app.api.runAppAction('app_box_details', { preventDefault() {} });

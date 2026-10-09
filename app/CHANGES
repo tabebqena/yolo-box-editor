@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 8.2.0
+- New built-in actions for refreshing the current image without a page reload: `app_refresh_image_labels` (re-read labels), `app_refresh_image_tags` (re-read tags) and `app_refresh_image_all` (pixels, labels and tags). `app_refresh_image` still re-fetches just the pixels. Handy in an action/hook `after_success` or a widget button after an external tool edits the image.
+
 ## 8.1.0
 - Custom widgets: define your own floating/dockable panel in a `widgets/*.yaml` file (copy `app/widgets/example.yaml`). It can hold buttons, dropdowns, checkboxes and text inputs; a button runs an action (or inline steps) and the other controls are passed along as `{WIDGET_<ID>}` placeholders. Pick each widget's show/location in Settings > Layout.
 - Extension packages: an `extensions/<name>/` folder with an `extension.yaml` groups actions, hooks, filters and widgets, and can add its own Settings > Extensions subtab with declarative controls. This layers on top of the existing folders — your flat actions/hooks/filters/widgets and their tabs are unchanged.

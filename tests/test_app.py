@@ -651,6 +651,17 @@ def test_app_actions_include_hook_only_client_actions():
         assert name in ybe.config.APP_ACTIONS
 
 
+def test_refresh_image_actions_are_builtin():
+    for name in (
+        "app_refresh_image",
+        "app_refresh_image_labels",
+        "app_refresh_image_tags",
+        "app_refresh_image_all",
+    ):
+        assert name in ybe.config.APP_ACTIONS
+        assert ybe._resolve_entry(name, {}) == ("app", name)
+
+
 def test_app_help_action_is_builtin():
     assert "app_help" in ybe.config.APP_ACTIONS
 

@@ -4,6 +4,18 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [8.2.0] - 2026-10-09
+
+### Added
+
+- **Refresh actions for the current image.** Besides `app_refresh_image`
+  (pixels only), the app now has `app_refresh_image_labels` (re-read the label
+  file), `app_refresh_image_tags` (re-read the tag file) and
+  `app_refresh_image_all` (pixels, labels and tags). They reload the requested
+  part from disk into the running UI, so an external tool that rewrote a label
+  or tag file can be reflected without navigating away or reloading the page.
+  Use them in an action/hook `after_success` or as a widget button.
+
 ## [8.1.0] - 2026-10-09
 
 ### Added

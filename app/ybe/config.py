@@ -154,6 +154,9 @@ APP_ACTIONS = {
     "app_refresh_images_list",
     "app_reload_images_list",
     "app_refresh_image",
+    "app_refresh_image_labels",
+    "app_refresh_image_tags",
+    "app_refresh_image_all",
     "app_help",
     # Client-only actions meant to be called from an action/hook `steps` or
     # `after_success` (not bound to keys by default).

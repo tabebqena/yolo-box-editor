@@ -165,6 +165,52 @@ async function postJson(url, body) {
 }
 
 /**
+ * Fetch the current image's annotations (labels and tags) from the server.
+ * @returns {Promise<Object|null>} `{boxes, tags}`, or null when no image is open.
+ */
+async function fetchCurrentAnnotations() {
+  if (currentIndex < 0 || !images[currentIndex]) return null;
+  return apiGetOrNull('/api/annotations' + keyQuery(images[currentIndex]));
+}
+
+/**
+ * Replace the current image's labels with a freshly read list.
+ *
+ * Used by the `app_refresh_image_*` actions after an external tool rewrote the
+ * label file. The fresh list is what is on disk, so the image is not marked
+ * dirty and the undo/redo history is reset to match.
+ * @param {Array<Object>} boxList - The boxes read from the server.
+ * @returns {void}
+ */
+function applyImageLabels(boxList) {
+  boxes = Array.isArray(boxList) ? boxList.map((b) => ({ ...b })) : [];
+  clearBoxSelection();
+  justDrawn = false;
+  dirty = false;
+  undoStack = [];
+  redoStack = [];
+  updateHistoryButtons();
+  renderSidePanel();
+  draw();
+}
+
+/**
+ * Replace the current image's tags with a freshly read list.
+ *
+ * Like `applyImageLabels`, the tags now match disk, so the history is reset.
+ * @param {string[]} tagList - The tags read from the server.
+ * @returns {void}
+ */
+function applyImageTags(tagList) {
+  imageTags = Array.isArray(tagList) ? [...tagList] : [];
+  undoStack = [];
+  redoStack = [];
+  dirty = false;
+  updateHistoryButtons();
+  renderTagBar();
+}
+
+/**
  * Re-apply the remembered split and/or filter when the server has none (e.g.
  * after a restart). Direct fetches only — never re-enters loadConfig.
  * @param {Object} cfg - The server config payload.

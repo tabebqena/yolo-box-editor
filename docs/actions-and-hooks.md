@@ -69,15 +69,21 @@ references).
 | `app_force_draw` | `Ctrl` | held modifier: hold it and drag to always draw a new box |
 | `app_refresh_images_list` | — | re-scan the image folders; stay on the same image by path |
 | `app_reload_images_list` | — | re-read the server list **without** re-scanning the disk |
-| `app_refresh_image` | — | re-fetch the current image (cache-busted) |
+| `app_refresh_image` | — | re-fetch the current image's pixels (cache-busted) |
+| `app_refresh_image_labels` | — | re-read the current image's labels from disk (keeps pixels and tags) |
+| `app_refresh_image_tags` | — | re-read the current image's tags from disk (keeps pixels and labels) |
+| `app_refresh_image_all` | — | re-read the current image's pixels, labels and tags |
 | `app_help` | `F1` | open the built-in help (tutorial + How to?) |
 | `app_select_next_box` | — | select the next box (same as `app_sel_box`, callable from a step) |
 | `app_select_prev_box` | — | select the previous box |
 | `app_clear_tags` | — | remove every tag from the current image |
 | `app_copy_labels_from_prev` | — | copy the previous image's boxes and tags onto the current one |
 
-The four actions at the end are meant to be called from an action/hook `steps`
-or `after_success` rather than bound to a key; they have no default key.
+The actions with no default key at the end are meant to be called from an
+action/hook `steps` or `after_success` rather than bound to a key. The
+`app_refresh_image_*` actions are useful after an external tool rewrote the
+current image's label or tag file, so the UI picks up the change without a full
+page reload.
 
 `app_force_draw` is special: its binding is a *modifier* (`Ctrl`, `Alt`,
 `Shift`, `Meta`, or a `+`-joined combination), not a key.

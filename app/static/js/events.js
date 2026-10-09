@@ -427,6 +427,35 @@ const APP_SHORTCUT_HANDLERS = {
     displayImage('/api/image' + keyQuery(images[currentIndex]) + '&_=' + Date.now());
     dbg('refresh image', { index: currentIndex });
   },
+  // Re-read the current image's labels (boxes) from disk. Keeps the pixels and
+  // tags; use after an external tool rewrote the label file.
+  app_refresh_image_labels: async (e) => {
+    e.preventDefault();
+    const data = await fetchCurrentAnnotations();
+    if (!data) { dbg('refresh labels skipped (no image)'); return; }
+    applyImageLabels(data.boxes);
+    dbg('refresh image labels', { index: currentIndex });
+  },
+  // Re-read the current image's tags from disk. Keeps the pixels and labels.
+  app_refresh_image_tags: async (e) => {
+    e.preventDefault();
+    const data = await fetchCurrentAnnotations();
+    if (!data) { dbg('refresh tags skipped (no image)'); return; }
+    applyImageTags(data.tags);
+    dbg('refresh image tags', { index: currentIndex });
+  },
+  // Re-fetch everything for the current image: pixels, labels and tags.
+  app_refresh_image_all: async (e) => {
+    e.preventDefault();
+    if (currentIndex < 0) { dbg('refresh image all skipped (no image)'); return; }
+    const data = await fetchCurrentAnnotations();
+    if (data) {
+      applyImageLabels(data.boxes);
+      applyImageTags(data.tags);
+    }
+    displayImage('/api/image' + keyQuery(images[currentIndex]) + '&_=' + Date.now());
+    dbg('refresh image all', { index: currentIndex });
+  },
   // Open the built-in help: the 3-level tutorial and the How-to recipes.
   app_help: (e) => {
     e.preventDefault();
