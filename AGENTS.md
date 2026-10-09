@@ -6,11 +6,15 @@ Flask app for labelling images in YOLO format. The shipped code lives in `app/`:
 secret key, then it runs the Flask app) and the implementation lives in the
 plain `app/ybe/` package — `server.py` holds the Flask app object and all
 routes, the rest are the reusable pieces (`config`, `state`, `parsing`, `auth`,
-`dataset`, `extensions`, …). The UI is plain `app/templates/index.html` +
-`app/static/style.css` + classic-script modules under `app/static/js/` (`core`,
-`api`, `canvas`, `navigation`, `extensions`, `shortcuts`, `images`, `editing`,
-`appearance`, `help`, `events`), finished by the `app/static/app.js` entry point;
-small reusable DOM/modal helpers live in `js/core.js`. The built-in help ships as
+`dataset`, `extensions`, `widgets`, `packages`, …). The UI is plain
+`app/templates/index.html` + `app/static/style.css` + classic-script modules
+under `app/static/js/` (`core`, `api`, `canvas`, `navigation`, `extensions`,
+`shortcuts`, `images`, `editing`, `appearance`, `widgets`, `plugin_api`,
+`packages`, `help`, `events`), finished by the `app/static/app.js` entry point;
+small reusable DOM/modal helpers live in `js/core.js`. An extension package
+(`app/extensions/<id>/`) may bundle actions/hooks/filters/widgets plus an
+optional **sandboxed UI panel** (an opaque-origin iframe whose only link to the
+app is the async `YBE` bridge). The built-in help ships as
 HTML fragments under `app/static/help/` (`beginner`, `intermediate`, `expert`,
 `howto`), opened with **F1** / the top-panel **?** button. **No build step**, and
 the modules share one global scope, so the load order in `index.html` and
@@ -42,7 +46,7 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   find Python and run `ybx.py`. `app/launcher.sh.in` and `app/launcher.cmd.in`
   are the thin Unix/Windows `ybe` shims that execute the Python launcher.
   (Replaces the old `install.sh`.)
-- Python tests (from repo root): `python -m pytest -q` (~335 tests); single test
+- Python tests (from repo root): `python -m pytest -q` (~365 tests); single test
   `python -m pytest tests/test_app.py::test_name -q`. `pytest.ini` puts `app/`
   on `pythonpath`.
 - JavaScript tests: `npm ci` then `npm run test:js` (Node's `node --test` +
@@ -77,11 +81,13 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   monkeypatching the owning module reaches every caller.
   - `config.py` — `BASE_DIR` (the shipped `app/` folder), `YBX_HOME` (the user
     folder), `configure_home`/`ensure_user_dirs`, the catalogs
-    (`APP_ACTIONS`, `HOOK_EVENTS`, placeholders, `EXTENSION_API_VERSION`,
-    timeouts, `MAX_RECENT`), and path constants: shipped `ACTIONS_DIR`,
-    `HOOKS_DIR`, `FILTERS_DIR`, `APP_SCRIPT_DIR`, `SHORTCUTS_FILE`,
+    (`APP_ACTIONS`, `HOOK_EVENTS`, placeholders, `EXTENSION_API_VERSION` = 4,
+    `PLUGIN_API_VERSION` = 1, timeouts, `MAX_RECENT`), and path constants:
+    shipped `ACTIONS_DIR`, `HOOKS_DIR`, `FILTERS_DIR`, `WIDGETS_DIR`,
+    `EXTENSIONS_DIR`, `APP_SCRIPT_DIR`, `SHORTCUTS_FILE`,
     `VERSION_FILE`, `CHANGES_FILE`; user `USER_ACTIONS_DIR`, `USER_HOOKS_DIR`,
-    `USER_FILTERS_DIR`, `USER_SCRIPT_DIR`, `USER_SHORTCUTS_FILE`; state files
+    `USER_FILTERS_DIR`, `USER_WIDGETS_DIR`, `USER_EXTENSIONS_DIR`,
+    `USER_SCRIPT_DIR`, `USER_SHORTCUTS_FILE`; state files
     `RECENT_FILE`, `VIEW_FILE`, `SETTINGS_FILE`, `CONFIG_FILE`,
     `UPDATE_CHECK_FILE`, `USERS_FILE` (the login accounts), `SECRET_KEY_FILE`
     (the session-signing key); and `FILTER_PIPES_DIR` (temp scratch).
@@ -95,7 +101,15 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   - `dataset.py` — `data.yaml` loading, split/class scanning, label and tag paths.
   - `tags.py` — `tags.yaml` and the per-image tag files.
   - `filters.py` — the filter-chain contract and execution.
-  - `extensions.py` — action/hook/filter YAML parse, validate, load and author.
+  - `extensions.py` — action/hook/filter/widget YAML parse, validate, load and
+    author (the loaders iterate `packages.extension_sources(kind)` so active
+    package subfolders are read too, flat files winning per source).
+  - `widgets.py` — custom-widget YAML parse/validate/load and
+    `sanitize_widget_values` (control values become `{WIDGET_<ID>}` placeholders).
+  - `packages.py` — extension-package discovery: `load_packages`, the
+    `extension.yaml` parser (`settings:` reuse the widget parser; `events:`;
+    `ui:`), `extension_sources`, `package_script_path` (realpath guard) and
+    `plugin_api_status`.
   - `shortcuts.py`, `pipes.py` — the shortcut list and `{PIPE_PATH}` scratch files.
   - `userconfig.py` — `config.json` (recent datasets, view, settings, disabled
     extensions).
@@ -122,13 +136,19 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   `startApp`, `boot`, final event wiring). Everything else lives in
   `app/static/js/` as classic scripts loaded by `index.html` in dependency
   order: `core`, `api`, `canvas`, `navigation`, `extensions`, `shortcuts`,
-  `images`, `editing`, `appearance`, `help`, `events`. They share one global
-  lexical scope,
+  `images`, `editing`, `appearance`, `widgets`, `plugin_api`, `packages`,
+  `help`, `events`. They share one global lexical scope,
   so top-level `let`/`const`/functions are visible across files and the order in
   `index.html` and `tests/js/helpers/app.js` must match. `js/events.js` owns
   `ESCAPE_CLOSERS` (it references the overlay closers defined in earlier
   modules). `js/core.js` holds the shared DOM/modal helpers and mutable state.
-  `js/help.js` owns the help modal (`openHelp`/`closeHelp`/`selectHelpTab`): it
+  `js/appearance.js` owns the dock registry (`WIDGETS`, `registerWidget`,
+  `createWidgetFrame`, `unregisterWidget`); `js/widgets.js` builds custom
+  widgets and their Layout sections. `js/plugin_api.js` owns the sandboxed-panel
+  bridge (`PANELS`, the `YBE` capability table, `buildPanelSrcdoc` and the
+  injected iframe stub); `js/packages.js` renders the Settings → Extensions tab
+  and mounts/tears down panels. `js/help.js` owns the help modal
+  (`openHelp`/`closeHelp`/`selectHelpTab`): it
   lazy-loads and caches the `app/static/help/*.html` fragments per tab.
 - `YBX_HOME` resolution: `--home <dir>` > `$YBX_HOME` > the parent of `app.py`.
   The launcher (`ybe.launcher.resolve_home`) resolves it the same way (from the
@@ -145,12 +165,24 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
     - Contract: `python <filter.py> <data.yaml> <split> <in_pipe> <out_pipe>`; input holds the active split's absolute paths, output feeds the next filter (`run_filter_chain`). Runs with `cwd=YBX_HOME`.
     - UI: Filters button opens a modal with up to 8 stacked selects, run top-to-bottom (`app/static/js/`).
     - Scratch pipe dir is deleted after each run; `--keep-filter-pipes` keeps it (CLI).
+  - `widgets/<name>.yaml` — a custom widget: `title` + `controls`
+    (button/select/checkbox/input); a button runs an action (by name) or inline
+    `steps`/`after_success`, and the other controls' values become
+    `{WIDGET_<ID>}` placeholders. Shown/placed from the Layout tab.
   - `scripts/*.py` — helpers named by action `steps`; the app never scans them.
     Reach them explicitly with `{USER_SCRIPT_DIR}/…` (yours) or
     `{APP_SCRIPT_DIR}/…` (shipped), or relatively as `scripts/…` (cwd is
     `YBX_HOME`). Shipped helpers: `class_filter.py`, `example.py`,
     `example_filter.py`, `tag_filter.py`, `tag_image.py`.
   - `shortcuts.txt` — `ACTION_NAME <KEY> label`.
+- Extension **packages** (`app/extensions/<id>/`, user `<home>/extensions/<id>/`)
+  are an additive layer over the flat folders above: an `extension.yaml`
+  manifest plus optional `actions/`, `hooks/`, `filters/`, `widgets/`,
+  `scripts/` and `panel.js`. The manifest's `settings:` block becomes a
+  Settings → Extensions subtab (same control format as a widget), `ui:` declares
+  a sandboxed UI panel (`api_version`/`title`/`script`/`location`/`height`), and
+  `events:` lists extra event names. Flat files always win over a package file
+  of the same name/source. `active: false` lists the package but loads nothing.
 - Tags: `tags.yaml` beside `data.yaml` (a plain `- tag` list) is the required
   available-tag list; an image's own tags live in a sibling tag file and are
   written with its labels on save (not instantly). The folder is overridable per
@@ -166,8 +198,17 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   `/api/hooks/save`, `/api/filters/save`, `/api/extensions/delete`,
   `/api/extensions/file`; all honour read-only. `/api/config` also returns
   `hook_events`, `app_actions`, `backend_actions`,
-   `action_defs`/`hook_defs`/`filter_defs` (each with `source`, `api_version`,
-   `status`) and `extension_api_version`.
+   `action_defs`/`hook_defs`/`filter_defs`/`widget_defs` (each with `source`,
+   `api_version`, `status`; the defs also carry `package`),
+   `widget_errors`, `extension_packages` (id/name/version/source/active/parts/
+   settings/events/`ui`) + `package_errors`, `extension_api_version` and
+   `plugin_api_version`. Settings → Layout shows/places each custom widget;
+   Settings → Extensions renders one subtab per package. Run routes:
+   `POST /api/widgets/run` and `POST /api/extensions/run` execute a
+   button/step through the action engine with `{WIDGET_<ID>}` values;
+   `GET /api/extensions/script?package=<id>` serves a panel script (active
+   packages only, path-guarded) to the host, which inlines it into the sandbox
+   iframe (the iframe itself has no network).
 - Auth: login is **opt-in**. Accounts are a `{username: password_hash}` map in
   `users.json` (`USERS_FILE`, owner-only `0600`, hashed via
   `werkzeug.security`). An empty/absent store means no login (the local default);
@@ -185,8 +226,8 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
 - `app/VERSION`, `app/CHANGES` (per-version "what's new" notes shown once per
   installed version) and `CHANGELOG.md` (Keep a Changelog); `README.md`,
   `TUTORIAL.md` (the 3-level tutorial) and `docs/` (`actions-and-hooks.md`,
-  `filters.md`, `tags.md`, `dataset.md`, `install.md`, `howto.md`) are
-  user-facing docs.
+  `filters.md`, `tags.md`, `dataset.md`, `install.md`, `howto.md`,
+  `widgets.md`, `extensions.md`, `extensions-ui.md`) are user-facing docs.
 
 ## Cross-file invariants
 - Built-in actions are the `app_*` set in `APP_ACTIONS` (`app/ybe/config.py`) and
@@ -203,16 +244,30 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   stay in sync: the `.help-tab` buttons in `index.html`, `HELP_TABS` in
   `js/help.js`, and the fragments under `app/static/help/`.
 - The extension YAML format is versioned by `EXTENSION_API_VERSION`
-  (`app/ybe/config.py`); bump it when the action/hook/filter file format changes.
-  The UI compares a file's `api_version:` against it.
+  (`app/ybe/config.py`); bump it when the action/hook/filter/widget/package
+  file format changes. The UI compares a file's `api_version:` against it.
+  The sandboxed-panel `YBE` API is versioned separately by `PLUGIN_API_VERSION`
+  (a package declares `ui.api_version:`); bump it when a `YBE` method/event's
+  meaning changes.
+- Adding/renaming an extension kind or a UI surface touches several places that
+  must stay in sync: the shipped/user dirs in `config.py` (+`configure_home` and
+  `ensure_user_dirs`), the loader in `extensions.py`/`widgets.py`, the
+  `/api/config` payload, the Settings tab markup + `js/navigation.js` +
+  `js/events.js` wiring, and the JS load order in `index.html` and
+  `tests/js/helpers/app.js`. Custom widgets and panels register into the same
+  `WIDGETS` dock registry (`js/appearance.js`); panels additionally emit editor
+  events via `emitUiEvent` in `js/plugin_api.js`.
 - Read-only is enforced server-side (label, tag and extension writes return
-  403), not only in the UI.
+  403), not only in the UI. `YBE` mutators also refuse in read-only mode; the
+  sandbox is containment for untrusted panel code, not a substitute for the
+  server-side check.
 
 ## Tests
 - `tests/test_app.py` imports `app` and monkeypatches the path constants on
-  `ybe.config` (shipped, `USER_*`, and the `*_FILE` state files), and resets
-  `ybe.state.STATE`; keep those names module-level so tests can patch them.
-  `clean_state` also patches `ybe.config.USERS_FILE` and resets
+  `ybe.config` (shipped, `USER_*` — including `WIDGETS_DIR`/`USER_WIDGETS_DIR`
+  and `EXTENSIONS_DIR`/`USER_EXTENSIONS_DIR` — and the `*_FILE` state files),
+  and resets `ybe.state.STATE`; keep those names module-level so tests can patch
+  them. `clean_state` also patches `ybe.config.USERS_FILE` and resets
   `ybe.state.USERS = {}`. Direct calls to helper functions go through the
   `app` module (e.g. `ybe.load_filters()`), which re-exports them.
 - Fixtures create real JPEGs (Pillow) in `tmp_path`; tests never touch the repo's
