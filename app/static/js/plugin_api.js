@@ -59,21 +59,28 @@ function ybeRequireWritable() {
 }
 
 /**
+ * Validate one submitted box (numbers clamped to [0,1]).
+ * @param {*} b
+ * @returns {{class:number,cx:number,cy:number,w:number,h:number}}
+ */
+function ybeNormalizeBox(b) {
+  const cls = Math.max(0, Math.floor(Number(b && b.class)) || 0);
+  const num = (k) => {
+    const n = Number(b && b[k]);
+    if (!Number.isFinite(n)) throw new Error('invalid box');
+    return Math.min(1, Math.max(0, n));
+  };
+  return { class: cls, cx: num('cx'), cy: num('cy'), w: num('w'), h: num('h') };
+}
+
+/**
  * Validate a submitted box list (numbers clamped to [0,1]).
  * @param {*} raw
  * @returns {Array<Object>}
  */
 function ybeNormalizeBoxes(raw) {
   if (!Array.isArray(raw)) throw new Error('boxes must be a list');
-  return raw.map((b) => {
-    const cls = Math.max(0, Math.floor(Number(b && b.class)) || 0);
-    const num = (k) => {
-      const n = Number(b && b[k]);
-      if (!Number.isFinite(n)) throw new Error('invalid box');
-      return Math.min(1, Math.max(0, n));
-    };
-    return { class: cls, cx: num('cx'), cy: num('cy'), w: num('w'), h: num('h') };
-  });
+  return raw.map(ybeNormalizeBox);
 }
 
 /**
@@ -113,6 +120,22 @@ function ybePanelMethods(panel) {
       renderSidePanel();
       draw();
       return true;
+    },
+    // Append one box to the real list (so a caller need not supply the whole
+    // list). Returns the new box's index. Pass `{undo:false}` to skip the undo
+    // snapshot when appending many boxes in a batch.
+    'callbacks.addBox': (a) => {
+      ybeRequireWritable();
+      const opts = (a[1] && typeof a[1] === 'object') ? a[1] : {};
+      const box = ybeNormalizeBox(a[0]);
+      if (opts.undo !== false) pushUndo();
+      boxes.push(box);
+      clearBoxSelection();
+      justDrawn = false;
+      markDirty();
+      renderSidePanel();
+      draw();
+      return boxes.length - 1;
     },
     'callbacks.selectBox': (a) => {
       const i = Math.floor(Number(a[0]));
@@ -680,6 +703,7 @@ function __ybeIframeStub() {
     },
     callbacks: {
       setBoxes: function (l) { return call('callbacks.setBoxes', [l]); },
+      addBox: function (b, o) { return call('callbacks.addBox', [b, o]); },
       selectBox: function (i) { return call('callbacks.selectBox', [i]); },
       clearSelection: function () { return call('callbacks.clearSelection'); },
       markDirty: function () { return call('callbacks.markDirty'); },

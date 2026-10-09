@@ -6,6 +6,10 @@ own. Packages are an **additive layer**: the flat `actions/`, `hooks/`,
 `filters/` and `widgets/` folders and their Settings tabs keep working exactly as
 before. A package only changes *where* files may live — never *what* they do.
 
+> New to extensions? Start with the step-by-step
+> [Building an extension from scratch to production](building-extensions.md)
+> guide, which uses the shipped `tags` and `annotate` packages as live examples.
+
 > If you just want one action, hook, filter or widget, use the flat folders and
 > the existing Actions / Hooks / Filters tabs. A package is for grouping several
 > related pieces (and adding a small settings panel).
@@ -49,7 +53,7 @@ change is an explicit decision, not a guess.
 - **Newer** — a file above `EXTENSION_API_VERSION` is never read: *"written for
   extension format vN, but this app supports vM — update yolo-box-editor to use
   it"*. A newer UI panel (`ui.api_version` above `PLUGIN_API_VERSION`, currently
-  `4`) is likewise not mounted.
+  `5`) is likewise not mounted.
 
 Errors appear in the actions/hooks/filters/widgets banner and, for packages, in
 Settings → Extensions. The raw editor can still open a skipped file to read it,
@@ -71,14 +75,23 @@ ybe:                 # YBE bridge capabilities its panel uses (explained to you)
   - capabilities
 backend: true        # ships backend.py (server-side Python)
 ui: true             # ships panel.js (sandboxed)
-routes: ["", /dir]   # HTTP routes, relative to /api/extension/<prefix>
-actions: [My action]
-hooks: [on_after_save]
-filters: [By tag]
-widgets: [My widget]
-app_actions: [clear_tags]
-events: [after_app_action]
-scripts: [helper.py]
+routes:              # HTTP routes, relative to /api/extension/<prefix>
+  - ""
+  - /dir
+actions:
+  - My action
+hooks:
+  - on_after_save
+filters:
+  - By tag
+widgets:
+  - My widget
+app_actions:
+  - clear_tags
+events:
+  - after_app_action
+scripts:
+  - helper.py
 ```
 
 The app knows the meaning of every `ybe:` key, so it explains them when you

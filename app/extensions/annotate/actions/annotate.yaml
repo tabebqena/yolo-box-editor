@@ -1,0 +1,7 @@
+# The model run. `{EXT_PYTHON}` is this package's own virtualenv (see the
+# manifest's `python:`/`requirements:`), `{EXT_DIR}` its folder, and the
+# `{WIDGET_*}` values come from the Settings form / the panel. The script writes
+# YOLO labels into the separate output folder — never the dataset's labels/.
+api_version: 6
+steps:
+  - {EXT_PYTHON} {EXT_DIR}/scripts/annotate_all.py --data {DATA_YAML_PATH} --out {WIDGET_OUTPUT_DIR} --model {WIDGET_MODEL} --conf {WIDGET_CONF}

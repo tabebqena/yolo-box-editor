@@ -5,7 +5,7 @@ declare its own **app actions**. This page covers both, plus the app-action
 **lifecycle bus** that lets extensions cooperate.
 
 > The format is versioned by `EXTENSION_API_VERSION` (`6` as of this release);
-> the sandboxed `YBE` API by `PLUGIN_API_VERSION` (`4`). A package must also ship
+> the sandboxed `YBE` API by `PLUGIN_API_VERSION` (`5`). A package must also ship
 > a [`permissions.yaml`](extensions.md#permissions-and-installing) declaring the
 > `ybe:` capabilities and artifacts it uses; the bridge enforces it per panel.
 

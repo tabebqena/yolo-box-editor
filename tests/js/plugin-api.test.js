@@ -103,6 +103,23 @@ test('callbacks.setBoxes validates and clamps', async () => {
     [[{ class: 0, cx: 'x', cy: 0, w: 0, h: 0 }]]), /invalid box/);
 });
 
+test('callbacks.addBox appends one box and returns its index', async () => {
+  app.set({
+    readonly: false,
+    images: [{ split: 'train', name: 'a.jpg' }],
+    currentIndex: 0,
+    boxes: [{ class: 0, cx: 0.1, cy: 0.1, w: 0.1, h: 0.1 }],
+  });
+  const idx = await app.api.ybeHandleRequest('callbacks.addBox',
+    [{ class: 1, cx: 1.5, cy: 0.5, w: 0.2, h: 0.2 }]);
+  assert.equal(idx, 1);
+  assert.equal(app.state().boxes.length, 2);
+  assert.equal(app.state().boxes[1].class, 1);
+  assert.equal(app.state().boxes[1].cx, 1); // clamped to 0..1
+  await assert.rejects(() => app.api.ybeHandleRequest('callbacks.addBox',
+    [{ class: 0, cx: 'x', cy: 0, w: 0, h: 0 }]), /invalid box/);
+});
+
 test('callbacks.drawBox stores a render-only overlay per package', async () => {
   app.set({ boxes: [] });
   await app.api.ybeHandleRequest('callbacks.drawBox',

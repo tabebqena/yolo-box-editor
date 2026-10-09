@@ -4,6 +4,31 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.14.0] - 2026-10-10
+
+### Added
+
+- **A new `annotate` example extension** (`app/extensions/annotate/`, shipped
+  `active: false`). It runs a small Ultralytics YOLO model over every image into
+  a folder **separate** from the dataset's labels, then overlays those boxes on
+  the canvas in a different colour. It exercises the whole extension system —
+  a manifest with a settings form and a per-extension Python environment, a
+  backend plugin with capabilities and routes, a shipped action/script, and a
+  sandboxed panel that draws overlays.
+- **A step-by-step guide, [Building an extension from scratch to
+  production](docs/building-extensions.md)**, using the `annotate` and `tags`
+  packages as live examples (flat action → widget → package → permissions →
+  backend → panel → overlays → environment → tests → shipping).
+- `YBE.callbacks.addBox(box, opts)` — append one box to the real label list
+  (returns its index), so a panel need not supply the full list; `{undo:false}`
+  skips the undo snapshot for batched appends. The panel plugin API is now **v5**.
+
+### Changed
+
+- The shipped packages' tests now live next to them, so each is self-contained:
+  `app/extensions/tags/tests/` and `app/extensions/annotate/tests/` (still picked
+  up by `python -m pytest -q`).
+
 ## [10.13.0] - 2026-10-10
 
 ### Added

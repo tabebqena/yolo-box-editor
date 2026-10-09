@@ -20,7 +20,7 @@ api_version: 6
 name: My Tools
 active: true
 ui:
-  api_version: 4          # the YBE plugin API version your script expects
+  api_version: 5          # the YBE plugin API version your script expects
   title: My Panel         # frame header and Layout-tab label
   script: panel.js        # relative to the package folder
   location: float         # float | left | right | bottom (default float)
@@ -91,6 +91,7 @@ All of these refuse in read-only mode.
 | ---- | ------ |
 | `YBE.call(method, args)` | call one of **your package's** backend capabilities (see [backend plugins](extension-actions.md)); other packages are not reachable |
 | `YBE.callbacks.setBoxes(list)` | replace the boxes (validated, clamped to 0..1) |
+| `YBE.callbacks.addBox(box, opts)` | append one box to the boxes (returns its index; `{undo:false}` to batch) |
 | `YBE.callbacks.selectBox(i)` / `clearSelection()` | change the box selection |
 | `YBE.callbacks.markDirty()` / `draw()` | mark changed / repaint |
 | `YBE.callbacks.save()` | save the current image |
@@ -122,9 +123,9 @@ await YBE.callbacks.setDrawnBoxes([{ class: 0, cx: 0.5, cy: 0.5, w: 0.2, h: 0.2 
 ```
 
 An extension that **does** want its boxes saved is not special-cased: it pushes
-them into the real list with `YBE.callbacks.setBoxes(list)` and calls
-`YBE.callbacks.save()`. Overlays are for previews, suggestions or a second set
-of labels kept elsewhere.
+them into the real list with `YBE.callbacks.setBoxes(list)` (replace) or
+`YBE.callbacks.addBox(box)` (append one) and calls `YBE.callbacks.save()`.
+Overlays are for previews, suggestions or a second set of labels kept elsewhere.
 
 ### Events
 `YBE.on(name, handler)` returns an unsubscribe function; `YBE.off` is also

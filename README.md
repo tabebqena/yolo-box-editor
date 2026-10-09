@@ -183,6 +183,7 @@ missing, see [Why can't I see my tag?](docs/tags.md#why-cant-i-see-my-tag).
 - [actions and hooks](docs/actions-and-hooks.md) — custom commands and events.
 - [widgets](docs/widgets.md) — custom dockable control panels.
 - [extension packages](docs/extensions.md) — group extensions with a Settings subtab.
+- [building an extension](docs/building-extensions.md) — from scratch to production, with live examples.
 - [extension UI panels](docs/extensions-ui.md) — sandboxed custom panels and the `YBE` API.
 - [filters](docs/filters.md) — narrow the image list with scripts.
 - [tags](docs/tags.md) — the tagging scheme and troubleshooting.

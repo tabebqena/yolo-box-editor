@@ -2,6 +2,10 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.14.0
+- A new **Annotate (example)** extension ships (disabled by default) as a complete worked example: it runs a small YOLO model over a dataset into a separate labels folder and overlays the results on the canvas. Read it together with the Tags extension in the new guide [Building an extension from scratch to production](docs/building-extensions.md).
+- Panels can now append a single box to the real labels with `YBE.callbacks.addBox(box)` (instead of replacing the whole list with `setBoxes`).
+
 ## 10.13.0
 - Extension panels can now draw their **own boxes on the canvas** with `YBE.callbacks.drawBox()` (or `setDrawnBoxes()`), in a colour of their choice. These overlays are **render-only**: the app draws them but never selects, edits or saves them, and each panel's boxes stay separate. An extension that wants its boxes saved keeps using `setBoxes()` + `save()`.
 

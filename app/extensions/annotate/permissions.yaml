@@ -1,0 +1,24 @@
+# What the Annotate example declares. A package must list everything it uses;
+# the app flags anything shipped but not declared here.
+api_version: 1
+
+# YBE bridge capabilities its panel uses.
+ybe:
+  - state.read        # YBE.state.getImage()
+  - config.read       # YBE.state.getConfig() — find the settings button
+  - api.request       # YBE.api.post('/api/extensions/run', ...)
+  - capabilities      # YBE.call('annotate.get' / 'annotate.setDir', ...)
+  - write.draw        # YBE.callbacks.setDrawnBoxes / setDrawnBoxesVisible
+
+# Code it ships.
+backend: true         # backend.py runs server-side
+ui: true              # panel.js runs in a sandboxed iframe
+
+# Extension artifacts it adds.
+routes:
+  - ""
+  - /dir
+actions:
+  - annotate
+scripts:
+  - annotate_all.py

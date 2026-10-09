@@ -1,0 +1,171 @@
+"""Annotate extension backend (example).
+
+Serves the model's boxes from a **separate** output folder and remembers that
+folder per dataset (keyed by the dataset path, stored in the user home so the
+dataset is never touched). The panel reads boxes through the `annotate.*`
+capabilities; the same data is available over HTTP at
+`/api/extension/annotate/labels` and `/api/extension/annotate/dir`.
+
+Unlike the dataset's own labels, these files are never read or written by the
+core app — only this extension knows about them.
+"""
+
+import json
+import os
+
+from ybe import config, state
+from ybe.dataset import _split_by_name
+
+OVERRIDE_FILE = ".annotate_extension.json"
+
+
+# --- per-dataset output-folder override ----------------------------------- #
+def _override_path():
+    return os.path.join(config.YBX_HOME, OVERRIDE_FILE)
+
+
+def _load_overrides():
+    try:
+        with open(_override_path(), encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def get_output_dir(data_yaml=None):
+    """The remembered output folder for a dataset, or None."""
+    key = os.path.abspath(data_yaml or state.STATE["data_yaml"] or "")
+    if not key:
+        return None
+    return _load_overrides().get(key)
+
+
+def set_output_dir(folder):
+    """Remember (or clear) the output folder for the current dataset."""
+    key = os.path.abspath(state.STATE["data_yaml"] or "")
+    if not key:
+        return None
+    data = _load_overrides()
+    if folder:
+        data[key] = folder
+    else:
+        data.pop(key, None)
+    try:
+        path = _override_path()
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2)
+            handle.write("\n")
+        os.replace(tmp, path)
+    except OSError:
+        pass
+    return folder
+
+
+# --- reads ----------------------------------------------------------------- #
+def label_path(entry):
+    """The extension label file for an image (`<out>/<split>/<stem>.txt`)."""
+    split = _split_by_name(entry["split"])
+    base = get_output_dir()
+    if split is None or not base:
+        return None
+    stem = os.path.splitext(entry["name"])[0]
+    return os.path.join(base, split["name"], stem + ".txt")
+
+
+def read_boxes(entry):
+    """Parse the extension label file into `[{class,cx,cy,w,h}]` (empty if none)."""
+    path = label_path(entry)
+    if not path or not os.path.isfile(path):
+        return []
+    boxes = []
+    try:
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                parts = line.split()
+                if len(parts) < 5:
+                    continue
+                try:
+                    cls = int(float(parts[0]))
+                    cx, cy, w, h = (float(v) for v in parts[1:5])
+                except ValueError:
+                    continue
+                boxes.append({"class": cls, "cx": cx, "cy": cy, "w": w, "h": h})
+    except OSError:
+        return []
+    return boxes
+
+
+def _entry_for_key(key):
+    if not key or "/" not in key:
+        return None
+    split, name = key.split("/", 1)
+    for entry in state.STATE["images"]:
+        if entry["split"] == split and entry["name"] == name:
+            return entry
+    return None
+
+
+def _require_writable():
+    if state.STATE["readonly"]:
+        raise PermissionError("read-only mode")
+
+
+# --- capabilities (used by the panel and /api/extensions/call) ------------ #
+def _cap_get(key):
+    entry = _entry_for_key(key)
+    return read_boxes(entry) if entry else []
+
+
+def _cap_set_dir(folder):
+    _require_writable()
+    folder = (folder or "").strip()
+    path = os.path.abspath(os.path.expanduser(folder)) if folder else None
+    if path and not os.path.isdir(path):
+        raise ValueError(f"not a folder: {path}")
+    set_output_dir(path)
+    return {"output_dir": path}
+
+
+def _cap_status():
+    return {"output_dir": get_output_dir()}
+
+
+# --- HTTP routes (served by the host's runtime dispatcher) ---------------- #
+def _get_labels():
+    from flask import jsonify, request
+    return jsonify({"ok": True, "boxes": _cap_get(request.args.get("key", ""))})
+
+
+def _post_dir():
+    from flask import jsonify, request
+    if state.STATE["readonly"]:
+        return jsonify({"ok": False, "error": "read-only mode"}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        result = _cap_set_dir(data.get("output_dir"))
+    except (ValueError, PermissionError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    result["ok"] = True
+    return jsonify(result)
+
+
+# Rules are relative to `/api/extension/<prefix>` (prefix = the manifest
+# `prefix:` or the package id, here `annotate`).
+extension_routes = (
+    {"rule": "", "methods": ["GET"], "handler": _get_labels},
+    {"rule": "/dir", "methods": ["POST"], "handler": _post_dir},
+)
+
+
+def register(ctx):
+    """Return the capability table (routes are declared in `extension_routes`)."""
+    return {
+        "capabilities": {
+            "annotate.get": lambda key: _cap_get(key),
+            "annotate.setDir": lambda folder: _cap_set_dir(folder),
+            "annotate.status": lambda *a: _cap_status(),
+        },
+    }

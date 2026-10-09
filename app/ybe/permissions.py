@@ -49,6 +49,7 @@ YBE_METHOD_PERMISSIONS = {
     "api.request": "api.request",
     "call": "capabilities",
     "callbacks.setBoxes": "write.boxes",
+    "callbacks.addBox": "write.boxes",
     "callbacks.selectBox": "write.selection",
     "callbacks.clearSelection": "write.selection",
     "callbacks.markDirty": "write.draw",

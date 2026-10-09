@@ -3633,7 +3633,7 @@ description: demo
 version: 1.0.0
 active: true
 ui:
-  api_version: 4
+  api_version: 5
   title: My Panel
   script: panel.js
   location: right
@@ -3654,6 +3654,7 @@ def test_overlay_callbacks_are_permission_mapped():
     for method in ("callbacks.drawBox", "callbacks.setDrawnBoxes",
                    "callbacks.clearDrawnBoxes", "callbacks.setDrawnBoxesVisible"):
         assert permissions.YBE_METHOD_PERMISSIONS[method] == "write.draw"
+    assert permissions.YBE_METHOD_PERMISSIONS["callbacks.addBox"] == "write.boxes"
 
 
 def test_load_packages_parses_ui(clean_state):
@@ -3661,7 +3662,7 @@ def test_load_packages_parses_ui(clean_state):
     pkgs, errors = ybe.load_packages()
     assert errors == []
     ui = pkgs[0]["ui"]
-    assert ui["api_version"] == 4
+    assert ui["api_version"] == 5
     assert ui["title"] == "My Panel"
     assert ui["script"] == "panel.js"
     assert ui["location"] == "right"
