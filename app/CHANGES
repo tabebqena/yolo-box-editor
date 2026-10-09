@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.3.0
+- Extensions can now be enabled/disabled **live, without restarting**. Instead of `@app.route`, a backend declares an `extension_routes` tuple and the app dispatches `/api/...` to the enabled packages at request time. The Settings > Extensions toggle now applies immediately (routes and panel load/unload in place).
+
 ## 10.2.0
 - The **Tags** extension is now enabled by default, and each package has an **Enabled** toggle in Settings > Extensions (restart to apply). The choice is stored in `<home>/extensions.json` so updates never reset it: a fresh install enables tags, and an update keeps whatever your old tag-bar visibility was. Change it with `app/scripts/migrate_tags_extension.py --enable` / `--disable`.
 

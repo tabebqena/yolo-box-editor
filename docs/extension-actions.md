@@ -18,34 +18,56 @@ active: true
 backend: backend.py
 ```
 
-When the package is **active** (and **shipped** — see trust below), the server
-imports `backend.py` and calls its `register(ctx)`. `register` may add Flask
-routes to `ctx.app` and must return a capability table:
+When the package is **enabled** (and **shipped** — see trust below), the server
+imports `backend.py` and calls `register(ctx)`. `register` returns a capability
+table; HTTP routes are declared in a module-level `extension_routes` tuple:
 
 ```python
-def register(ctx):
-    @ctx.app.route("/api/mytool", methods=["POST"])
-    def api_mytool():
-        ctx.require_writable()          # raises in read-only mode
-        return {"ok": True}
+from flask import jsonify, request
 
+def do_it():
+    return jsonify({"ok": True})
+
+def register(ctx):
     return {
-        "mytool.do": lambda arg: do_it(arg),   # callable from the panel / API
+        "capabilities": {"mytool.do": lambda arg: do_it()},
     }
+
+extension_routes = (
+    {"rule": "/api/mytool", "methods": ["POST"], "handler": do_it},
+)
 ```
 
 `ctx` exposes `app`, `state`, `config`, `package` and `require_writable()`.
+
+`register` may also return the routes (`{"capabilities": {...}, "routes": [...]}`),
+and it is optional if the package only declares routes.
+
+### Routes run through a dispatcher, not `@app.route`
+
+The app installs a **single** startup catch-all (`/api/<path:subpath>`) that asks
+the host to match the request against the *currently enabled* packages. So:
+
+- an extension **must not** use `@app.route` (Flask cannot accept rules after the
+  first request); declare `extension_routes` instead;
+- handlers run inside a normal Flask request context, so `request`, `session`,
+  `g` and `current_app` all work, and the return value may be a `Response`, a
+  `(body, status)` tuple, a `dict`/`list` (JSON), or a string;
+- rules are Flask-style (`/api/tags/<int:key>`); a handler receives the URL
+  parameters as keyword arguments;
+- a rule path that core already owns is shadowed by the core rule (static rules
+  win), so pick unique paths;
+- enabling/disabling a package swaps its routes in and out **with no restart**.
 
 Capabilities are reached from the package's panel as
 `YBE.call('mytool.do', [arg])` (only the caller's own package is reachable) and
 headlessly through `POST /api/extensions/call`
 (`{"package": "...", "method": "...", "args": [...]}`). Read-only is enforced
-inside the capability.
+inside the capability (and each mutating route).
 
-**Trust:** capabilities run in the server process, so by default only **shipped**
-packages' backends are loaded. A user package can ship a `backend:` too, but it
-is ignored unless/until you decide to trust it (matching the rule that evaluators
-of untrusted code are opt-in).
+**Trust:** capabilities and route handlers run in the server process, so by
+default only **shipped** packages' backends are loaded. A user package can ship
+a `backend:` too, but it is ignored unless/until you decide to trust it.
 
 ## Extension app actions
 

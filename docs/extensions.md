@@ -90,8 +90,10 @@ python app/scripts/migrate_tags_extension.py --home <user folder>          # mig
 python app/scripts/migrate_tags_extension.py --home <user folder> --disable
 ```
 
-Enabling/disabling a package takes effect after a **server restart** (its routes
-are registered at startup).
+The toggle applies **immediately**: the server loads/unloads the package's
+backend (routes and capabilities) in place and the UI mounts/tears down its
+panel, with no restart. See [extension actions](extension-actions.md) for how
+extensions declare routes.
 
 ## Precedence
 

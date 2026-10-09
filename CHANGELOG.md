@@ -4,6 +4,20 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.3.0] - 2026-10-09
+
+### Added
+
+- **Hot enable/disable of extension packages — no restart.** A backend no longer
+  registers Flask rules directly. It declares `extension_routes`
+  (`{"rule", "methods", "handler"}` tuples) and the app serves them through a
+  single startup catch-all dispatcher (`/api/<path:subpath>`) that matches
+  against the enabled packages at request time. Enabling/disabling a package
+  loads/unloads its routes and capabilities in place and mounts/tears down its
+  panel immediately (the Settings → Extensions **Enabled** toggle does this).
+  Handlers run in a normal Flask request context, so `request`, `session`, `g`
+  and `current_app` work.
+
 ## [10.2.0] - 2026-10-09
 
 ### Added

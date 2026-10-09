@@ -87,7 +87,7 @@ function buildPackagePanel(pkg) {
   const cb = mk('input');
   cb.type = 'checkbox';
   cb.checked = !!pkg.active;
-  cb.title = 'Enable or disable this package (restart the app to apply)';
+  cb.title = 'Enable or disable this package';
   cb.addEventListener('change', () => setPackageActive(pkg, cb));
   toggle.append(cb, mk('span', null, 'Enabled'));
   head.appendChild(toggle);
@@ -109,7 +109,8 @@ function buildPackagePanel(pkg) {
 }
 
 /**
- * Persist a package's enabled/disabled override (needs a restart to apply).
+ * Persist a package's enabled/disabled override and apply it live (the server
+ * loads/unloads the backend; this refreshes the tab and the mounted panels).
  * @param {object} pkg - The package definition.
  * @param {HTMLInputElement} cb - The checkbox that changed.
  * @returns {Promise<void>}
@@ -121,12 +122,29 @@ async function setPackageActive(pkg, cb) {
       { package: pkg.id, active: want });
     if (!res.ok || data.ok === false) throw new Error(data.error || 'request failed');
     pkg.active = want;
-    toast((want ? 'Enabled ' : 'Disabled ') + pkg.name + ' — restart the app to apply',
-      { type: 'success' });
+    toast((want ? 'Enabled ' : 'Disabled ') + pkg.name, { type: 'success' });
+    await refreshExtensions();
   } catch (e) {
     cb.checked = !want;
     dbgWarn('package toggle failed', e);
     toast('Could not change "' + pkg.name + '": ' + e.message, { type: 'error' });
+  }
+}
+
+/**
+ * Re-read the package list and re-render the Extensions tab and mounted panels,
+ * so an enable/disable takes effect without reloading the page.
+ * @returns {Promise<void>}
+ */
+async function refreshExtensions() {
+  try {
+    const cfg = await apiGet('/api/config');
+    extensionPackages = cfg.extension_packages || [];
+    extensionAppActions = cfg.extension_app_actions || [];
+    renderExtensionsTab();
+    renderExtensionPanels();
+  } catch (e) {
+    dbgWarn('refresh extensions failed', e);
   }
 }
 

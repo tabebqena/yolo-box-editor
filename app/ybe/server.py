@@ -67,7 +67,13 @@ from ybe.packages import (
     package_script_path,
     plugin_api_status,
 )
-from ybe.plugins import call_capability
+from ybe.plugins import (
+    call_capability,
+    disable as disable_extension,
+    dispatch as dispatch_extension_route,
+    enable as enable_extension,
+    is_loaded,
+)
 from ybe.parsing import _read_text
 from ybe.pipes import create_pipe
 from ybe.shortcuts import (
@@ -335,6 +341,7 @@ def api_config():
             "events": p["events"],
             "app_actions": p["app_actions"],
             "backend": bool(p["backend"]),
+            "loaded": is_loaded(p["id"]),
             "ui": _extension_ui_payload(p["ui"]),
             "api_version": p["api_version"],
             "status": api_version_status(p["api_version"]),
@@ -1093,19 +1100,26 @@ def api_extension_script():
 
 @app.route("/api/extensions/active", methods=["POST"])
 def api_extension_active():
-    """Enable or disable a package (writes the per-user override).
+    """Enable or disable a package, live and persisted.
 
-    Body `{"package": "<id>", "active": true|false}`. The change needs a server
-    restart to load/unload the package's backend routes. This is a user
-    preference, not a dataset write, so read-only does not block it.
+    Body `{"package": "<id>", "active": true|false}`. The per-user override is
+    written and the package's backend (routes + capabilities) is loaded or
+    unloaded in place, with no restart. This is a user preference, not a dataset
+    write, so read-only does not block it.
     """
     data = request.get_json(silent=True) or {}
     pid = (data.get("package") or "").strip()
     if not pid:
         return jsonify({"ok": False, "error": "package is required"}), 400
     active = bool(data.get("active"))
-    extension_flags.set_flag(pid, active)
-    return jsonify({"ok": True, "package": pid, "active": active})
+    if active:
+        extension_flags.set_flag(pid, True)
+        loaded = enable_extension(app, pid)
+    else:
+        disable_extension(pid)
+        extension_flags.set_flag(pid, False)
+        loaded = False
+    return jsonify({"ok": True, "package": pid, "active": active, "loaded": loaded})
 
 
 @app.route("/api/extensions/call", methods=["POST"])
@@ -1120,14 +1134,26 @@ def api_extension_call():
     pid = (data.get("package") or "").strip()
     method = (data.get("method") or "").strip()
     args = data.get("args")
-    pkg = next((p for p in load_packages()[0] if p["id"] == pid and p["active"]), None)
-    if pkg is None:
-        return jsonify({"ok": False, "error": "unknown or inactive package"}), 404
+    if not is_loaded(pid):
+        return jsonify({"ok": False, "error": "unknown or disabled package"}), 404
     try:
         value = call_capability(pid, method, args if isinstance(args, list) else [])
     except Exception as exc:  # noqa: BLE001 - report the capability's own error
         return jsonify({"ok": False, "error": str(exc)}), 400
     return jsonify({"ok": True, "value": value})
+
+
+# Startup catch-all for extension-declared routes. It is the only rule that
+# serves extension HTTP endpoints, so packages can be enabled/disabled at
+# runtime without touching Flask's URL map. Static core rules always win
+# (Werkzeug ranks them above this converter rule).
+@app.route(
+    "/api/<path:subpath>",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    endpoint="api_extension_dispatch",
+)
+def api_extension_dispatch(subpath):
+    return dispatch_extension_route(request.method, "/api/" + subpath)
 
 
 # --- single image and its annotations -------------------------------------- #

@@ -243,6 +243,11 @@ def _previous_entry(entry):
     return None
 
 
+def _require_writable():
+    if state.STATE["readonly"]:
+        raise PermissionError("read-only mode")
+
+
 # --- capabilities (used by the panel and /api/extensions/call) ------------ #
 def _cap_available():
     return read_tags_yaml()
@@ -255,8 +260,8 @@ def _cap_get(key):
     return read_image_tags(entry)
 
 
-def _cap_set(ctx, key, tags):
-    ctx.require_writable()
+def _cap_set(key, tags):
+    _require_writable()
     entry = _entry_for_key(key)
     if entry is None:
         raise ValueError("unknown image")
@@ -264,21 +269,21 @@ def _cap_set(ctx, key, tags):
     return {"tags": read_image_tags(entry), "available": register_available(tags)}
 
 
-def _cap_clear(ctx, key):
-    return _cap_set(ctx, key, [])
+def _cap_clear(key):
+    return _cap_set(key, [])
 
 
-def _cap_copy_from_prev(ctx, key):
-    ctx.require_writable()
+def _cap_copy_from_prev(key):
+    _require_writable()
     entry = _entry_for_key(key)
     if entry is None:
         raise ValueError("unknown image")
     prev = _previous_entry(entry)
-    return _cap_set(ctx, key, read_image_tags(prev) if prev else [])
+    return _cap_set(key, read_image_tags(prev) if prev else [])
 
 
-def _cap_set_dir(ctx, folder):
-    ctx.require_writable()
+def _cap_set_dir(folder):
+    _require_writable()
     folder = (folder or "").strip()
     path = os.path.abspath(os.path.expanduser(folder)) if folder else None
     if path and not os.path.isdir(path):
@@ -293,44 +298,57 @@ def _rescan_splits():
     return scan_splits()
 
 
-def register(ctx):
-    """Register the routes and return the capability table."""
-    app = ctx.app
-
+# --- HTTP routes (declared for the host's runtime dispatcher) -------------- #
+def _get_tags():
     from flask import jsonify, request
+    key = request.args.get("key", "")
+    return jsonify({"ok": True, "available": read_tags_yaml(), "tags": _cap_get(key)})
 
-    @app.route("/api/tags", methods=["GET", "POST"])
-    def api_tags():
-        if request.method == "GET":
-            key = request.args.get("key", "")
-            return jsonify({"ok": True, "available": read_tags_yaml(), "tags": _cap_get(key)})
-        if state.STATE["readonly"]:
-            return jsonify({"ok": False, "error": "read-only mode"}), 403
-        data = request.get_json(silent=True) or {}
-        try:
-            result = _cap_set(ctx, data.get("key", ""), data.get("tags"))
-        except (ValueError, PermissionError) as exc:
-            return jsonify({"ok": False, "error": str(exc)}), 400
-        result["ok"] = True
-        return jsonify(result)
 
-    @app.route("/api/tags-dir", methods=["POST"])
-    def api_tags_dir():
-        if state.STATE["readonly"]:
-            return jsonify({"ok": False, "error": "read-only mode"}), 403
-        data = request.get_json(silent=True) or {}
-        try:
-            result = _cap_set_dir(ctx, data.get("tags_dir"))
-        except (ValueError, PermissionError) as exc:
-            return jsonify({"ok": False, "error": str(exc)}), 400
-        result["ok"] = True
-        return jsonify(result)
+def _post_tags():
+    from flask import jsonify, request
+    if state.STATE["readonly"]:
+        return jsonify({"ok": False, "error": "read-only mode"}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        result = _cap_set(data.get("key", ""), data.get("tags"))
+    except (ValueError, PermissionError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    result["ok"] = True
+    return jsonify(result)
 
+
+def _post_tags_dir():
+    from flask import jsonify, request
+    if state.STATE["readonly"]:
+        return jsonify({"ok": False, "error": "read-only mode"}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        result = _cap_set_dir(data.get("tags_dir"))
+    except (ValueError, PermissionError) as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    result["ok"] = True
+    return jsonify(result)
+
+
+# Declarative routes served by the host's catch-all dispatcher (no `@app.route`,
+# so enabling this package needs no restart).
+extension_routes = (
+    {"rule": "/api/tags", "methods": ["GET"], "handler": _get_tags},
+    {"rule": "/api/tags", "methods": ["POST"], "handler": _post_tags},
+    {"rule": "/api/tags-dir", "methods": ["POST"], "handler": _post_tags_dir},
+)
+
+
+def register(ctx):
+    """Return the capability table (routes are declared in `extension_routes`)."""
     return {
-        "tags.available": lambda *a: _cap_available(),
-        "tags.get": lambda key: _cap_get(key),
-        "tags.set": lambda key, tags: _cap_set(ctx, key, tags),
-        "tags.clear": lambda key: _cap_clear(ctx, key),
-        "tags.copyFromPrev": lambda key: _cap_copy_from_prev(ctx, key),
-        "tags.setDir": lambda folder: _cap_set_dir(ctx, folder),
+        "capabilities": {
+            "tags.available": lambda *a: _cap_available(),
+            "tags.get": lambda key: _cap_get(key),
+            "tags.set": lambda key, tags: _cap_set(key, tags),
+            "tags.clear": lambda key: _cap_clear(key),
+            "tags.copyFromPrev": lambda key: _cap_copy_from_prev(key),
+            "tags.setDir": lambda folder: _cap_set_dir(folder),
+        },
     }

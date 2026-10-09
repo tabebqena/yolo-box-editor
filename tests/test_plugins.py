@@ -119,7 +119,9 @@ def _tags_capabilities(tmp_path, monkeypatch):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     ctx = plugins.PluginContext(Flask("tags-test"), pkg)
-    return module, module.register(ctx), ctx
+    result = module.register(ctx) or {}
+    caps = result.get("capabilities", result) if isinstance(result, dict) else {}
+    return module, caps, ctx
 
 
 def test_tags_capabilities_roundtrip(clean_state, tmp_path, monkeypatch):
@@ -161,6 +163,47 @@ def test_tags_mutations_refuse_readonly(clean_state, tmp_path, monkeypatch):
     ybe.state.STATE["readonly"] = True
     with pytest.raises(PermissionError):
         caps["tags.set"]("train/a.jpg", ["fire"])
+
+
+def test_extension_routes_dispatch_and_toggle_without_restart(clean_state, tmp_path, monkeypatch):
+    monkeypatch.setattr(ybe.config, "EXTENSIONS_DIR",
+                        str(Path(ybe.config.BASE_DIR) / "extensions"))
+    monkeypatch.setattr(ybe.config, "USER_EXTENSIONS_DIR", str(tmp_path / "none"))
+    _dataset(tmp_path)
+    plugins.PLUGIN_REGISTRY.clear()
+    plugins.PLUGIN_CAPABILITIES.clear()
+    client = ybe.app.test_client()
+    try:
+        # disabled: the catch-all dispatcher finds no owner
+        assert client.get("/api/tags?key=train/a.jpg").status_code == 404
+        # enable live (no restart, no new Flask rules)
+        assert plugins.enable(ybe.app, "tags") is True
+        resp = client.get("/api/tags?key=train/a.jpg")
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body["ok"] and "fire" in body["available"]
+        # a capability works too
+        call = client.post("/api/extensions/call",
+                           json={"package": "tags", "method": "tags.get",
+                                 "args": ["train/a.jpg"]}).get_json()
+        assert call["ok"] and call["value"] == []
+        # url params + POST route
+        post = client.post("/api/tags", json={"key": "train/a.jpg", "tags": ["fire"]})
+        assert post.status_code == 200 and post.get_json()["tags"] == ["fire"]
+        # disable live
+        assert plugins.disable("tags") is True
+        assert client.get("/api/tags?key=train/a.jpg").status_code == 404
+    finally:
+        plugins.PLUGIN_REGISTRY.clear()
+        plugins.PLUGIN_CAPABILITIES.clear()
+
+
+def test_plugin_context_require_writable(clean_state):
+    ctx = plugins.PluginContext(object(), {"id": "x"})
+    ctx.require_writable()
+    ybe.state.STATE["readonly"] = True
+    with pytest.raises(PermissionError):
+        ctx.require_writable()
 
 
 def test_api_extensions_active_sets_flag(clean_state, tmp_path):
