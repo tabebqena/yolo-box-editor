@@ -173,12 +173,13 @@ def test_extension_routes_dispatch_and_toggle_without_restart(clean_state, tmp_p
     plugins.PLUGIN_REGISTRY.clear()
     plugins.PLUGIN_CAPABILITIES.clear()
     client = ybe.app.test_client()
+    base = "/api/extension/tags"
     try:
         # disabled: the catch-all dispatcher finds no owner
-        assert client.get("/api/tags?key=train/a.jpg").status_code == 404
+        assert client.get(base + "?key=train/a.jpg").status_code == 404
         # enable live (no restart, no new Flask rules)
         assert plugins.enable(ybe.app, "tags") is True
-        resp = client.get("/api/tags?key=train/a.jpg")
+        resp = client.get(base + "?key=train/a.jpg")
         assert resp.status_code == 200
         body = resp.get_json()
         assert body["ok"] and "fire" in body["available"]
@@ -187,15 +188,78 @@ def test_extension_routes_dispatch_and_toggle_without_restart(clean_state, tmp_p
                            json={"package": "tags", "method": "tags.get",
                                  "args": ["train/a.jpg"]}).get_json()
         assert call["ok"] and call["value"] == []
-        # url params + POST route
-        post = client.post("/api/tags", json={"key": "train/a.jpg", "tags": ["fire"]})
+        # the package's own sub-route
+        post = client.post(base + "/dir", json={"tags_dir": ""})
+        assert post.status_code == 200 and post.get_json()["tags_dir"] is None
+        post = client.post(base, json={"key": "train/a.jpg", "tags": ["fire"]})
         assert post.status_code == 200 and post.get_json()["tags"] == ["fire"]
         # disable live
         assert plugins.disable("tags") is True
-        assert client.get("/api/tags?key=train/a.jpg").status_code == 404
+        assert client.get(base + "?key=train/a.jpg").status_code == 404
     finally:
         plugins.PLUGIN_REGISTRY.clear()
         plugins.PLUGIN_CAPABILITIES.clear()
+
+
+def test_route_prefix_collision_blocks_enable(clean_state, tmp_path, monkeypatch):
+    ext = tmp_path / "app-extensions"
+    for pid in ("a", "b"):
+        d = ext / pid
+        d.mkdir(parents=True)
+        (d / "backend.py").write_text(
+            "def register(ctx):\n    return {}\n"
+            "extension_routes = ({'rule': '', 'handler': lambda: 'x'},)\n",
+            encoding="utf-8")
+        (d / "extension.yaml").write_text(
+            f"api_version: 5\nid: {pid}\nname: {pid}\nprefix: shared\nactive: true\n"
+            "backend: backend.py\n", encoding="utf-8")
+    monkeypatch.setattr(ybe.config, "EXTENSIONS_DIR", str(ext))
+    monkeypatch.setattr(ybe.config, "USER_EXTENSIONS_DIR", str(tmp_path / "none"))
+    from ybe.packages import package_route_prefix_duplicates
+    assert package_route_prefix_duplicates() == {"shared": ["a", "b"]}
+    # the first package enabled claims the prefix; the second is refused
+    assert plugins.enable(ybe.app, "a") is True
+    assert plugins.enable(ybe.app, "b") is False
+    plugins.PLUGIN_REGISTRY.clear()
+    plugins.PLUGIN_CAPABILITIES.clear()
+
+
+def test_disabled_package_excludes_all_its_extensions(clean_state, tmp_path):
+    base = tmp_path / "app-extensions" / "pkg"
+    for kind, fname, body in (
+        ("actions", "act.yaml", "name: pkg_action\nsteps:\n  - echo hi\n"),
+        ("hooks", "on_after_save.yaml", "steps:\n  - echo hi\n"),
+        ("filters", "f.yaml", "name: pkg_filter\nsteps:\n  - echo hi\n"),
+        ("widgets", "w.yaml",
+         "name: pkg_widget\ntitle: W\ncontrols:\n  - type: button\n    label: Go\n"
+         "    steps:\n      - echo hi\n"),
+    ):
+        d = base / kind
+        d.mkdir(parents=True, exist_ok=True)
+        (d / fname).write_text(f"api_version: 5\n{body}", encoding="utf-8")
+    (base / "extension.yaml").write_text(
+        "api_version: 5\nid: pkg\nname: Pkg\nactive: true\n", encoding="utf-8")
+
+    def names(kind):
+        if kind == "action":
+            return {a["name"] for a in ybe.load_actions()}
+        if kind == "hook":
+            return {h["name"] for h in ybe.load_hooks()[0]}
+        if kind == "filter":
+            return set(ybe.load_filters()[0])
+        return set(ybe.load_widgets()[0])
+
+    extension_flags.set_flag("pkg", True)
+    assert "pkg_action" in names("action")
+    assert "on_after_save" in names("hook")
+    assert "pkg_filter" in names("filter")
+    assert "pkg_widget" in names("widget")
+
+    extension_flags.set_flag("pkg", False)
+    assert "pkg_action" not in names("action")
+    assert "on_after_save" not in names("hook")
+    assert "pkg_filter" not in names("filter")
+    assert "pkg_widget" not in names("widget")
 
 
 def test_plugin_context_require_writable(clean_state):

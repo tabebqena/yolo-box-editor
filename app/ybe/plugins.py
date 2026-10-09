@@ -27,7 +27,7 @@ import sys
 from flask import Response, abort, jsonify
 
 from ybe import config, extension_flags, state
-from ybe.packages import load_packages, package_backend_path
+from ybe.packages import load_packages, package_backend_path, package_route_prefix
 
 
 class PluginContext:
@@ -85,26 +85,32 @@ def _compile_rule(rule):
     return compiled
 
 
-def _normalize_routes(raw):
-    """Validate/normalize declared routes and pre-compile their rules."""
+def _normalize_routes(raw, prefix):
+    """Validate routes, mount them under the package prefix, compile the rules.
+
+    A declared `rule` is relative to `/api/extension/<prefix>` (an empty rule is
+    the mount point itself), so package rules can never collide.
+    """
+    base = config.EXTENSION_ROUTE_PREFIX.rstrip("/") + "/" + prefix
     routes = []
     for entry in raw or []:
         if not isinstance(entry, dict):
             continue
-        rule = entry.get("rule")
         handler = entry.get("handler")
-        if not rule or not callable(handler):
+        if not callable(handler):
             continue
-        if not rule.startswith("/"):
+        rule = str(entry.get("rule") or "")
+        if rule and not rule.startswith("/"):
             rule = "/" + rule
+        full = base + rule
         methods = entry.get("methods") or entry.get("method") or ["GET"]
         if isinstance(methods, str):
             methods = [methods]
         routes.append({
-            "rule": rule,
+            "rule": full,
             "methods": [str(m).upper() for m in methods],
             "handler": handler,
-            "regex": _compile_rule(rule),
+            "regex": _compile_rule(full),
         })
     return routes
 
@@ -141,7 +147,7 @@ def _load_backend(app, pkg):
                 capabilities = returned
     if not isinstance(capabilities, dict):
         capabilities = {}
-    return module, capabilities, _normalize_routes(routes)
+    return module, capabilities, _normalize_routes(routes, package_route_prefix(pkg))
 
 
 def enable(app, package_id):
@@ -155,6 +161,16 @@ def enable(app, package_id):
     pkg = next((p for p in load_packages()[0] if p["id"] == package_id), None)
     if pkg is None or pkg["source"] != "shipped" or not pkg.get("backend"):
         return False
+    # Route prefixes must be unique: refuse a package whose prefix is already
+    # claimed by an earlier package (first one in discovery order wins).
+    prefix = package_route_prefix(pkg)
+    for other in load_packages()[0]:
+        if other["id"] == pkg["id"]:
+            break
+        if package_route_prefix(other) == prefix:
+            print("[ybe] plugin '%s' not enabled: route prefix '%s' already used by '%s'"
+                  % (package_id, prefix, other["id"]), file=sys.stderr)
+            return False
     try:
         module, capabilities, routes = _load_backend(app, pkg)
     except Exception as exc:  # noqa: BLE001 - a bad plugin must not brick the app

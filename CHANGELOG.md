@@ -4,6 +4,23 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.4.0] - 2026-10-09
+
+### Changed
+
+- **Extension routes are namespaced and prefix-checked.** A package's routes are
+  mounted at `/api/extension/<prefix><rule>`, where `<prefix>` is the manifest
+  `prefix:` (or the package id), sanitized. Prefixes must be unique; a package
+  whose prefix is already claimed by an earlier-discovered package is refused on
+  enable, so rules can never collide with each other or with core routes.
+
+### Fixed
+
+- Enabling/disabling a package now updates **all** of its parts live: its
+  actions, hooks, filters and widgets appear/disappear in the toolbar, Settings
+  builders, filter chain and Layout tab immediately (previously only the package
+  panel and backend toggled until a full reload).
+
 ## [10.3.0] - 2026-10-09
 
 ### Added

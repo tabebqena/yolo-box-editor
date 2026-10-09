@@ -34,7 +34,8 @@ def register(ctx):
     }
 
 extension_routes = (
-    {"rule": "/api/mytool", "methods": ["POST"], "handler": do_it},
+    {"rule": "/items", "methods": ["GET"], "handler": list_items},
+    {"rule": "/items/<int:key>", "methods": ["POST"], "handler": do_it},
 )
 ```
 
@@ -43,7 +44,20 @@ extension_routes = (
 `register` may also return the routes (`{"capabilities": {...}, "routes": [...]}`),
 and it is optional if the package only declares routes.
 
-### Routes run through a dispatcher, not `@app.route`
+### Routes are namespaced, and run through a dispatcher
+
+Every route is mounted under a fixed host prefix plus the package's own prefix:
+
+```
+/api/extension/<prefix><rule>
+```
+
+`<prefix>` is the manifest `prefix:` when set, else the package id, sanitized to
+`[a-z0-9_-]`. So with `prefix: mytool`, `rule: /items` is served at
+`/api/extension/mytool/items`. **Prefixes must be unique**: if two discovered
+packages claim the same one, the later one is refused on enable (the first in
+discovery order wins). This is checked at setup, so rules can never collide with
+each other or with core routes.
 
 The app installs a **single** startup catch-all (`/api/<path:subpath>`) that asks
 the host to match the request against the *currently enabled* packages. So:
@@ -53,10 +67,8 @@ the host to match the request against the *currently enabled* packages. So:
 - handlers run inside a normal Flask request context, so `request`, `session`,
   `g` and `current_app` all work, and the return value may be a `Response`, a
   `(body, status)` tuple, a `dict`/`list` (JSON), or a string;
-- rules are Flask-style (`/api/tags/<int:key>`); a handler receives the URL
-  parameters as keyword arguments;
-- a rule path that core already owns is shadowed by the core rule (static rules
-  win), so pick unique paths;
+- `rule` is relative to the mount (an empty rule is the mount point itself);
+  handlers receive any URL parameters as keyword arguments;
 - enabling/disabling a package swaps its routes in and out **with no restart**.
 
 Capabilities are reached from the package's panel as

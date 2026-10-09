@@ -79,7 +79,7 @@ def _parse_manifest(text):
     """Parse an `extension.yaml` into a dict of its keys."""
     data = {
         "id": None, "name": None, "description": None, "version": None,
-        "author": None, "active": True, "api_version": None,
+        "author": None, "active": True, "api_version": None, "prefix": None,
         "settings": None, "events": [], "ui": None,
         "backend": None, "app_actions": [],
     }
@@ -94,7 +94,7 @@ def _parse_manifest(text):
         key, value = key.strip(), _strip_comment(value)
         if key == "api_version":
             data["api_version"] = _parse_api_version(value)
-        elif key in ("id", "name", "description", "version", "author", "backend"):
+        elif key in ("id", "name", "description", "version", "author", "backend", "prefix"):
             if value:
                 data[key] = _yaml_scalar(value)
         elif key == "active":
@@ -249,6 +249,25 @@ def package_backend_path(pkg):
     return package_relative_path(pkg, pkg.get("backend"))
 
 
+def package_route_prefix(pkg):
+    """The unique URL prefix a package's routes are mounted under.
+
+    The manifest `prefix:` if given, else the package id; sanitized to
+    `[a-z0-9_-]` so it is always a safe path segment.
+    """
+    raw = (pkg.get("prefix") or pkg.get("id") or "").strip().lower()
+    safe = "".join(c if (c.isalnum() or c in "-_") else "-" for c in raw).strip("-_")
+    return safe or "ext"
+
+
+def package_route_prefix_duplicates():
+    """`{prefix: [package ids]}` for every prefix used by more than one package."""
+    by_prefix = {}
+    for pkg in load_packages()[0]:
+        by_prefix.setdefault(package_route_prefix(pkg), []).append(pkg["id"])
+    return {prefix: ids for prefix, ids in by_prefix.items() if len(ids) > 1}
+
+
 def extension_app_action_defs(only_active=True):
     """Every declared extension app action as a list of dicts.
 
@@ -328,6 +347,7 @@ def load_packages():
                 "ui": data["ui"],
                 "backend": data["backend"],
                 "app_actions": data["app_actions"],
+                "prefix": (data["prefix"] or "").strip() or None,
                 "parts": _discover_parts(path),
                 "source": source,
                 "path": path,

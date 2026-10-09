@@ -139,10 +139,14 @@ async function setPackageActive(pkg, cb) {
 async function refreshExtensions() {
   try {
     const cfg = await apiGet('/api/config');
-    extensionPackages = cfg.extension_packages || [];
-    extensionAppActions = cfg.extension_app_actions || [];
-    renderExtensionsTab();
-    renderExtensionPanels();
+    // Mirror loadConfig's extension-related parts so a package's actions, hooks,
+    // filters, widgets, panels and shortcuts all appear/disappear live too.
+    filters = cfg.filters || [];
+    hooksByName = new Set(cfg.hooks || []);
+    applyExtensionConfig(cfg);
+    populateFilterPanel();
+    populateActions(cfg.actions || []);
+    renderShortcuts();
   } catch (e) {
     dbgWarn('refresh extensions failed', e);
   }

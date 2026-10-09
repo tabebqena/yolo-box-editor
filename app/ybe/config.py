@@ -210,6 +210,10 @@ ACTION_REF_PREFIX = "action_"
 # An extension-defined app action is named `<extension_id>.<name>` in steps and
 # events (e.g. `tags.clear_tags`). The prefix keeps it distinct from core `app_*`.
 EXTENSION_ACTION_PREFIX = "ext."
+# Every extension HTTP route is mounted under this prefix plus the package's own
+# unique prefix (`/api/extension/<prefix><rule>`), so package rules never collide
+# with each other or with the core `/api/*` routes.
+EXTENSION_ROUTE_PREFIX = "/api/extension"
 # Cap on how many times a lifecycle event may recursively trigger another
 # app action before the host refuses (see js/plugin_api.js).
 MAX_EVENT_DEPTH = 8

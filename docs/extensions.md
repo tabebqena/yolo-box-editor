@@ -38,6 +38,7 @@ description: A short summary shown in the Extensions tab.
 version: 1.0.0
 author: you
 active: true              # false keeps the package listed but loads nothing from it
+prefix: mytool            # optional URL prefix for this package's routes (default: id)
 backend: backend.py       # optional backend plugin (see extension-actions.md)
 
 # Optional extension-defined app actions, used as ext.<package>.<name>.
@@ -83,17 +84,20 @@ seeds it on first run/install: a **fresh install enables** it, while an **update
 keeps the old tag-bar visibility** (`tags` / `ybe_tags_visible` in `config.json`).
 
 Change it with the **Enabled** toggle on each package's **Settings →
-Extensions** subtab, by editing the file, or with the helper script:
+Extensions** subtab (this applies immediately), by editing the file, or with the
+helper script (a manual file/script change takes effect on the next start):
 
 ```bash
 python app/scripts/migrate_tags_extension.py --home <user folder>          # migrate
 python app/scripts/migrate_tags_extension.py --home <user folder> --disable
 ```
 
-The toggle applies **immediately**: the server loads/unloads the package's
+The Settings toggle applies **immediately**: the server loads/unloads the package's
 backend (routes and capabilities) in place and the UI mounts/tears down its
-panel, with no restart. See [extension actions](extension-actions.md) for how
-extensions declare routes.
+panel, with no restart. Everything a package provides follows the flag — its
+**actions, hooks, filters and widgets** disappear from the toolbar, Settings
+builders, filter chain and Layout tab too, and come back when re-enabled. See
+[extension actions](extension-actions.md) for how extensions declare routes.
 
 ## Precedence
 

@@ -64,6 +64,7 @@ from ybe.filters import _clear_filter, apply_filters
 from ybe.packages import (
     extension_app_action_defs,
     load_packages,
+    package_route_prefix,
     package_script_path,
     plugin_api_status,
 )
@@ -342,6 +343,8 @@ def api_config():
             "app_actions": p["app_actions"],
             "backend": bool(p["backend"]),
             "loaded": is_loaded(p["id"]),
+            "prefix": package_route_prefix(p),
+            "route_prefix": config.EXTENSION_ROUTE_PREFIX + "/" + package_route_prefix(p),
             "ui": _extension_ui_payload(p["ui"]),
             "api_version": p["api_version"],
             "status": api_version_status(p["api_version"]),

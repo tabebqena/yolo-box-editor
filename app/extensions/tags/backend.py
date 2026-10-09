@@ -332,11 +332,13 @@ def _post_tags_dir():
 
 
 # Declarative routes served by the host's catch-all dispatcher (no `@app.route`,
-# so enabling this package needs no restart).
+# so enabling this package needs no restart). Rules are relative to the mount
+# `/api/extension/<prefix>` (prefix = the manifest `prefix:` or the package id,
+# here `tags`), so these are `/api/extension/tags` and `/api/extension/tags/dir`.
 extension_routes = (
-    {"rule": "/api/tags", "methods": ["GET"], "handler": _get_tags},
-    {"rule": "/api/tags", "methods": ["POST"], "handler": _post_tags},
-    {"rule": "/api/tags-dir", "methods": ["POST"], "handler": _post_tags_dir},
+    {"rule": "", "methods": ["GET"], "handler": _get_tags},
+    {"rule": "", "methods": ["POST"], "handler": _post_tags},
+    {"rule": "/dir", "methods": ["POST"], "handler": _post_tags_dir},
 )
 
 
