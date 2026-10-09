@@ -42,7 +42,7 @@ const LET_STATE = [
   'extensionPackages', 'extensionAppActions', 'customWidgetNames', 'yamlEditor',
   'undoStack', 'redoStack',
   'moved', 'dragUndoPushed', 'imgW', 'imgH', 'dirty', 'readonly',
-  'datasetLoaded', 'boxesVisible',
+  'datasetLoaded', 'boxesVisible', 'drawnBoxes',
   'boxDetailsVisible', 'isolateSelected',
   'currentDataYaml', 'hooksByName', 'hookInFlight', 'autoSave', 'autoSaveTimer',
   'debugMode', 'updateInfo', 'serverSettings', 'settingsSaveTimer',

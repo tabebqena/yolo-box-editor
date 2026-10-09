@@ -4,6 +4,21 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.13.0] - 2026-10-10
+
+### Added
+
+- **Extension panels can draw their own boxes on the canvas.** Four render-only
+  callbacks — `YBE.callbacks.drawBox(box, opts)`, `setDrawnBoxes(list, opts)`,
+  `clearDrawnBoxes()` and `setDrawnBoxesVisible(visible)` — let a panel overlay
+  its own boxes (with a per-box `color` and optional `label`) on top of the
+  dataset boxes. The app draws them but never hit-tests, selects, drags or saves
+  them, and each panel's overlays are kept separate (keyed by package id) and
+  cleared on image change. Extensions that want their boxes saved are not
+  special-cased: they still push them into the real list with `setBoxes()` +
+  `save()`. This is a generic facility — no extension-specific code in the core.
+- The panel plugin API version is now **v4** (`PLUGIN_API_VERSION`).
+
 ## [10.12.0] - 2026-10-10
 
 ### Added

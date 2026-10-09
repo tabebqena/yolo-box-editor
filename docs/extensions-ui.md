@@ -16,11 +16,11 @@ Add a `ui:` block to `extension.yaml` (see
 [extension packages](extensions.md)):
 
 ```yaml
-api_version: 5
+api_version: 6
 name: My Tools
 active: true
 ui:
-  api_version: 3          # the YBE plugin API version your script expects
+  api_version: 4          # the YBE plugin API version your script expects
   title: My Panel         # frame header and Layout-tab label
   script: panel.js        # relative to the package folder
   location: float         # float | left | right | bottom (default float)
@@ -99,6 +99,32 @@ All of these refuse in read-only mode.
 | `YBE.callbacks.toast(msg, opts)` / `setStatus(msg)` | show a message |
 | `YBE.callbacks.openSettings(tab)` | open Settings (optionally on a tab) |
 | `YBE.callbacks.getSetting(key)` / `setSetting(key, value)` | per-panel prefs (no `localStorage` in the sandbox) |
+| `YBE.callbacks.drawBox(box, opts)` | draw one **render-only** overlay box (see below) |
+| `YBE.callbacks.setDrawnBoxes(list, opts)` | replace this panel's overlay boxes in one call |
+| `YBE.callbacks.clearDrawnBoxes()` | remove this panel's overlay boxes |
+| `YBE.callbacks.setDrawnBoxesVisible(visible)` | show/hide this panel's overlays |
+
+### Overlays (boxes the app draws but never saves)
+
+A panel can draw its own boxes **on top of** the dataset boxes without touching
+them. These overlays are **render-only**: the app draws them but never
+hit-tests, selects, drags or saves them, and they are cleared when the image
+changes (so redraw them on `image_loaded`). Each panel's overlays are kept
+separate, keyed by its package id, so several extensions can draw at once.
+
+```js
+// one box: normalized {class, cx, cy, w, h}, optional color and label
+await YBE.callbacks.drawBox(
+  { class: 0, cx: 0.5, cy: 0.5, w: 0.2, h: 0.2, color: '#e75480' });
+// or replace them all at once (e.g. after reading a label file)
+await YBE.callbacks.setDrawnBoxes([{ class: 0, cx: 0.5, cy: 0.5, w: 0.2, h: 0.2 }],
+  { color: '#e75480' });
+```
+
+An extension that **does** want its boxes saved is not special-cased: it pushes
+them into the real list with `YBE.callbacks.setBoxes(list)` and calls
+`YBE.callbacks.save()`. Overlays are for previews, suggestions or a second set
+of labels kept elsewhere.
 
 ### Events
 `YBE.on(name, handler)` returns an unsubscribe function; `YBE.off` is also

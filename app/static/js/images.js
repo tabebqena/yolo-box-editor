@@ -259,6 +259,9 @@ function loadImage(i) {
   dirty = false;
   clearTimeout(autoSaveTimer); // a stale auto-save must not fire on the new image
   autoSaveTimer = null;
+  // Extension-drawn overlays belong to the old image: drop them so nothing
+  // stale lingers (the owning panel redraws on `image_loaded`).
+  drawnBoxes.clear();
   updateNav();
   updateHistoryButtons();
   const entry = images[currentIndex];

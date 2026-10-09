@@ -37,11 +37,11 @@ version added, which versions were dropped, and the support window — so a form
 change is an explicit decision, not a guess.
 
 - **Within the window** — the app supports the newest
-  `EXTENSION_API_SUPPORT_WINDOW` (3) format versions (currently `v3..v5`); they
+  `EXTENSION_API_SUPPORT_WINDOW` (3) format versions (currently `v4..v6`); they
   load normally.
 - **Older than the window** — an explicitly-versioned file below the window is
   **skipped** with an explaining error: *"written for extension format vN, but
-  this app supports the last 3 versions (v3..v5) — update the file, or start the
+  this app supports the last 3 versions (v4..v6) — update the file, or start the
   app with `--allow-old-extensions` to force it"*. The user can **force** parsing
   with `--allow-old-extensions`.
 - **Unversioned** — a file with no `api_version` is the original format and is
@@ -49,7 +49,7 @@ change is an explicit decision, not a guess.
 - **Newer** — a file above `EXTENSION_API_VERSION` is never read: *"written for
   extension format vN, but this app supports vM — update yolo-box-editor to use
   it"*. A newer UI panel (`ui.api_version` above `PLUGIN_API_VERSION`, currently
-  `3`) is likewise not mounted.
+  `4`) is likewise not mounted.
 
 Errors appear in the actions/hooks/filters/widgets banner and, for packages, in
 Settings → Extensions. The raw editor can still open a skipped file to read it,
@@ -104,7 +104,7 @@ ybe remove-extension my-extension
 ## The manifest
 
 ```yaml
-api_version: 5
+api_version: 6
 id: my-tools              # optional; the folder name is used otherwise
 name: My Tools
 description: A short summary shown in the Extensions tab.

@@ -131,6 +131,13 @@ function ybePanelMethods(panel) {
     },
     'callbacks.markDirty': () => { markDirty(); return true; },
     'callbacks.draw': () => { draw(); return true; },
+    // Render-only overlays the app draws but never saves, keyed by this panel's
+    // package so several extensions can draw at once. A panel that wants its
+    // boxes saved pushes them into the real list via callbacks.setBoxes + save.
+    'callbacks.drawBox': (a) => drawBox(packageId, a[0], a[1] || {}),
+    'callbacks.setDrawnBoxes': (a) => setDrawnBoxes(packageId, a[0], a[1] || {}),
+    'callbacks.clearDrawnBoxes': () => clearDrawnBoxes(packageId),
+    'callbacks.setDrawnBoxesVisible': (a) => setDrawnBoxesVisible(packageId, a[0]),
     'callbacks.save': async () => { ybeRequireWritable(); return await save(); },
     'callbacks.runAction': async (a, ctx) => {
       const name = String(a[0]);
@@ -567,6 +574,8 @@ function unmountExtensionPanel(name) {
   window.removeEventListener('message', panel.listener);
   delete PANELS[name];
   unregisterWidget(name);
+  // Drop any overlays this panel drew so they do not linger after teardown.
+  if (panel.packageId) clearDrawnBoxes(panel.packageId);
 }
 
 /**
@@ -675,6 +684,10 @@ function __ybeIframeStub() {
       clearSelection: function () { return call('callbacks.clearSelection'); },
       markDirty: function () { return call('callbacks.markDirty'); },
       draw: function () { return call('callbacks.draw'); },
+      drawBox: function (box, o) { return call('callbacks.drawBox', [box, o]); },
+      setDrawnBoxes: function (list, o) { return call('callbacks.setDrawnBoxes', [list, o]); },
+      clearDrawnBoxes: function () { return call('callbacks.clearDrawnBoxes'); },
+      setDrawnBoxesVisible: function (v) { return call('callbacks.setDrawnBoxesVisible', [v]); },
       save: function () { return call('callbacks.save'); },
       runAction: function (n, o) { return call('callbacks.runAction', [n, o], lastCtx); },
       refreshImage: function (k) { return call('callbacks.refreshImage', [k]); },

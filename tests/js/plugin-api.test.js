@@ -103,6 +103,46 @@ test('callbacks.setBoxes validates and clamps', async () => {
     [[{ class: 0, cx: 'x', cy: 0, w: 0, h: 0 }]]), /invalid box/);
 });
 
+test('callbacks.drawBox stores a render-only overlay per package', async () => {
+  app.set({ boxes: [] });
+  await app.api.ybeHandleRequest('callbacks.drawBox',
+    [{ class: 1, cx: 0.5, cy: 0.5, w: 0.2, h: 0.2, color: '#f00' }], null,
+    { packageId: 'ann' });
+  const entry = app.state().drawnBoxes.get('ann');
+  assert.equal(entry.boxes.length, 1);
+  assert.equal(entry.boxes[0].color, '#f00');
+  assert.equal(entry.boxes[0].cx, 0.5);
+  // the real boxes are untouched: overlays are never saved
+  assert.equal(app.state().boxes.length, 0);
+});
+
+test('callbacks.setDrawnBoxes replaces and can set visibility', async () => {
+  await app.api.ybeHandleRequest('callbacks.drawBox',
+    [{ class: 0, cx: 0.1, cy: 0.1, w: 0.1, h: 0.1 }], null, { packageId: 'ann' });
+  await app.api.ybeHandleRequest('callbacks.setDrawnBoxes',
+    [[{ class: 0, cx: 0.2, cy: 0.2, w: 0.1, h: 0.1 }], { visible: false }], null,
+    { packageId: 'ann' });
+  const entry = app.state().drawnBoxes.get('ann');
+  assert.equal(entry.boxes.length, 1);
+  assert.equal(entry.boxes[0].cx, 0.2);
+  assert.equal(entry.visible, false);
+  await app.api.ybeHandleRequest('callbacks.setDrawnBoxesVisible', [true], null,
+    { packageId: 'ann' });
+  assert.equal(app.state().drawnBoxes.get('ann').visible, true);
+});
+
+test('callbacks.clearDrawnBoxes empties one owner only', async () => {
+  await app.api.ybeHandleRequest('callbacks.drawBox',
+    [{ class: 0, cx: 0.1, cy: 0.1, w: 0.1, h: 0.1 }], null, { packageId: 'a' });
+  await app.api.ybeHandleRequest('callbacks.drawBox',
+    [{ class: 0, cx: 0.1, cy: 0.1, w: 0.1, h: 0.1 }], null, { packageId: 'b' });
+  await app.api.ybeHandleRequest('callbacks.clearDrawnBoxes', [], null,
+    { packageId: 'a' });
+  const map = app.state().drawnBoxes;
+  assert.equal(map.get('a').boxes.length, 0);
+  assert.equal(map.get('b').boxes.length, 1);
+});
+
 test('emitUiEvent forwards to mounted panels', () => {
   const calls = [];
   app.consts.PANELS.fake = { target: { postMessage: (m) => calls.push(m) } };

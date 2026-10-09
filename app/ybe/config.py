@@ -281,14 +281,16 @@ ALLOW_OLD_EXTENSIONS = False  # set by --allow-old-extensions
 # own schedule. A package declares it as `ui.api_version:`; the UI compares it
 # against this to block panels written for a newer API. v2 added `YBE.call`
 # (package backend capabilities) and the `before_/after_app_action` event bus;
-# v3 added `YBE.state.getConfig()` and the `YBE.api` request proxy.
-PLUGIN_API_VERSION = 3
+# v3 added `YBE.state.getConfig()` and the `YBE.api` request proxy; v4 added the
+# render-only overlay callbacks (`YBE.callbacks.drawBox`/`setDrawnBoxes`/…).
+PLUGIN_API_VERSION = 4
 # What each plugin (YBE) API version added, and any versions dropped. A panel
 # declaring `ui.api_version:` newer than PLUGIN_API_VERSION is not loaded.
 PLUGIN_API_HISTORY = (
     (1, "initial YBE bridge (state reads, box edits, events)"),
     (2, "YBE.call (backend capabilities) and the app-action event bus"),
     (3, "YBE.state.getConfig and the YBE.api request proxy"),
+    (4, "render-only overlay callbacks (drawBox/setDrawnBoxes/clearDrawnBoxes)"),
 )
 PLUGIN_API_DROPPED = ()
 

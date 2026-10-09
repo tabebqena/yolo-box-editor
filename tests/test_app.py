@@ -3633,7 +3633,7 @@ description: demo
 version: 1.0.0
 active: true
 ui:
-  api_version: 3
+  api_version: 4
   title: My Panel
   script: panel.js
   location: right
@@ -3649,12 +3649,19 @@ def test_plugin_api_status():
     assert ybe.plugin_api_status(None) == "outdated"
 
 
+def test_overlay_callbacks_are_permission_mapped():
+    from ybe import permissions
+    for method in ("callbacks.drawBox", "callbacks.setDrawnBoxes",
+                   "callbacks.clearDrawnBoxes", "callbacks.setDrawnBoxesVisible"):
+        assert permissions.YBE_METHOD_PERMISSIONS[method] == "write.draw"
+
+
 def test_load_packages_parses_ui(clean_state):
     write_package(clean_state, "mypack", UI_MANIFEST, [("", "panel.js", PANEL_JS)])
     pkgs, errors = ybe.load_packages()
     assert errors == []
     ui = pkgs[0]["ui"]
-    assert ui["api_version"] == 3
+    assert ui["api_version"] == 4
     assert ui["title"] == "My Panel"
     assert ui["script"] == "panel.js"
     assert ui["location"] == "right"

@@ -215,6 +215,12 @@ let datasetLoaded = false;
 let boxesVisible = true;    // `app_show_hide`: draw the box overlay or not
 let boxDetailsVisible = true; // `app_box_details`: draw handles/labels/buttons or outlines only
 let isolateSelected = false; // `app_isolate_box`: draw only the selected box
+// Extension-drawn boxes: render-only overlays the app draws but NEVER saves.
+// Keyed by the drawing owner (a panel's package id), so several extensions can
+// draw at once. Each entry is `{ boxes: [], visible: true }`; a box may carry a
+// `color` and a `label`. Extensions that want their boxes saved push them into
+// the real `boxes` via the normal setBoxes/save path instead.
+let drawnBoxes = new Map();
 let currentDataYaml = '';   // data.yaml of the loaded dataset (for resume)
 let hooksByName = new Set(); // event hooks defined in hooks/ (on_<event>)
 let hookInFlight = new Set(); // hooks currently running (re-entrancy guard)

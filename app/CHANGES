@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.13.0
+- Extension panels can now draw their **own boxes on the canvas** with `YBE.callbacks.drawBox()` (or `setDrawnBoxes()`), in a colour of their choice. These overlays are **render-only**: the app draws them but never selects, edits or saves them, and each panel's boxes stay separate. An extension that wants its boxes saved keeps using `setBoxes()` + `save()`.
+
 ## 10.12.0
 - Extensions can now bring their **own Python environment**. A package manifest may declare `requirements:` (and/or a `requirements_file:`) and a `python:` strategy — a dedicated virtualenv under your home folder (the default), the app's interpreter, or a specific interpreter path. Its steps reach it with the new `{EXT_PYTHON}`, `{EXT_ENV_DIR}` and `{EXT_DIR}` placeholders. Install with `ybe install-extension` (it shows what is needed and offers to build), manage later with `ybe extension-env <id>`, or use the **Set up environment** button in Settings → Extensions.
 

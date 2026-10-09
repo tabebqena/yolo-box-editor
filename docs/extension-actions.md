@@ -4,8 +4,8 @@ An extension package can go beyond data files: it can ship **backend code** and
 declare its own **app actions**. This page covers both, plus the app-action
 **lifecycle bus** that lets extensions cooperate.
 
-> The format is versioned by `EXTENSION_API_VERSION` (`5` as of this release);
-> the sandboxed `YBE` API by `PLUGIN_API_VERSION` (`3`). A package must also ship
+> The format is versioned by `EXTENSION_API_VERSION` (`6` as of this release);
+> the sandboxed `YBE` API by `PLUGIN_API_VERSION` (`4`). A package must also ship
 > a [`permissions.yaml`](extensions.md#permissions-and-installing) declaring the
 > `ybe:` capabilities and artifacts it uses; the bridge enforces it per panel.
 
@@ -14,7 +14,7 @@ declare its own **app actions**. This page covers both, plus the app-action
 Add a `backend:` file to `extension.yaml`:
 
 ```yaml
-api_version: 5
+api_version: 6
 name: Tags
 active: true
 backend: backend.py

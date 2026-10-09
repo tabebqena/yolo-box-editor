@@ -22,6 +22,10 @@ let dragOrigBoxes = null;
 let forceDrawMode = false;
 const FORCE_DRAW_MODE_KEY = 'ybe_force_draw_mode';
 
+// Default outline color for extension-drawn overlays (a panel may override it
+// per box or per draw call).
+const DRAWN_BOX_COLOR = '#e75480';
+
 // Offscreen layer holding the image and every box except the one being
 // dragged, so a per-mousemove redraw can blit it and repaint only the active
 // box instead of re-stroking all boxes (the cost that made drags lag on images
@@ -290,6 +294,13 @@ function paintScene(forceBase) {
     }
   }
 
+  // Extension-drawn overlays sit on top of the base layer. They are render-only:
+  // never hit-tested, selected, dragged or saved.
+  drawnBoxes.forEach((entry) => {
+    if (!entry.visible || !entry.boxes.length) return;
+    entry.boxes.forEach((b) => paintDrawnBox(ctx, b));
+  });
+
   // a coordinate input highlight only survives while that input keeps focus
   const f = document.activeElement;
   if (editingPoint && (!f || f.dataset.name !== editingPoint.name)) editingPoint = null;
@@ -401,6 +412,124 @@ function paintBox(g, b, idx) {
     }
     if (active && !readonly && !fixed) drawHandles(g, r);
   }
+}
+
+/**
+ * Get (creating on demand) the drawn-box entry for an owner.
+ * @param {string} owner - The drawing owner (a panel's package id).
+ * @returns {{boxes: object[], visible: boolean}}
+ */
+function drawnEntry(owner) {
+  const key = String(owner || 'default');
+  let entry = drawnBoxes.get(key);
+  if (!entry) {
+    entry = { boxes: [], visible: true };
+    drawnBoxes.set(key, entry);
+  }
+  return entry;
+}
+
+/**
+ * Normalize one extension-drawn box (a copy; the app never stores the caller's
+ * object).
+ * @param {object} box - `{class,cx,cy,w,h,color?,label?}` (normalized coords).
+ * @param {string} [fallbackColor]
+ * @returns {object}
+ */
+function normalizeDrawnBox(box, fallbackColor) {
+  const b = box || {};
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  return {
+    class: num(b.class),
+    cx: num(b.cx),
+    cy: num(b.cy),
+    w: num(b.w),
+    h: num(b.h),
+    color: b.color || fallbackColor || DRAWN_BOX_COLOR,
+    label: b.label || null,
+  };
+}
+
+/**
+ * Draw one box for an owner (render-only overlay; never saved). Append to the
+ * owner's list and repaint.
+ * @param {string} owner - The drawing owner.
+ * @param {object} box - `{class,cx,cy,w,h,color?,label?}`.
+ * @param {{color?:string}} [options]
+ * @returns {boolean}
+ */
+function drawBox(owner, box, options) {
+  const opts = options || {};
+  drawnEntry(owner).boxes.push(normalizeDrawnBox(box, opts.color));
+  draw();
+  return true;
+}
+
+/**
+ * Replace an owner's drawn boxes in one call (e.g. a fresh label file).
+ * @param {string} owner - The drawing owner.
+ * @param {object[]} list - The boxes to draw.
+ * @param {{color?:string, visible?:boolean}} [options]
+ * @returns {boolean}
+ */
+function setDrawnBoxes(owner, list, options) {
+  const opts = options || {};
+  const entry = drawnEntry(owner);
+  entry.boxes = (list || []).map((b) => normalizeDrawnBox(b, opts.color));
+  if (typeof opts.visible === 'boolean') entry.visible = opts.visible;
+  draw();
+  return true;
+}
+
+/**
+ * Remove every box an owner has drawn.
+ * @param {string} owner - The drawing owner.
+ * @returns {boolean}
+ */
+function clearDrawnBoxes(owner) {
+  const entry = drawnBoxes.get(String(owner || 'default'));
+  if (entry) {
+    entry.boxes = [];
+    draw();
+  }
+  return true;
+}
+
+/**
+ * Show or hide an owner's drawn boxes without discarding them.
+ * @param {string} owner - The drawing owner.
+ * @param {boolean} visible
+ * @returns {boolean}
+ */
+function setDrawnBoxesVisible(owner, visible) {
+  drawnEntry(owner).visible = !!visible;
+  draw();
+  return true;
+}
+
+/**
+ * Paint one extension-drawn box (outline + optional label). Overlays are not
+ * interactive: no handles, delete/class buttons or selection state.
+ * @param {CanvasRenderingContext2D} g
+ * @param {object} b - A normalized drawn box.
+ */
+function paintDrawnBox(g, b) {
+  const r = toPx(b);
+  const color = b.color || DRAWN_BOX_COLOR;
+  g.strokeStyle = color;
+  g.lineWidth = 2;
+  g.strokeRect(r.x, r.y, r.w, r.h);
+  if (!boxDetailsVisible) return;
+  const label = b.label || `${b.class}: ${classes[b.class] || 'class ' + b.class}`;
+  g.font = '14px system-ui, sans-serif';
+  const tw = g.measureText(label).width;
+  const ly = Math.max(0, r.y - 18);
+  g.fillStyle = color;
+  g.globalAlpha = 0.9;
+  g.fillRect(r.x, ly, tw + 8, 18);
+  g.globalAlpha = 1;
+  g.fillStyle = '#111';
+  g.fillText(label, r.x + 4, ly + 13);
 }
 
 /**
