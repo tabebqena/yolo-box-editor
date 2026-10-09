@@ -20,7 +20,7 @@ api_version: 5
 name: My Tools
 active: true
 ui:
-  api_version: 2          # the YBE plugin API version your script expects
+  api_version: 3          # the YBE plugin API version your script expects
   title: My Panel         # frame header and Layout-tab label
   script: panel.js        # relative to the package folder
   location: float         # float | left | right | bottom (default float)
@@ -65,8 +65,24 @@ Everything is **async** — reads and writes return Promises.
 | `YBE.state.getActiveSplit()` | active split name or `null` |
 | `YBE.state.getImageCount()` | number of images in the current list |
 | `YBE.state.isDatasetLoaded()` | boolean |
+| `YBE.state.getConfig()` | read-only copy of the app's `/api/config` payload |
 | `YBE.readonly` | boolean (kept up to date) |
 | `YBE.apiVersion` | the plugin API version |
+
+### Call the app's API
+
+The sandbox has no network, so use the host as a proxy:
+
+| Call | Effect |
+| ---- | ------ |
+| `YBE.api.get(path)` | GET a same-origin `/api/*` path |
+| `YBE.api.post(path, body)` | POST JSON to a same-origin `/api/*` path |
+| `YBE.api.request(method, path, body)` | GET/POST (only these two) |
+
+Only `/api/*` paths are allowed and the auth routes
+(`/api/login`, `/api/logout`, `/api/session`, `/api/password`) are refused, so a
+panel cannot sign in/out or read the session. Writes are still gated by the
+server's read-only rules.
 
 ### Write / act
 All of these refuse in read-only mode.

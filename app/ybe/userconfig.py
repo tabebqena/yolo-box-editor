@@ -1,7 +1,7 @@
 """The per-user config.json: recent datasets, per-dataset views and UI settings.
 
 One JSON file in the user home holds everything the browser would otherwise
-store locally (recent data files, each dataset's split/filter/tags view and
+store locally (recent data files, each dataset's split/filter view and
 disabled extensions, and cross-browser UI settings). Legacy per-purpose files
 are migrated in and removed on first use.
 """
@@ -152,7 +152,7 @@ def _load_views():
 
 
 def _save_view(data_yaml, split, active_filters):
-    """Remember a dataset's split/filter chain and tags folder so a restart reopens it.
+    """Remember a dataset's split/filter chain so a restart reopens it.
 
     Other per-dataset view keys (the disabled action/hook lists, the last image)
     are preserved.

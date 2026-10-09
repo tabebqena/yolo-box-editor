@@ -14,9 +14,9 @@ The modules, roughly bottom-up (each layer may use the ones above it):
     pipes           shared command/pipe helpers for action and filter runs
     extensions      actions/hooks/filters: parse, validate, load, author YAML
     shortcuts       shortcuts.txt bindings
-    tags            tags.yaml and per-image tag files
-    dataset         data.yaml -> splits, image list, label/tag paths
+    dataset         data.yaml -> splits, image list, label paths
     filters         the filter-chain runtime (narrow the image list)
+    plugins         backend plugins for extension packages
     userconfig      config.json: recents, per-dataset views, UI settings
     commands        action execution (steps + after_success) as a queue
     auth            the login-account store

@@ -95,6 +95,11 @@ function ybePanelMethods(panel) {
     'state.getActiveSplit': () => activeSplit,
     'state.getImageCount': () => images.length,
     'state.isDatasetLoaded': () => !!datasetLoaded,
+    // Read-only copy of the app's `/api/config` payload.
+    'state.getConfig': async () => await apiGet('/api/config'),
+    // Proxy a same-origin `/api/*` request through the host (the sandbox has no
+    // network of its own). Auth routes are off-limits.
+    'api.request': async (a) => await ybeApiRequest(a[0], a[1], a[2]),
     // Package backend capabilities (only the caller's own package is reachable).
     'call': (a) => capabilityCall(packageId, String(a[0]), Array.isArray(a[1]) ? a[1] : []),
     'callbacks.setBoxes': (a) => {
@@ -217,6 +222,31 @@ async function capabilityCall(packageId, method, args) {
     throw new Error((data && data.error) || ('capability failed: ' + method));
   }
   return data.value;
+}
+
+// Auth/session routes a panel may never touch (so it cannot log in/out or read
+// the signed session).
+const YBE_API_BLOCKED = ['/api/login', '/api/logout', '/api/session', '/api/password'];
+
+/**
+ * Proxy a same-origin API request for a panel. Only `/api/*` paths are allowed,
+ * auth routes are refused, and only GET/POST are supported. The host performs
+ * the fetch, so the sandbox never gets network access itself.
+ * @param {string} method
+ * @param {string} path
+ * @param {*} [body] - JSON body for POST.
+ * @returns {Promise<*>} The parsed response body.
+ */
+async function ybeApiRequest(method, path, body) {
+  const m = String(method || 'GET').toUpperCase();
+  const p = String(path || '');
+  if (m !== 'GET' && m !== 'POST') throw new Error('only GET and POST are allowed');
+  if (!p.startsWith('/api/')) throw new Error('only /api/ paths are allowed');
+  if (YBE_API_BLOCKED.some((b) => p === b || p.startsWith(b + '?') || p.startsWith(b + '/'))) {
+    throw new Error('auth routes are not available to panels');
+  }
+  if (m === 'GET') return await apiGet(p);
+  return (await apiPost(p, body === undefined ? {} : body)).data;
 }
 
 /**
@@ -570,6 +600,11 @@ function __ybeIframeStub() {
     on: on,
     off: off,
     call: function (method, args) { return call('call', [method, args], lastCtx); },
+    api: {
+      request: function (method, path, body) { return call('api.request', [method, path, body]); },
+      get: function (path) { return call('api.request', ['GET', path]); },
+      post: function (path, body) { return call('api.request', ['POST', path, body]); },
+    },
     state: {
       getImage: function () { return call('state.getImage'); },
       getImageIndex: function () { return call('state.getImageIndex'); },
@@ -578,6 +613,7 @@ function __ybeIframeStub() {
       getActiveSplit: function () { return call('state.getActiveSplit'); },
       getImageCount: function () { return call('state.getImageCount'); },
       isDatasetLoaded: function () { return call('state.isDatasetLoaded'); },
+      getConfig: function () { return call('state.getConfig'); },
     },
     callbacks: {
       setBoxes: function (l) { return call('callbacks.setBoxes', [l]); },

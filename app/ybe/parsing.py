@@ -20,7 +20,7 @@ def _strip_comment(s):
 
 
 def _parse_yaml_names_value(value):
-    """Parse a `names:` value into a list of class/tag names.
+    """Parse a `names:` value into a list of class names.
 
     Handles the three shapes seen in real data.yaml files:
       - an inline list:      [fire, smoke]

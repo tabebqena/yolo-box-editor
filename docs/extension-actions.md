@@ -5,7 +5,7 @@ declare its own **app actions**. This page covers both, plus the app-action
 **lifecycle bus** that lets extensions cooperate.
 
 > The format is versioned by `EXTENSION_API_VERSION` (`5` as of this release);
-> the sandboxed `YBE` API by `PLUGIN_API_VERSION` (`2`).
+> the sandboxed `YBE` API by `PLUGIN_API_VERSION` (`3`).
 
 ## Backend plugins
 

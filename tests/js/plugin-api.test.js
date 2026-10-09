@@ -36,6 +36,24 @@ test('the `call` capability forwards to the caller package backend', async () =>
   assert.deepEqual(posted, { package: 'tags', method: 'tags.available', args: [] });
 });
 
+test('state.getConfig returns the app config', async () => {
+  app.fetchMock.on('/api/config', () => ({ body: { data_yaml: '/d/data.yaml', classes: ['a'] } }));
+  const cfg = await app.api.ybeHandleRequest('state.getConfig', []);
+  assert.deepEqual(plain(cfg), { data_yaml: '/d/data.yaml', classes: ['a'] });
+});
+
+test('api.request proxies same-origin /api paths and refuses auth routes', async () => {
+  app.fetchMock.on('/api/images', () => ({ body: { images: [] } }));
+  const got = await app.api.ybeHandleRequest('api.request', ['GET', '/api/images']);
+  assert.deepEqual(plain(got), { images: [] });
+  await assert.rejects(() => app.api.ybeHandleRequest('api.request', ['GET', '/api/login']),
+    /auth routes/);
+  await assert.rejects(() => app.api.ybeHandleRequest('api.request', ['GET', '/etc/passwd']),
+    /only \/api\//);
+  await assert.rejects(() => app.api.ybeHandleRequest('api.request', ['DELETE', '/api/images']),
+    /GET and POST/);
+});
+
 test('mutating callbacks refuse in read-only mode', async () => {
   app.set({
     readonly: true,

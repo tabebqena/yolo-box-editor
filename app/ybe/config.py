@@ -48,7 +48,7 @@ USER_EXTENSIONS_DIR = os.path.join(YBX_HOME, "extensions")
 USER_SCRIPT_DIR = os.path.join(YBX_HOME, "scripts")
 USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
 # One JSON file holds all per-user config: recent datasets, per-dataset views
-# (split/filter/tags/disabled + last image) and cross-browser UI settings. It
+# (split/filter/disabled + last image) and cross-browser UI settings. It
 # sits in YBX_HOME, outside `app/`, so app updates never touch it.
 CONFIG_FILE = os.path.join(YBX_HOME, "config.json")
 # The update-check cache is a throwaway background result, so it stays its own
@@ -244,8 +244,9 @@ EXTENSION_API_VERSION = 5
 # panel's JavaScript talks to the app through `YBE`, whose shape evolves on its
 # own schedule. A package declares it as `ui.api_version:`; the UI compares it
 # against this to block panels written for a newer API. v2 added `YBE.call`
-# (package backend capabilities) and the `before_/after_app_action` event bus.
-PLUGIN_API_VERSION = 2
+# (package backend capabilities) and the `before_/after_app_action` event bus;
+# v3 added `YBE.state.getConfig()` and the `YBE.api` request proxy.
+PLUGIN_API_VERSION = 3
 
 # Placeholder catalogs offered by the UI's click-to-insert palette. Keep them in
 # sync with the values built in `api_action_run` and `_filter_placeholder_values`

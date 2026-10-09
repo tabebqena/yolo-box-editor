@@ -33,7 +33,7 @@ settings:
 # network and can only reach the app through the async `YBE` object. This
 # package is shipped `active: false`, so the panel is listed but not mounted.
 ui:
-  api_version: 2
+  api_version: 3
   title: Example panel
   script: panel.js
   location: float

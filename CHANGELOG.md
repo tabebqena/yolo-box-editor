@@ -4,6 +4,18 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.1.0] - 2026-10-09
+
+### Added
+
+- **Panels can read the app config and call the API through the bridge.**
+  `YBE.state.getConfig()` returns a read-only copy of the `/api/config` payload,
+  and `YBE.api.get(path)` / `YBE.api.post(path, body)` proxy a same-origin
+  `/api/*` request through the host (the sandbox still has no network). Only
+  `/api/*` GET/POST are allowed; the auth routes (`/api/login`, `/api/logout`,
+  `/api/session`, `/api/password`) are refused, and the server's read-only rules
+  still apply. The panel plugin API version is now `3`.
+
 ## [10.0.0] - 2026-10-09
 
 ### Changed

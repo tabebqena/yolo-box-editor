@@ -1,9 +1,9 @@
-"""Dataset scanning: data.yaml -> splits, image list, labels/tags paths.
+"""Dataset scanning: data.yaml -> splits, image list, label paths.
 
 The live dataset is held in `state.STATE`; these functions read and populate it.
-By convention the labels/tags folders are found by replacing the last `images`
-path segment (`.../images/train` -> `.../labels/train`); `_replace_images_segment`
-is the single place that rule lives.
+By convention the labels folder is found by replacing the last `images` path
+segment (`.../images/train` -> `.../labels/train`); `_replace_images_segment` is
+the single place that rule lives (the tags extension reuses it for tag paths).
 
 Startup resume (`app.py`) and the post-run image rescan (`commands.py`) live one
 layer up because they also touch user config and the filter chain.
@@ -20,7 +20,7 @@ def is_image(name):
 
 
 def _replace_images_segment(images_dir, component):
-    """Replace the last `images` path segment with `component` (labels/tags)."""
+    """Replace the last `images` path segment with `component` (labels, tags, …)."""
     parts = images_dir.replace("\\", "/").rstrip("/").split("/")
     for i in range(len(parts) - 1, -1, -1):
         if parts[i] == "images":

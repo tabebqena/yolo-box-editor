@@ -58,7 +58,7 @@ app_actions:
     shortcut: Alt+9
 
 ui:
-  api_version: 2
+  api_version: 3
   title: Tags
   script: panel.js
   location: bottom
