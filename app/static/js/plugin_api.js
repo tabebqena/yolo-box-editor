@@ -359,6 +359,22 @@ function buildYbeThemeCss() {
 }
 
 /**
+ * The host document's used color scheme. Forwarded into the panel so a
+ * transparent panel canvas matches the app instead of being painted white
+ * (an app that sets `color-scheme: dark` otherwise leaves an inherited,
+ * unset-scheme iframe with a light canvas). A panel may still override this
+ * with its own `:root`/`body` styles.
+ * @returns {string}
+ */
+function ybeHostColorScheme() {
+  try {
+    const v = getComputedStyle(document.documentElement).colorScheme;
+    if (v && v !== 'normal' && /^[a-z ]+$/i.test(v)) return v;
+  } catch (e) { /* ignore */ }
+  return 'dark';
+}
+
+/**
  * A random nonce for the wrapper's inline scripts.
  * @returns {string}
  */
@@ -392,7 +408,8 @@ function buildPanelSrcdoc(scriptText) {
   const stub = escapeScriptClose('(' + __ybeIframeStub.toString() + ')();');
   return '<!doctype html><html><head><meta charset="utf-8">'
     + '<meta http-equiv="Content-Security-Policy" content="' + csp + '">'
-    + '<style>' + YBE_PANEL_BASE_CSS + '</style></head><body>'
+    + '<style>' + YBE_PANEL_BASE_CSS
+    + ':root{color-scheme:' + ybeHostColorScheme() + '}</style></head><body>'
     + '<script nonce="' + nonce + '">window.__YBE_API_VERSION=' + Number(pluginApiVersion || 1) + ';</script>'
     + '<script nonce="' + nonce + '">' + stub + '</script>'
     + '<script nonce="' + nonce + '">' + escapeScriptClose(scriptText) + '</script>'

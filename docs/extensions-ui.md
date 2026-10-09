@@ -117,7 +117,10 @@ available.
 | `app_action` | `{action, extension, name, depth, chain}` — sent to a package's panel when one of its app actions runs |
 
 The bridge also pushes `theme` (CSS variables) at start-up so the panel can match
-the app's colours, and reports the panel's height back so the frame sizes itself.
+the app's colours, reports the panel's height back so the frame sizes itself, and
+sets the wrapper's `color-scheme` to the app's own so a transparent panel blends
+in instead of showing a white canvas. Add your own `:root`/`body` background (or
+`color-scheme`) in the panel to opt out and use a custom look.
 
 ## Trust & safety
 

@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.10.0] - 2026-10-09
+
+### Fixed
+
+- **Extension panels no longer show a white background.** A sandboxed panel
+  document now declares the app's `color-scheme`, so a transparent panel (like
+  the Tags bar) blends into the surrounding dock instead of being painted a
+  light canvas. A panel can still opt out with its own `:root`/`body`
+  background or `color-scheme`.
+
 ## [10.9.0] - 2026-10-09
 
 ### Fixed

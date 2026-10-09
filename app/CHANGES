@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.10.0
+- Extension panels now match the app's style by default instead of showing a white background. A panel that wants a custom look can still set its own background or `color-scheme`.
+
 ## 10.9.0
 - Fixed: a **fixed box** no longer swallows clicks on the boxes inside it. Clicking a box that sits under a fixed frame now selects that box, while clicking a part of the frame not covered by another box still selects the frame (so you can unfix it). Handy for labelling several objects inside a region you have already fixed.
 

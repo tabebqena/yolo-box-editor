@@ -159,6 +159,12 @@ test('buildPanelSrcdoc numbers the plugin API version', () => {
   assert.match(html, /window\.__YBE_API_VERSION=1/);
 });
 
+test('buildPanelSrcdoc forwards a color-scheme so panels match the app', () => {
+  const html = app.api.buildPanelSrcdoc('');
+  assert.match(html, /:root\{color-scheme:/);
+  assert.match(html, /color-scheme:dark/);
+});
+
 test('mountExtensionPanel mounts a sandboxed iframe and unmounts', () => {
   app.api.mountExtensionPanel(
     { id: 'p1', name: 'P1', ui: { title: 'P1', script: 'p.js', status: 'current', location: 'right' } },
