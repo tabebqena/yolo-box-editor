@@ -129,9 +129,15 @@ Full details: [install, update and run](docs/install.md).
 | `I` | hide all boxes except the selected one |
 | `Space` | focus the canvas (so shortcuts work after typing) |
 | `Ctrl+A` | select all boxes |
+| `N` | create a new box without the mouse |
+| `Alt+←` / `→` / `↑` / `↓` | move the selected box |
 | `Ctrl+←` / `→` / `↑` / `↓` | widen the selected box's matching border |
 | `Ctrl+Shift+←` / `→` / `↑` / `↓` | narrow the selected box's matching border |
 | `Alt+1`…`Alt+9` | toggle a tag by number |
+
+Prefer the mouse? The small **canvas toolbar** (top-left of the image) has
+buttons for **new box**, **select all**, **Details**, **Isolate**, **Boxes** and
+**Draw on top**, so everything the keyboard can toggle is one click away too.
 
 **Ctrl+click** a box to add it to the selection (Ctrl+click again to remove it) —
 the same works on a row in the Boxes list. Drag any selected box to move them all

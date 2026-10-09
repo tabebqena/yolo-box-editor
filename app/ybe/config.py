@@ -141,6 +141,12 @@ APP_ACTIONS = {
     "app_focus_canvas",
     "app_select_all",
     "app_fix_box",
+    # Keyboard box creation and whole-box moves (mouse-free editing).
+    "app_new_box",
+    "app_move_left",
+    "app_move_right",
+    "app_move_up",
+    "app_move_down",
     # Keyboard border editing: widen (Ctrl+arrow) / narrow (Ctrl+Shift+arrow).
     "app_widen_left",
     "app_widen_right",

@@ -48,7 +48,7 @@ const LET_STATE = [
   'debugMode', 'updateInfo', 'serverSettings', 'settingsSaveTimer',
   'pendingSettings', 'notifLog', 'notifUnread', 'autoModalCurrent', 'mode',
   'start', 'dragStart', 'mouse', 'origBox', 'handle', 'loadDataAutoOpened',
-  'dragIndices', 'dragOrigBoxes',
+  'dragIndices', 'dragOrigBoxes', 'forceDrawMode', 'keyEditUndoAt',
   'tipChecked', 'actionsExpanded', 'shownShortcutErrors', 'presenceTimer',
   'presenceDismissed', 'presenceToast', 'shortcutCapture', 'sidePanelOpen',
   'panelSide', 'settingsInitialized', 'appStarted',

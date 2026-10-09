@@ -4,6 +4,20 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.8.0] - 2026-10-09
+
+### Added
+
+- **Full input parity: drive the editor with the mouse alone or the keyboard
+  alone.** New rebindable built-in actions `app_new_box` (`N`) creates a centred
+  box and opens the class picker, and `app_move_left`/`app_move_right`/
+  `app_move_up`/`app_move_down` (`Alt+arrow`) translate the selected box(es) while
+  keeping them inside the image. A held move/nudge collapses into one undo step.
+- **Canvas toolbar** (top-left of the image): clickable **new box**, **select
+  all**, **Details**, **Isolate**, **Boxes** and **Draw on top** buttons, so the
+  previously keyboard-only canvas toggles are one click away. The **Draw** button
+  enables a persistent force-draw mode for mouse-only drawing over existing boxes.
+
 ## [10.7.0] - 2026-10-09
 
 ### Added

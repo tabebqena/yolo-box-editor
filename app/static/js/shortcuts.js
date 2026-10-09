@@ -97,7 +97,7 @@ function menuRow(label, keys) {
 }
 
 // Preferred display order for the built-in app shortcuts.
-const APP_SHORTCUT_ORDER = ['app_help', 'app_prev', 'app_next', 'app_del', 'app_drop', 'app_undo', 'app_redo', 'app_save', 'app_ch_box', 'app_sel_box', 'app_sel_points', 'app_escape', 'app_show_hide', 'app_box_details', 'app_isolate_box', 'app_focus_canvas', 'app_select_all', 'app_fix_box', 'app_widen_left', 'app_widen_right', 'app_widen_up', 'app_widen_down', 'app_narrow_left', 'app_narrow_right', 'app_narrow_up', 'app_narrow_down', 'app_force_draw', 'app_refresh_images_list', 'app_reload_images_list', 'app_refresh_image'];
+const APP_SHORTCUT_ORDER = ['app_help', 'app_prev', 'app_next', 'app_del', 'app_drop', 'app_undo', 'app_redo', 'app_save', 'app_ch_box', 'app_sel_box', 'app_sel_points', 'app_escape', 'app_show_hide', 'app_box_details', 'app_isolate_box', 'app_focus_canvas', 'app_select_all', 'app_fix_box', 'app_new_box', 'app_move_left', 'app_move_right', 'app_move_up', 'app_move_down', 'app_widen_left', 'app_widen_right', 'app_widen_up', 'app_widen_down', 'app_narrow_left', 'app_narrow_right', 'app_narrow_up', 'app_narrow_down', 'app_force_draw', 'app_refresh_images_list', 'app_reload_images_list', 'app_refresh_image'];
 
 // Last shortcut-error message shown, so config reloads don't re-toast it.
 let shownShortcutErrors = '';

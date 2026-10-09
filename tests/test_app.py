@@ -692,6 +692,23 @@ def test_keyboard_box_actions_are_builtin_and_shipped():
     assert "<Ctrl+ArrowLeft>" in text and "<Ctrl+Shift+ArrowLeft>" in text
 
 
+def test_mousefree_box_actions_are_builtin_and_shipped():
+    # Creating a box (N) and moving it (Alt+arrow) without a mouse.
+    for name in (
+        "app_new_box",
+        "app_move_left",
+        "app_move_right",
+        "app_move_up",
+        "app_move_down",
+    ):
+        assert name in ybe.config.APP_ACTIONS
+    base = Path(ybe.config.BASE_DIR)
+    text = (base / "shortcuts.txt").read_text(encoding="utf-8")
+    assert "app_new_box" in text and "<N>" in text
+    assert "app_move_left" in text and "<Alt+ArrowLeft>" in text
+    assert "app_move_down" in text and "<Alt+ArrowDown>" in text
+
+
 def test_help_content_and_shipped_shortcut_ship():
     base = Path(ybe.config.BASE_DIR)
     # The shipped binding: F1 opens help.

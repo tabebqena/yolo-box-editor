@@ -17,6 +17,14 @@
       <div class="app-main">
         <main class="canvas-wrap">
           <canvas id="canvas" tabindex="0"></canvas>
+          <div id="canvasToolbar" class="canvas-toolbar" role="toolbar" aria-label="Canvas tools">
+            <button id="ctNewBox" type="button" title="New box (N)">&#43;</button>
+            <button id="ctSelectAll" type="button" title="Select all boxes (Ctrl+A)">&#9635;</button>
+            <button id="ctDetails" type="button" aria-pressed="true" title="Box details: handles, labels and buttons (,)">Details</button>
+            <button id="ctIsolate" type="button" aria-pressed="false" title="Isolate: show only the selected box (I)">Isolate</button>
+            <button id="ctShowBoxes" type="button" aria-pressed="true" title="Show boxes: toggle the box overlay (.)">Boxes</button>
+            <button id="ctForceDraw" type="button" aria-pressed="false" title="Draw on top: a drag always starts a new box">Draw</button>
+          </div>
         </main>
       </div>
 

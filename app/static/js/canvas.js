@@ -16,6 +16,12 @@ let dragIndices = [];
 // same delta to each of them.
 let dragOrigBoxes = null;
 
+// Mouse-only "draw on top" mode (canvas toolbar button): while on, a plain drag
+// always starts a new box even on top of an existing one, without holding the
+// force-draw modifier. Persisted in settings; keyboard users use the modifier.
+let forceDrawMode = false;
+const FORCE_DRAW_MODE_KEY = 'ybe_force_draw_mode';
+
 // Offscreen layer holding the image and every box except the one being
 // dragged, so a per-mousemove redraw can blit it and repaint only the active
 // box instead of re-stroking all boxes (the cost that made drags lag on images
@@ -223,6 +229,7 @@ function draw() {
   fastDrawQueued = false; // a full draw supersedes any queued fast repaint
   paintScene(true);
   syncSidePanel();
+  syncCanvasToolbar();
 }
 
 /**
@@ -609,6 +616,7 @@ function updateCursor(p) {
  * @returns {boolean}
  */
 function forceDrawActive(e) {
+  if (forceDrawMode) return true;
   const info = appShortcuts['app_force_draw'];
   const spec = (info && info.shortcut) || 'Ctrl';
   const mods = spec.split('+').map((s) => s.trim().toLowerCase()).filter(Boolean);
@@ -701,6 +709,75 @@ function resizeBox(p) {
 
 // How far each keyboard border nudge moves an edge, in normalized units.
 const BOX_NUDGE_STEP = 0.005;
+// How far each keypress translates a whole box, in normalized units.
+const BOX_MOVE_STEP = 0.005;
+
+// Keyboard nudge/move bursts come from held-key auto-repeat; collapse a burst
+// into a single undo step so Ctrl+Z undoes the whole adjustment, not one key.
+let keyEditUndoAt = 0;
+const KEY_EDIT_UNDO_GAP = 700; // ms
+
+/**
+ * Push an undo snapshot for a keyboard edit at most once per burst.
+ * @returns {void}
+ */
+function pushKeyEditUndo() {
+  const now = Date.now();
+  if (now - keyEditUndoAt > KEY_EDIT_UNDO_GAP) pushUndo();
+  keyEditUndoAt = now;
+}
+
+/**
+ * Create a new box at the centre of the image with a default size, select it and
+ * open the class picker. Drives the app_new_box shortcut (`N`) and the canvas
+ * toolbar's "new box" button, so a box can be created without the mouse.
+ * @returns {void}
+ */
+function newBox() {
+  if (readonly || currentIndex < 0 || !imgW || !imgH) return;
+  pushUndo();
+  boxes.push({ class: defaultClass, cx: 0.5, cy: 0.5, w: 0.25, h: 0.25 });
+  selectOnlyBox(boxes.length - 1);
+  justDrawn = true;
+  syncClassSelect(selected);
+  markDirty();
+  draw();
+  updateHistoryButtons();
+  dbg('box created by keyboard', { total: boxes.length });
+  runHook('on_box_created');
+  openPickerForSelectedBox();
+}
+
+/**
+ * Translate every selected box by a normalized delta, keeping the whole box
+ * inside the image. Drives the app_move_* shortcuts (Alt+arrow) and, indirectly,
+ * the toolbar. Applies to the whole selection like a mouse group-drag.
+ * @param {number} dx - Normalized horizontal delta.
+ * @param {number} dy - Normalized vertical delta.
+ * @returns {void}
+ */
+function moveSelectedBox(dx, dy) {
+  const indices = selectionIndices();
+  if (readonly || !indices.length) return;
+  let changed = false;
+  const next = [];
+  for (const i of indices) {
+    const b = boxes[i];
+    const cx = Math.max(b.w / 2, Math.min(1 - b.w / 2, b.cx + dx));
+    const cy = Math.max(b.h / 2, Math.min(1 - b.h / 2, b.cy + dy));
+    if (cx === b.cx && cy === b.cy) continue;
+    next.push([i, { ...b, cx, cy }]);
+    changed = true;
+  }
+  if (!changed) return;
+  pushKeyEditUndo();
+  for (const [i, b] of next) boxes[i] = b;
+  justDrawn = false;
+  markDirty();
+  draw();
+  updateHistoryButtons();
+  runHook('on_box_edited');
+}
 
 /**
  * Move one border of every selected box by the nudge step, keeping the opposite
@@ -713,6 +790,7 @@ function nudgeSelectedBox(edge, grow) {
   if (readonly || !indices.length) return;
   const d = grow ? BOX_NUDGE_STEP : -BOX_NUDGE_STEP;
   let changed = false;
+  const next = [];
   for (const i of indices) {
     const b = boxes[i];
     let { cx, cy, w, h } = b;
@@ -733,14 +811,63 @@ function nudgeSelectedBox(edge, grow) {
       cy = (y1 + y2) / 2;
       h = y2 - y1;
     }
-    boxes[i] = { ...b, cx, cy, w, h };
+    next.push([i, { ...b, cx, cy, w, h }]);
     changed = true;
   }
   if (!changed) return;
+  pushKeyEditUndo();
+  for (const [i, b] of next) boxes[i] = b;
   markDirty();
   draw();
   updateHistoryButtons();
   runHook('on_box_edited');
+}
+
+// ------------------------------------------------------------------------- //
+// canvas overlay toggles (shared by shortcuts and the toolbar buttons)
+// ------------------------------------------------------------------------- //
+
+/**
+ * Show or hide the box handles/labels/buttons (outlines-only mode).
+ * @returns {void}
+ */
+function toggleBoxDetails() {
+  boxDetailsVisible = !boxDetailsVisible;
+  settingsSet(SHOW_BOX_DETAILS_KEY, boxDetailsVisible ? '1' : '0');
+  draw();
+  syncCanvasToolbar();
+}
+
+/**
+ * Show or hide the whole box overlay.
+ * @returns {void}
+ */
+function toggleShowBoxes() {
+  boxesVisible = !boxesVisible;
+  settingsSet(SHOW_BOXES_KEY, boxesVisible ? '1' : '0');
+  draw();
+  syncCanvasToolbar();
+}
+
+/**
+ * Draw only the selected box (or all boxes when nothing is selected).
+ * @returns {void}
+ */
+function toggleIsolateBox() {
+  isolateSelected = !isolateSelected;
+  settingsSet(ISOLATE_BOX_KEY, isolateSelected ? '1' : '0');
+  draw();
+  syncCanvasToolbar();
+}
+
+/**
+ * Toggle the mouse-only "draw on top" mode used by the canvas toolbar.
+ * @returns {void}
+ */
+function toggleForceDrawMode() {
+  forceDrawMode = !forceDrawMode;
+  settingsSet(FORCE_DRAW_MODE_KEY, forceDrawMode ? '1' : '0');
+  syncCanvasToolbar();
 }
 
 // ------------------------------------------------------------------------- //
@@ -759,6 +886,7 @@ function applyReadonly() {
   setActionButtonsDisabled(readonly);
   updateHistoryButtons();
   draw();
+  syncCanvasToolbar();
   emitReadonlyChange();
 }
 

@@ -585,6 +585,45 @@ function initFloatWindow(win) {
 }
 
 /**
+ * Sync the canvas overlay toolbar buttons to the current canvas state: the
+ * pressed state of the view toggles, the draw-on-top mode, and which buttons are
+ * disabled (read-only / no boxes / no image).
+ * @returns {void}
+ */
+function syncCanvasToolbar() {
+  const pressed = (id, on) => {
+    const b = el(id);
+    if (b) b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  };
+  pressed('ctDetails', boxDetailsVisible);
+  pressed('ctIsolate', isolateSelected);
+  pressed('ctShowBoxes', boxesVisible);
+  pressed('ctForceDraw', forceDrawMode);
+  const toolbar = el('canvasToolbar');
+  if (toolbar) toolbar.classList.toggle('hidden', currentIndex < 0);
+  const setDisabled = (id, off) => { const b = el(id); if (b) b.disabled = off; };
+  setDisabled('ctNewBox', readonly);
+  setDisabled('ctSelectAll', readonly || !boxes.length);
+  setDisabled('ctForceDraw', readonly);
+}
+
+/**
+ * Wire the mouse-only canvas overlay toolbar. Each button drives the same code
+ * path as its keyboard shortcut, so both input methods stay in sync.
+ * @returns {void}
+ */
+function buildCanvasToolbar() {
+  const on = (id, fn) => { const b = el(id); if (b) b.addEventListener('click', fn); };
+  on('ctNewBox', () => newBox());
+  on('ctSelectAll', () => selectAllBoxes());
+  on('ctDetails', () => toggleBoxDetails());
+  on('ctIsolate', () => toggleIsolateBox());
+  on('ctShowBoxes', () => toggleShowBoxes());
+  on('ctForceDraw', () => toggleForceDrawMode());
+  syncCanvasToolbar();
+}
+
+/**
  * Sync the appearance controls (panel side, dock selects, visibility toggles).
  */
 function setAppearanceControls() {
@@ -645,6 +684,9 @@ function initAppearance() {
 
   applyAllWidgets();
   setAppearanceControls();
+
+  forceDrawMode = settingsGet(FORCE_DRAW_MODE_KEY) === '1';
+  buildCanvasToolbar();
 
   el('panelSideSel').addEventListener('change', () => {
     panelSide = el('panelSideSel').value === 'left' ? 'left' : 'right';

@@ -33,6 +33,11 @@ app_isolate_box <I>       hide all boxes except the selected one
 app_focus_canvas <Space>  focus the canvas (so shortcuts keep working)
 app_select_all <Ctrl+A>   select all boxes
 app_fix_box  <F>          fix/unfix selected box
+app_new_box  <N>          create a new box (opens the class picker)
+app_move_left  <Alt+ArrowLeft>   move the selected box left
+app_move_right <Alt+ArrowRight>  move the selected box right
+app_move_up    <Alt+ArrowUp>     move the selected box up
+app_move_down  <Alt+ArrowDown>   move the selected box down
 app_widen_left  <Ctrl+ArrowLeft>   widen the selected box's left border
 app_widen_right <Ctrl+ArrowRight>  widen the selected box's right border
 app_widen_up    <Ctrl+ArrowUp>     widen the selected box's top border

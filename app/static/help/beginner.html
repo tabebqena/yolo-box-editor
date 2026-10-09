@@ -39,15 +39,20 @@ Intermediate tab for the layout options.</p>
 </ol>
 <p>The new box is <em>selected</em>: yellow on the canvas, with its row active in
 the Boxes list.</p>
+<p class="help-note">No mouse? Press <kbd>N</kbd> (or the <strong>+</strong> in
+the canvas toolbar) to drop a box in the centre of the image; the class list
+opens so you can pick one, then move and resize it with the keyboard (below).</p>
 <p class="help-note">To draw inside or on top of an existing box, hold the
-force-draw modifier (default <kbd>Ctrl</kbd>) and drag. A plain drag inside a box
-moves that box instead.</p>
+force-draw modifier (default <kbd>Ctrl</kbd>) and drag — or turn on
+<strong>Draw</strong> in the canvas toolbar. A plain drag inside a box moves that
+box instead.</p>
 
 <h3>4. Move and resize a box</h3>
 <ul>
-  <li><strong>Move</strong>: click inside the selected box and drag.</li>
+  <li><strong>Move</strong>: click inside the selected box and drag, or press
+  <kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd>/<kbd>↑</kbd>/<kbd>↓</kbd>.</li>
   <li><strong>Resize</strong>: drag one of the eight square handles (corners and
-  edge midpoints).</li>
+  edge midpoints), or use <kbd>Ctrl</kbd>+arrow (see step 6).</li>
   <li><strong>Type exact values</strong>: click the <code>cx</code>,
   <code>cy</code>, <code>w</code> or <code>h</code> field in the box's row and
   type. Coordinates are fractions of the image (0–1), so
@@ -66,6 +71,9 @@ asks you to confirm first.</p>
   one). Drag any selected box to move them together, or press
   <kbd>Delete</kbd> to remove them all.</li>
   <li>Press <kbd>Ctrl</kbd>+<kbd>A</kbd> to select every box.</li>
+  <li>With a box selected, <kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd>/<kbd>↑</kbd>/<kbd>↓</kbd>
+  move the whole box; hold the key to keep moving (one <kbd>Ctrl</kbd>+<kbd>Z</kbd>
+  undoes the whole move).</li>
   <li>With a box selected, <kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd>/<kbd>↑</kbd>/<kbd>↓</kbd>
   widen a border; add <kbd>Shift</kbd> to narrow it.</li>
   <li>Press <kbd>Shift</kbd> to jump to the next box.</li>
@@ -95,6 +103,8 @@ the box, then pick the class — use <kbd>↑</kbd>/<kbd>↓</kbd> and
   <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>delete selected box</td></tr>
   <tr><td><kbd>Z</kbd> / <kbd>Y</kbd></td><td>undo / redo</td></tr>
   <tr><td><kbd>S</kbd></td><td>save labels</td></tr>
+  <tr><td><kbd>N</kbd></td><td>create a new box (no mouse needed)</td></tr>
+  <tr><td><kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd>/<kbd>↑</kbd>/<kbd>↓</kbd></td><td>move the selected box</td></tr>
   <tr><td><kbd>/</kbd></td><td>change the selected box's class</td></tr>
   <tr><td><kbd>Shift</kbd></td><td>select the next box</td></tr>
   <tr><td><kbd>Esc</kbd></td><td>drop a just-drawn box / deselect</td></tr>

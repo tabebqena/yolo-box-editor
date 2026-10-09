@@ -345,26 +345,11 @@ const APP_SHORTCUT_HANDLERS = {
   },
   app_sel_points: (e) => { tabCycleRow(e); },
   app_escape: (e) => { escDeactivateRow(e); },
-  app_show_hide: (e) => {
-    e.preventDefault();
-    boxesVisible = !boxesVisible;
-    settingsSet(SHOW_BOXES_KEY, boxesVisible ? '1' : '0');
-    draw();
-  },
-  app_box_details: (e) => {
-    e.preventDefault();
-    boxDetailsVisible = !boxDetailsVisible;
-    settingsSet(SHOW_BOX_DETAILS_KEY, boxDetailsVisible ? '1' : '0');
-    draw();
-  },
+  app_show_hide: (e) => { e.preventDefault(); toggleShowBoxes(); },
+  app_box_details: (e) => { e.preventDefault(); toggleBoxDetails(); },
   // Hide every box but the selected one (needs a selection to take effect; with
   // none selected all boxes stay visible). Hidden boxes are not hit-tested.
-  app_isolate_box: (e) => {
-    e.preventDefault();
-    isolateSelected = !isolateSelected;
-    settingsSet(ISOLATE_BOX_KEY, isolateSelected ? '1' : '0');
-    draw();
-  },
+  app_isolate_box: (e) => { e.preventDefault(); toggleIsolateBox(); },
   app_fix_box: (e) => {
     if (readonly || selected < 0) return;
     e.preventDefault();
@@ -381,6 +366,16 @@ const APP_SHORTCUT_HANDLERS = {
     e.preventDefault();
     selectAllBoxes();
   },
+  // Mouse-free creation: a centred default box, then the class picker.
+  app_new_box: (e) => {
+    e.preventDefault();
+    newBox();
+  },
+  // Whole-box translation (Alt+arrow), distinct from the border nudge below.
+  app_move_left: (e) => { e.preventDefault(); moveSelectedBox(-BOX_MOVE_STEP, 0); },
+  app_move_right: (e) => { e.preventDefault(); moveSelectedBox(BOX_MOVE_STEP, 0); },
+  app_move_up: (e) => { e.preventDefault(); moveSelectedBox(0, -BOX_MOVE_STEP); },
+  app_move_down: (e) => { e.preventDefault(); moveSelectedBox(0, BOX_MOVE_STEP); },
   // Keyboard border editing for the selected box(es): Ctrl+arrow widens,
   // Ctrl+Shift+arrow narrows the matching border.
   app_widen_left: (e) => { e.preventDefault(); nudgeSelectedBox('left', true); },

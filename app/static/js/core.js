@@ -246,6 +246,7 @@ function selectOnlyBox(i) {
   selectedSet = new Set(i >= 0 ? [i] : []);
   selected = i;
   if (i >= 0) lastSelected = i;
+  keyEditUndoAt = 0; // a new selection starts its own keyboard-edit undo burst
   emitUiEvent('selection_changed', { indices: selectionIndices() });
 }
 
@@ -255,6 +256,7 @@ function selectOnlyBox(i) {
 function clearBoxSelection() {
   selectedSet = new Set();
   selected = -1;
+  keyEditUndoAt = 0; // a new selection starts its own keyboard-edit undo burst
   emitUiEvent('selection_changed', { indices: [] });
 }
 

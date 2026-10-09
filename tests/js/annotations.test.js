@@ -424,6 +424,80 @@ test('the widen/narrow actions nudge the selected box borders', () => {
   assert.equal(Math.round(app.state().boxes[0].w * 1000), 200); // no-op
 });
 
+test('app_new_box creates a centred box and opens the class picker', () => {
+  ready({ imgW: 100, imgH: 100, boxes: [], selected: -1, undoStack: [] });
+  app.api.runAppAction('app_new_box', { preventDefault() {} });
+  assert.equal(app.state().boxes.length, 1);
+  const b = app.state().boxes[0];
+  assert.equal(b.cx, 0.5);
+  assert.equal(b.cy, 0.5);
+  assert.equal(b.w, 0.25);
+  assert.equal(b.h, 0.25);
+  assert.equal(app.state().selected, 0);
+  assert.equal(app.state().justDrawn, true);
+  assert.equal(app.state().undoStack.length, 1);
+  assert.equal(app.api.isHidden('classPicker'), false);
+});
+
+test('app_new_box does nothing without an image or in read-only mode', () => {
+  ready({ imgW: 0, imgH: 0, boxes: [] });
+  app.api.runAppAction('app_new_box', { preventDefault() {} });
+  assert.equal(app.state().boxes.length, 0);
+  app.set({ imgW: 100, imgH: 100, readonly: true });
+  app.api.runAppAction('app_new_box', { preventDefault() {} });
+  assert.equal(app.state().boxes.length, 0);
+});
+
+test('the move actions translate the selected box and clamp to the image', () => {
+  ready({ imgW: 100, imgH: 100, boxes: [box()], selected: 0 });
+  app.api.runAppAction('app_move_right', { preventDefault() {} });
+  assert.equal(Math.round(app.state().boxes[0].cx * 10000), 5050);
+  // hard against the right edge: the whole box stays inside (cx = 1 - w/2)
+  for (let i = 0; i < 200; i++) app.api.runAppAction('app_move_right', { preventDefault() {} });
+  assert.equal(app.state().boxes[0].cx, 0.9);
+  app.api.runAppAction('app_move_up', { preventDefault() {} });
+  assert.equal(Math.round(app.state().boxes[0].cy * 10000), 4950);
+});
+
+test('a burst of keyboard moves collapses into one undo step', () => {
+  ready({ imgW: 100, imgH: 100, boxes: [box()], selected: 0, undoStack: [] });
+  app.api.moveSelectedBox(0.01, 0);
+  app.api.moveSelectedBox(0.01, 0);
+  app.api.moveSelectedBox(0.01, 0);
+  assert.equal(app.state().undoStack.length, 1); // coalesced
+  app.api.moveSelectedBox(0.01, 0);
+  assert.equal(app.state().undoStack.length, 1);
+});
+
+test('the canvas toolbar toggles drive the same state as the shortcuts', () => {
+  ready({ imgW: 100, imgH: 100, boxes: [box()] });
+  app.api.buildCanvasToolbar();
+  assert.equal(app.$('ctDetails').getAttribute('aria-pressed'), 'true');
+  app.click('ctDetails');
+  assert.equal(app.state().boxDetailsVisible, false);
+  assert.equal(app.$('ctDetails').getAttribute('aria-pressed'), 'false');
+  app.click('ctShowBoxes');
+  assert.equal(app.state().boxesVisible, false);
+  app.click('ctIsolate');
+  assert.equal(app.state().isolateSelected, true);
+  app.click('ctForceDraw');
+  assert.equal(app.state().forceDrawMode, true);
+  assert.equal(app.$('ctForceDraw').getAttribute('aria-pressed'), 'true');
+  app.click('ctSelectAll');
+  assert.deepEqual(plain(app.api.selectionIndices()), [0]);
+  app.click('ctNewBox');
+  assert.equal(app.state().boxes.length, 2);
+});
+
+test('draw-on-top mode makes a plain drag start a new box', () => {
+  ready({ imgW: 100, imgH: 100, boxes: [box()] });
+  app.api.toggleForceDrawMode();
+  assert.equal(app.state().forceDrawMode, true);
+  assert.equal(app.api.forceDrawActive({}), true);
+  app.api.toggleForceDrawMode();
+  assert.equal(app.api.forceDrawActive({ ctrlKey: false }), false);
+});
+
 test('the class picker navigates with the arrow keys and digits', () => {
   ready({ selected: 0, classes: ['cat', 'dog', 'bird'] });
   app.api.openClassPicker(0, 0);

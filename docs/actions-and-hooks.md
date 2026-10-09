@@ -58,6 +58,11 @@ references).
 | `app_focus_canvas` | `Space` | return focus to the canvas so the keyboard shortcuts work again |
 | `app_select_all` | `Ctrl+A` | select every box |
 | `app_fix_box` | `F` | fix / unfix the selected box (transient: never saved) |
+| `app_new_box` | `N` | create a centred box without the mouse, then open the class picker |
+| `app_move_left` | `Alt+←` | move the selected box(es) left |
+| `app_move_right` | `Alt+→` | move the selected box(es) right |
+| `app_move_up` | `Alt+↑` | move the selected box(es) up |
+| `app_move_down` | `Alt+↓` | move the selected box(es) down |
 | `app_widen_left` | `Ctrl+←` | widen the selected box's left border |
 | `app_widen_right` | `Ctrl+→` | widen the selected box's right border |
 | `app_widen_up` | `Ctrl+↑` | widen the selected box's top border |
