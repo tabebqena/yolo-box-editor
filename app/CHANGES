@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.9.0
+- Fixed: a **fixed box** no longer swallows clicks on the boxes inside it. Clicking a box that sits under a fixed frame now selects that box, while clicking a part of the frame not covered by another box still selects the frame (so you can unfix it). Handy for labelling several objects inside a region you have already fixed.
+
 ## 10.8.0
 - A complete editor with either device alone. Keyboard-only: press **N** to create a box (it opens the class picker) and **Alt+arrow** to move the selected box(es); a held move collapses into a single undo step. Mouse-only: a small **canvas toolbar** (top-left of the image) adds clickable **new box**, **select all**, **Details**, **Isolate**, **Boxes** and **Draw on top** controls so the keyboard-only view toggles are reachable without a keyboard.
 

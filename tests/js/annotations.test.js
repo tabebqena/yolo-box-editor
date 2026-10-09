@@ -331,6 +331,20 @@ test('app_isolate_box keeps only the selected box hit-testable', () => {
   assert.equal(app.api.hitTest({ x: 10, y: 10 }).type, 'none'); // other hidden
 });
 
+test('a fixed box does not swallow clicks on the boxes inside it', () => {
+  const child = box({ cx: 0.2, cy: 0.2, w: 0.2, h: 0.2 }); // x/y 10..30
+  const frame = box({ cx: 0.5, cy: 0.5, w: 0.8, h: 0.8, fixed: true }); // on top
+  ready({ imgW: 100, imgH: 100, boxes: [child, frame], selected: -1, boxDetailsVisible: false });
+  // over the child: the child wins even though the fixed frame is above it
+  const overChild = app.api.hitTest({ x: 20, y: 20 });
+  assert.equal(overChild.type, 'box');
+  assert.equal(overChild.index, 0);
+  // over the frame only: the fixed box is still selectable (to unfix it)
+  const overFrame = app.api.hitTest({ x: 70, y: 70 });
+  assert.equal(overFrame.type, 'box');
+  assert.equal(overFrame.index, 1);
+});
+
 test('toggleBoxSelection adds and removes boxes (Ctrl+click)', () => {
   ready({ boxes: [box(), box(), box()] });
   app.api.selectOnlyBox(0);

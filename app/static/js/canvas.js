@@ -577,13 +577,20 @@ function hitTest(p) {
       }
     }
   }
+  // A fixed box is a protected frame: let clicks pass through to the editable
+  // boxes inside it. Prefer the topmost non-fixed box containing the point and
+  // only fall back to the fixed box when nothing editable is under the cursor,
+  // so a fixed box can still be selected/unfixed where it is not covered.
+  let fixedHit = -1;
   for (let i = boxes.length - 1; i >= 0; i--) {
     if (boxHidden(i)) continue;
     const r = toPx(boxes[i]);
     if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
-      return { type: 'box', index: i };
+      if (!boxes[i].fixed) return { type: 'box', index: i };
+      if (fixedHit < 0) fixedHit = i;
     }
   }
+  if (fixedHit >= 0) return { type: 'box', index: fixedHit };
   return { type: 'none' };
 }
 

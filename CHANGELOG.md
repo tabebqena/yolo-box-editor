@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.9.0] - 2026-10-09
+
+### Fixed
+
+- **Boxes inside a fixed box can be selected again.** `hitTest` returned the
+  topmost box, so a fixed frame drawn above the boxes it surrounds swallowed
+  every click. A fixed box is now click-through: the topmost *editable* box
+  wins, and the fixed box is only hit where nothing editable is under the
+  cursor (so it can still be selected and unfixed).
+
 ## [10.8.0] - 2026-10-09
 
 ### Added
