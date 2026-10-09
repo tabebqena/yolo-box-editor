@@ -359,6 +359,7 @@ function applyExtensionConfig(cfg) {
   extensionPackages = cfg.extension_packages || [];
   extensionAppActions = cfg.extension_app_actions || [];
   pluginApiVersion = cfg.plugin_api_version || 1;
+  pluginPermissionMap = cfg.plugin_permission_map || {};
   renderActionBuilder();
   renderHookBuilder();
   renderFilterBuilder();

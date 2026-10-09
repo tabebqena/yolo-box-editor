@@ -1,0 +1,16 @@
+# What the Example extension declares. Built-in packages carry the same
+# permission file format as installed ones; they live under app/extensions/.
+api_version: 1
+
+ybe:
+  - state.read        # the example panel reads the image and its boxes
+
+backend: false        # no server-side Python
+ui: true              # ships panel.js
+
+actions:
+  - Example: refresh list
+hooks:
+  - on_after_save
+widgets:
+  - Package demo

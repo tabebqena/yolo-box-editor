@@ -13,7 +13,7 @@ list of extra event names the package emits. No function here executes anything.
 
 import os
 
-from ybe import config, extension_flags
+from ybe import config, extension_flags, permissions
 from ybe.parsing import (
     _parse_api_version,
     _read_text,
@@ -358,6 +358,13 @@ def load_packages():
     for pid, pkg in merged.items():
         if pid in overrides:
             pkg["active"] = overrides[pid]
+        # Permissions: what the package declares, and anything it ships that the
+        # declaration does not cover (so callers can flag dishonest packages).
+        perms = permissions.read_permissions(pkg)
+        pkg["permissions"] = perms
+        pkg["permission_errors"] = permissions.coverage_errors(pkg, perms)
+        pkg["permission_unknown"] = (
+            permissions.unknown_ybe_permissions(perms) if perms else [])
     return list(merged.values()), errors
 
 

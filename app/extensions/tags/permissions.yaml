@@ -1,0 +1,38 @@
+# What the Tags extension declares. Built-in packages carry the same permission
+# file format as installed ones; they live under app/extensions/ (trusted).
+api_version: 1
+
+# YBE bridge capabilities its panel uses.
+ybe:
+  - state.read        # read the current image / boxes
+  - capabilities      # call its own tags.* backend capabilities
+
+# Code it ships.
+backend: true         # backend.py runs server-side
+ui: true              # panel.js runs in a sandboxed iframe
+
+# Extension artifacts it adds.
+routes:
+  - ""
+  - /dir
+filters:
+  - Has tag
+  - Does not have tag
+app_actions:
+  - refresh_image_tags
+  - clear_tags
+  - copy_tags_from_prev
+  - toggle_tag_1
+  - toggle_tag_2
+  - toggle_tag_3
+  - toggle_tag_4
+  - toggle_tag_5
+  - toggle_tag_6
+  - toggle_tag_7
+  - toggle_tag_8
+  - toggle_tag_9
+events:
+  - after_app_action
+scripts:
+  - tag_filter.py
+  - tag_image.py

@@ -183,6 +183,7 @@ let backendActions = []; // built-in server action names
 let hookEvents = []; // known hook events
 let extensionApiVersion = 1; // extension YAML format version the UI writes
 let pluginApiVersion = 1; // UI-panel (YBE) plugin API version the UI supports
+let pluginPermissionMap = {}; // YBE method -> permission key (from /api/config)
 let placeholders = { action: [], filter: [] }; // click-to-insert catalogs
 let actionDefs = []; // [{name, steps, after_success, source, status, api_version}]
 // Loaded hook definitions (Settings > Hooks).

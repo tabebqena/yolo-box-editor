@@ -28,6 +28,48 @@ extensions/my-tools/
 Shipped packages live in `app/extensions/`; yours live in `<home>/extensions/`.
 The user folder is read after the shipped one and wins on an id clash.
 
+## Permissions and installing
+
+Extensions are code, so an extension must ship a **`permissions.yaml`** that
+declares what it uses. Built-in packages (`app/extensions/`) and installed ones
+(`<home>/extensions/`) use the same file format; only their path differs.
+
+```yaml
+api_version: 1
+ybe:                 # YBE bridge capabilities its panel uses (explained to you)
+  - state.read
+  - capabilities
+backend: true        # ships backend.py (server-side Python)
+ui: true             # ships panel.js (sandboxed)
+routes: ["", /dir]   # HTTP routes, relative to /api/extension/<prefix>
+actions: [My action]
+hooks: [on_after_save]
+filters: [By tag]
+widgets: [My widget]
+app_actions: [clear_tags]
+events: [after_app_action]
+scripts: [helper.py]
+```
+
+The app knows the meaning of every `ybe:` key, so it explains them when you
+install; anything the package ships but does not declare is reported as a
+**permission issue** in Settings → Extensions. The bridge enforces the `ybe:`
+list per panel: a package may only call the methods it declared (a package with
+no file is allowed, but flagged).
+
+Install from the command line — it prints the declarations, explains each
+permission and warns you before copying:
+
+```bash
+ybe install-extension /path/to/my-extension      # prompts for confirmation
+ybe install-extension /path/to/my-extension --yes
+ybe extensions                                   # list installed extensions
+ybe remove-extension my-extension
+```
+
+> **Only install extensions from authors you trust, or read their files
+> yourself.** An extension may run server-side Python and shell commands.
+
 ## The manifest
 
 ```yaml

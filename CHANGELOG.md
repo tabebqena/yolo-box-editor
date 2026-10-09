@@ -4,6 +4,24 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.5.0] - 2026-10-09
+
+### Added
+
+- **Extension permissions.** Every package (built-in or installed) may ship a
+  `permissions.yaml` declaring the `YBE` capabilities its panel uses, whether it
+  ships a backend/panel, and the routes/actions/hooks/filters/widgets/app
+  actions/events/scripts it adds. The app explains each permission, reports
+  anything a package ships without declaring it, and the bridge enforces the
+  `ybe:` list per panel (a package may only call methods it declared).
+- **`ybe install-extension <path>`** installs an extension folder after printing
+  its declarations, explaining each permission and showing a trust warning
+  (`--yes` to skip the prompt, `--force` to override a built-in id). Also
+  `ybe extensions` (list) and `ybe remove-extension <id>`. Built-in packages live
+  under `app/extensions/`, installed ones under `<home>/extensions/`.
+- Settings → Extensions now shows each package's permissions and any
+  permission issues.
+
 ## [10.4.0] - 2026-10-09
 
 ### Changed

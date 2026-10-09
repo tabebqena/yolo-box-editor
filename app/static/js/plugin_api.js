@@ -180,10 +180,31 @@ function ybePanelMethods(panel) {
  */
 async function ybeHandleRequest(method, args, ctx, panel) {
   if (typeof method !== 'string') throw new Error('invalid YBE method');
+  ybeCheckPermission(panel, method);
   const table = ybePanelMethods(panel);
   const fn = Object.prototype.hasOwnProperty.call(table, method) ? table[method] : null;
   if (!fn) throw new Error('unknown YBE method: ' + method);
   return await fn(Array.isArray(args) ? args : [], ctx);
+}
+
+/**
+ * Enforce a package's declared permission for a YBE method. A package that ships
+ * a permissions.yaml may only call methods whose permission it declares; a
+ * package without a file is allowed (the UI flags it instead).
+ * @param {{packageId?:string}} panel
+ * @param {string} method
+ * @throws {Error} when the permission is not declared.
+ */
+function ybeCheckPermission(panel, method) {
+  const packageId = (panel && panel.packageId) || '';
+  const pkg = (extensionPackages || []).find((p) => p.id === packageId);
+  if (!pkg || !pkg.permissions) return;
+  const need = pluginPermissionMap[method];
+  if (!need) return;
+  if ((pkg.permissions.ybe || []).indexOf(need) < 0) {
+    throw new Error(
+      `permission denied: "${method}" needs "${need}" in permissions.yaml`);
+  }
 }
 
 /**

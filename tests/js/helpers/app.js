@@ -36,7 +36,7 @@ const LET_STATE = [
   'shortcutErrors', 'shortcutDefaults', 'userShortcutNames', 'shortcutEditMode',
   'shortcutDraft', 'shortcutResets', 'hookErrors', 'filterErrors', 'appActions',
   'backendActions', 'hookEvents', 'extensionApiVersion', 'pluginApiVersion',
-  'placeholders',
+  'pluginPermissionMap', 'placeholders',
   'actionDefs', 'hookDefs', 'filterDefs', 'widgetDefs', 'widgetErrors',
   'extensionPackages', 'extensionAppActions', 'customWidgetNames', 'yamlEditor',
   'undoStack', 'redoStack',

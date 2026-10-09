@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.5.0
+- Extensions now declare what they use in a `permissions.yaml` (the YBE capabilities, whether they ship a backend/panel, and the routes/actions/hooks/filters/widgets/scripts they add). The app explains each permission, flags anything a package ships without declaring it, and a panel can only call the YBE methods it declared. Install an extension with `ybe install-extension /path` (it prints the declarations and a trust warning first); list with `ybe extensions`, remove with `ybe remove-extension <id>`. Only install from authors you trust.
+
 ## 10.4.0
 - Extension HTTP routes now live under `/api/extension/<prefix>/...` where the prefix (manifest `prefix:` or the package id) must be unique — a clash refuses the later package, so routes can't collide. Also, toggling a package on/off now updates **all** of its parts live: actions, hooks, filters, widgets, routes and panel.
 

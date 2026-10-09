@@ -17,6 +17,7 @@ Commands:
 """
 
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -325,6 +326,172 @@ def do_users(home, args):
 
 
 # --------------------------------------------------------------------------- #
+# extension packages
+# --------------------------------------------------------------------------- #
+EXTENSION_INSTALL_WARNING = (
+    "Extensions are code. An extension may run server-side Python (backend.py),\n"
+    "a sandboxed UI panel (panel.js), and actions/filters that run shell\n"
+    "commands. Only install one from an author you trust, or read its files\n"
+    "yourself first."
+)
+
+EXTENSION_USAGE = """manage extension packages
+
+Usage:
+  ybe extensions                 list installed (user) extensions
+  ybe install-extension <path>   install the extension folder at <path>
+      --yes                      do not prompt (still shows the permissions)
+      --force                    install over a built-in id / replace an existing copy
+  ybe remove-extension <id>      remove an installed extension
+
+Before installing, the extension's permissions.yaml is printed with an
+explanation of each permission and a trust warning. The folder is copied to
+<home>/extensions/<id>/ and enabled; restart the app ('ybe restart') if it is
+running.
+"""
+
+
+def _read_text(path):
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+    except OSError:
+        return ""
+
+
+def do_install_extension(home, args):
+    """Install an extension folder after showing what it declares and asks for."""
+    from ybe import config, extension_flags, permissions
+    from ybe.packages import _parse_manifest
+
+    assume_yes = force = False
+    source = None
+    for arg in args:
+        if arg in ("-y", "--yes"):
+            assume_yes = True
+        elif arg in ("-f", "--force"):
+            force = True
+        elif arg in ("-h", "--help"):
+            print(EXTENSION_USAGE, end="")
+            return 0
+        elif arg.startswith("-"):
+            die("unknown option %r; try 'ybe install-extension --help'" % arg)
+        elif source is None:
+            source = arg
+        else:
+            die("install takes one path")
+
+    if not source:
+        die("usage: ybe install-extension <path> [--yes] [--force]")
+    source = os.path.abspath(os.path.expanduser(source))
+    if not os.path.isfile(os.path.join(source, "extension.yaml")):
+        die("%s is not an extension folder (no extension.yaml)" % source)
+
+    config.configure_home(home)
+    manifest = _parse_manifest(_read_text(os.path.join(source, "extension.yaml")))
+    pid = (manifest["id"] or os.path.basename(source.rstrip("/"))).strip()
+    if not pid:
+        die("could not determine the extension id")
+
+    if os.path.isdir(os.path.join(config.EXTENSIONS_DIR, pid)) and not force:
+        die("'%s' is a built-in extension; installing over it is refused "
+            "(use --force to override)" % pid)
+
+    perms = permissions.read_permissions_path(source)
+    if perms is None and not force:
+        die("%s has no permissions.yaml; every extension must declare what it "
+            "uses (use --force to install anyway)" % source)
+    dest = os.path.join(config.USER_EXTENSIONS_DIR, pid)
+
+    version = (" v" + manifest["version"]) if manifest["version"] else ""
+    say("Extension: %s (%s)%s" % (manifest["name"] or pid, pid, version))
+    if manifest["description"]:
+        say("  " + manifest["description"])
+    say("")
+    if perms is None:
+        say("This extension does NOT ship a permissions.yaml (it declares nothing).")
+    else:
+        say("This extension declares:")
+        for line in permissions.describe(perms):
+            say("  - " + line)
+        unknown = permissions.unknown_ybe_permissions(perms)
+        if unknown:
+            say("  ! unknown permissions (check the file): %s" % ", ".join(unknown))
+    say("")
+    say(EXTENSION_INSTALL_WARNING)
+
+    if not assume_yes:
+        try:
+            answer = input("\nInstall %r from %s? [y/N] " % (pid, source)).strip().lower()
+        except EOFError:
+            answer = ""
+        if answer not in ("y", "yes"):
+            say("Cancelled.")
+            return 1
+
+    if os.path.isdir(dest):
+        if not force:
+            die("'%s' is already installed (use --force to replace it)" % pid)
+        shutil.rmtree(dest)
+    shutil.copytree(source, dest,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    extension_flags.set_flag(pid, True)
+    say("Installed '%s' into %s (enabled)." % (pid, dest))
+    _warn_if_running(home)
+    return 0
+
+
+def do_remove_extension(home, args):
+    """Remove an installed (user) extension and forget its enable flag."""
+    from ybe import config, extension_flags
+
+    if not args or args[0] in ("-h", "--help"):
+        print(EXTENSION_USAGE, end="")
+        return 0
+    pid = args[0]
+    config.configure_home(home)
+    dest = os.path.join(config.USER_EXTENSIONS_DIR, pid)
+    if not os.path.isdir(dest):
+        die("no installed extension '%s' in %s" % (pid, config.USER_EXTENSIONS_DIR))
+    shutil.rmtree(dest)
+    flags = extension_flags.load_flags()
+    if pid in flags:
+        flags.pop(pid)
+        extension_flags.save_flags(flags)
+    say("Removed extension '%s'." % pid)
+    _warn_if_running(home)
+    return 0
+
+
+def do_extensions(home, args):
+    """List installed extensions, or dispatch `install`/`remove` subcommands."""
+    from ybe import config
+    from ybe.packages import load_packages
+
+    config.configure_home(home)
+    if args and args[0] == "install":
+        return do_install_extension(home, args[1:])
+    if args and args[0] == "remove":
+        return do_remove_extension(home, args[1:])
+    if args and args[0] in ("-h", "--help"):
+        print(EXTENSION_USAGE, end="")
+        return 0
+
+    packages, _errors = load_packages()
+    installed = [p for p in packages if p["source"] == "user"]
+    if not installed:
+        say("(no installed extensions in %s)" % config.USER_EXTENSIONS_DIR)
+        return 0
+    for pkg in installed:
+        status = "enabled" if pkg["active"] else "disabled"
+        perms = "permissions: yes" if pkg["permissions"] else "permissions: MISSING"
+        issues = (" (%d issue(s))" % len(pkg["permission_errors"])
+                  if pkg["permission_errors"] else "")
+        say("%-20s %-8s %s%s" % (pkg["id"], status, perms, issues))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # delegated installer commands
 # --------------------------------------------------------------------------- #
 def missing_installer_error(path):
@@ -366,6 +533,9 @@ Usage:
   ybe status                  report whether it is running
   ybe logs [-f]               show the last log lines (or follow with -f)
   ybe users                   manage login accounts (see 'ybe users --help')
+  ybe install-extension PATH  install an extension (see the trust prompt)
+  ybe extensions              list installed extensions
+  ybe remove-extension ID     remove an installed extension
   ybe version                 print the installed version
   ybe check-update            check for a newer version
   ybe update                  update in place, keeping your files and venv
@@ -423,6 +593,12 @@ def main(argv=None):
         return do_logs(home, args)
     if command in ("users", "user"):
         return do_users(home, args)
+    if command in ("install-extension", "install-ext"):
+        return do_install_extension(home, args)
+    if command in ("remove-extension", "remove-ext"):
+        return do_remove_extension(home, args)
+    if command in ("extensions", "extension"):
+        return do_extensions(home, args)
     if command in ("version", "check-update", "update", "upgrade", "uninstall"):
         return delegate(home, command, args)
     if command in ("help", "-h", "--help"):

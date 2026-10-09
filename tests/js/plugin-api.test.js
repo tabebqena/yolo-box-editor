@@ -54,6 +54,28 @@ test('api.request proxies same-origin /api paths and refuses auth routes', async
     /GET and POST/);
 });
 
+test('a panel may only call YBE methods its package declares', async () => {
+  app.set({
+    pluginPermissionMap: { 'state.getImage': 'state.read' },
+    extensionPackages: [{ id: 'p', permissions: { ybe: [] } }],
+  });
+  await assert.rejects(
+    () => app.api.ybeHandleRequest('state.getImage', [], null, { packageId: 'p' }),
+    /permission denied/);
+  app.set({ extensionPackages: [{ id: 'p', permissions: { ybe: ['state.read'] } }] });
+  const img = await app.api.ybeHandleRequest('state.getImage', [], null, { packageId: 'p' });
+  assert.equal(img, null);
+});
+
+test('a package without a permissions file is allowed (legacy)', async () => {
+  app.set({
+    pluginPermissionMap: { 'state.getImage': 'state.read' },
+    extensionPackages: [{ id: 'p', permissions: null }],
+  });
+  const img = await app.api.ybeHandleRequest('state.getImage', [], null, { packageId: 'p' });
+  assert.equal(img, null);
+});
+
 test('mutating callbacks refuse in read-only mode', async () => {
   app.set({
     readonly: true,

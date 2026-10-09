@@ -102,10 +102,40 @@ function buildPackagePanel(pkg) {
       : (pkg.active ? '' : ' (package disabled)');
     panel.appendChild(mk('p', 'hint', 'UI panel: ' + (pkg.ui.title || pkg.id) + note));
   }
+  panel.appendChild(buildPackagePermissions(pkg));
   if (pkg.settings && (pkg.settings.controls || []).length) {
     panel.appendChild(buildPackageSettings(pkg));
   }
   return panel;
+}
+
+/**
+ * Build the permissions section: what the package declares, plus any artifact
+ * it ships without declaring (the honesty check).
+ * @param {object} pkg - The package definition.
+ * @returns {HTMLElement}
+ */
+function buildPackagePermissions(pkg) {
+  const sec = mk('div', 'package-permissions');
+  const errors = pkg.permission_errors || [];
+  if (errors.length) {
+    sec.appendChild(mk('div', 'settings-group-title', 'Permission issues'));
+    errors.forEach((msg) => sec.appendChild(mk('p', 'hint', '\u26a0 ' + msg)));
+  }
+  sec.appendChild(mk('div', 'settings-group-title', 'Permissions'));
+  if (!pkg.permissions) {
+    sec.appendChild(mk('p', 'hint',
+      'No permissions.yaml — this package does not declare what it uses.'));
+    return sec;
+  }
+  const list = mk('ul', 'permission-list');
+  (pkg.permission_lines || []).forEach((line) => list.appendChild(mk('li', null, line)));
+  sec.appendChild(list);
+  if ((pkg.permission_unknown || []).length) {
+    sec.appendChild(mk('p', 'hint',
+      'Unknown permissions (not understood by this app): ' + pkg.permission_unknown.join(', ')));
+  }
+  return sec;
 }
 
 /**
