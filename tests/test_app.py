@@ -79,7 +79,6 @@ DEFAULT_STATE = {
     "filter_images": None,
     "filter_error": None,
     "classes": [],
-    "tags_dir": None,
     "readonly": False,
     "debug": False,
     "keep_pipe": False,
@@ -645,7 +644,6 @@ def test_app_actions_include_hook_only_client_actions():
     for name in (
         "app_select_next_box",
         "app_select_prev_box",
-        "app_clear_tags",
         "app_copy_labels_from_prev",
     ):
         assert name in ybe.config.APP_ACTIONS
@@ -655,7 +653,6 @@ def test_refresh_image_actions_are_builtin():
     for name in (
         "app_refresh_image",
         "app_refresh_image_labels",
-        "app_refresh_image_tags",
         "app_refresh_image_all",
     ):
         assert name in ybe.config.APP_ACTIONS
@@ -949,7 +946,6 @@ def test_index_serves_page():
     assert "id=\"filterDefs\"" in html
     assert "id=\"actionDefs\"" in html
     assert "id=\"hookDefs\"" in html
-    assert "id=\"tagFloat\"" in html
     assert "id=\"boxFloat\"" in html
     assert "id=\"navFloat\"" in html
     assert "id=\"saveFloat\"" in html
@@ -957,12 +953,10 @@ def test_index_serves_page():
     assert "id=\"dockSide\"" in html
     assert "id=\"dockBottom\"" in html
     assert "id=\"panelSideSel\"" in html
-    assert "id=\"tagsDockSel\"" in html
     assert "id=\"boxesDockSel\"" in html
     assert "id=\"actionsDockSel\"" in html
     assert "id=\"navDockSel\"" in html
     assert "id=\"saveDockSel\"" in html
-    assert "id=\"tagsVisibleSw\"" in html
     assert "id=\"boxesVisibleSw\"" in html
     assert "id=\"actionsVisibleSw\"" in html
     assert "id=\"navVisibleSw\"" in html
@@ -1181,7 +1175,7 @@ def test_api_annotations_get_empty_without_file(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
     assert client.get("/api/annotations?key=train/a.jpg").get_json() == {
-        "boxes": [], "tags": []}
+        "boxes": []}
 
 
 def test_api_annotations_get_parses_existing(clean_state, tmp_path):
@@ -1190,13 +1184,10 @@ def test_api_annotations_get_parses_existing(clean_state, tmp_path):
     (root / "labels" / "train" / "a.txt").write_text(
         "1 0.5 0.25 0.2 0.4\nbad line\n", encoding="utf-8"
     )
-    (root / "tags" / "train").mkdir(parents=True)
-    (root / "tags" / "train" / "a.txt").write_text("fire\nsmoke\n\n", encoding="utf-8")
     client = ybe.app.test_client()
     load_dataset(client, root)
     data = client.get("/api/annotations?key=train/a.jpg").get_json()
     assert data["boxes"] == [{"class": 1, "cx": 0.5, "cy": 0.25, "w": 0.2, "h": 0.4}]
-    assert data["tags"] == ["fire", "smoke"]
 
 
 def test_api_annotations_post_writes_clamped(clean_state, tmp_path):
@@ -1231,199 +1222,10 @@ def test_api_annotations_post_readonly_rejected(clean_state, tmp_path, monkeypat
     assert resp.status_code == 403
 
 
-def test_api_annotations_post_writes_tags(clean_state, tmp_path):
-    root = make_dataset(tmp_path)
-    client = ybe.app.test_client()
-    load_dataset(client, root)
-    resp = client.post(
-        "/api/annotations?key=train/a.jpg",
-        json={"boxes": [], "tags": ["fire", "", "smoke", "fire"]},
-    )
-    assert resp.status_code == 200
-    body = resp.get_json()
-    assert body["ok"] and body["tags_count"] == 2
-    written = (root / "tags" / "train" / "a.txt").read_text().splitlines()
-    assert written == ["fire", "smoke"]
-
-
-def test_api_annotations_post_registers_new_tags_in_yaml(clean_state, tmp_path):
-    root = make_dataset(tmp_path)
-    (root / "tags.yaml").write_text("- fire\n", encoding="utf-8")
-    client = ybe.app.test_client()
-    load_dataset(client, root)
-    body = client.post(
-        "/api/annotations?key=train/a.jpg",
-        json={"boxes": [], "tags": ["fire", "smoke"]},
-    ).get_json()
-    assert body["available_tags"] == ["fire", "smoke"]
-    assert (root / "tags.yaml").read_text() == "- fire\n- smoke\n"
-
-
-def test_api_annotations_post_does_not_rewrite_known_tags_yaml(clean_state, tmp_path):
-    root = make_dataset(tmp_path)
-    (root / "tags.yaml").write_text("# keep me\n- fire\n", encoding="utf-8")
-    before = (root / "tags.yaml").read_text()
-    client = ybe.app.test_client()
-    load_dataset(client, root)
-    body = client.post(
-        "/api/annotations?key=train/a.jpg",
-        json={"boxes": [], "tags": ["fire"]},
-    ).get_json()
-    assert body["available_tags"] == ["fire"]
-    assert (root / "tags.yaml").read_text() == before
-
-
-def test_api_annotations_post_without_tags_leaves_tag_file(clean_state, tmp_path):
-    root = make_dataset(tmp_path)
-    (root / "tags" / "train").mkdir(parents=True)
-    (root / "tags" / "train" / "a.txt").write_text("keep\n", encoding="utf-8")
-    client = ybe.app.test_client()
-    load_dataset(client, root)
-    client.post("/api/annotations?key=train/a.jpg", json={"boxes": []})
-    assert (root / "tags" / "train" / "a.txt").read_text() == "keep\n"
-
-
-def test_api_annotations_post_clears_tags_when_empty(clean_state, tmp_path):
-    root = make_dataset(tmp_path)
-    (root / "tags" / "train").mkdir(parents=True)
-    (root / "tags" / "train" / "a.txt").write_text("old\n", encoding="utf-8")
-    client = ybe.app.test_client()
-    load_dataset(client, root)
-    client.post("/api/annotations?key=train/a.jpg", json={"boxes": [], "tags": []})
-    assert (root / "tags" / "train" / "a.txt").read_text() == ""
-
-
 def test_api_annotations_out_of_range_404(clean_state, tmp_path):
     client = ybe.app.test_client()
     load_dataset(client, make_dataset(tmp_path))
     assert client.get("/api/annotations?key=train/nope.jpg").status_code == 404
-
-
-# --------------------------------------------------------------------------- #
-# tags: paths / tags.yaml IO
-# --------------------------------------------------------------------------- #
-def test_tags_dir_replaces_images_segment(clean_state):
-    assert ybe._tags_dir_for("/d/images/train") == "/d/tags/train"
-
-
-def test_tags_dir_fallback_sibling(clean_state):
-    assert ybe._tags_dir_for("/d/train") == "/d/tags/train"
-
-
-def test_tags_dir_override_uses_split_subfolder(clean_state):
-    ybe.state.STATE["tags_dir"] = "/custom/tags"
-    assert ybe._tags_dir_for("/d/images/train", "train") == "/custom/tags/train"
-
-
-def test_api_tags_dir_sets_and_clears(clean_state, tmp_path):
-    root = make_dataset(tmp_path)
-    custom = tmp_path / "mytags"
-    custom.mkdir()
-    client = ybe.app.test_client()
-    load_dataset(client, root)
-
-    resp = client.post("/api/tags-dir", json={"tags_dir": str(custom)})
-    assert resp.status_code == 200
-    assert resp.get_json()["tags_dir"] == str(custom)
-    assert ybe.state.STATE["splits"][0]["tags_dir"] == str(custom / "train")
-
-    resp = client.post("/api/tags-dir", json={"tags_dir": ""})
-    assert resp.status_code == 200
-    assert resp.get_json()["tags_dir"] is None
-    assert ybe.state.STATE["splits"][0]["tags_dir"] == str(root / "tags" / "train")
-
-
-def test_api_tags_dir_rejects_missing_folder(clean_state, tmp_path):
-    client = ybe.app.test_client()
-    load_dataset(client, make_dataset(tmp_path))
-    resp = client.post("/api/tags-dir", json={"tags_dir": str(tmp_path / "nope")})
-    assert resp.status_code == 400
-    assert resp.get_json()["ok"] is False
-
-
-def test_tags_dir_persists_in_view_state(clean_state, tmp_path):
-    root = make_dataset(tmp_path)
-    custom = tmp_path / "mytags"
-    custom.mkdir()
-    client = ybe.app.test_client()
-    load_dataset(client, root)
-    client.post("/api/tags-dir", json={"tags_dir": str(custom)})
-
-    # reloading the dataset re-applies the saved folder
-    ybe.state.STATE["tags_dir"] = None
-    load_dataset(client, root)
-    assert ybe.state.STATE["tags_dir"] == str(custom)
-
-
-def test_normalize_tags_dedupes_and_cleans():
-    assert ybe._normalize_tags(["  fire ", "smoke", "fire", "", "  ", "a\nb", 7]) == [
-        "fire",
-        "smoke",
-    ]
-
-
-def test_read_tags_yaml_empty_without_dataset(clean_state, tmp_path):
-    assert ybe.read_tags_yaml() == []
-
-
-def test_read_tags_yaml_parses_plain_list(clean_state, tmp_path):
-    (tmp_path / "data.yaml").write_text(f"nc: 1\nnames: [fire]\n", encoding="utf-8")
-    ybe.state.STATE["data_yaml"] = str(tmp_path / "data.yaml")
-    assert ybe.read_tags_yaml() == []
-    (tmp_path / "tags.yaml").write_text("- fire\n- smoke\n", encoding="utf-8")
-    assert ybe.read_tags_yaml() == ["fire", "smoke"]
-
-
-def test_read_tags_yaml_ignores_nested_tags_key(clean_state, tmp_path):
-    (tmp_path / "data.yaml").write_text("nc: 1\nnames: [fire]\n", encoding="utf-8")
-    ybe.state.STATE["data_yaml"] = str(tmp_path / "data.yaml")
-    (tmp_path / "tags.yaml").write_text(
-        "- fire\n- smoke\n\ntags:\n  - ignored\n", encoding="utf-8",
-    )
-    assert ybe.read_tags_yaml() == ["fire", "smoke"]
-    (tmp_path / "tags.yaml").write_text("tags:\n  - fire\n", encoding="utf-8")
-    assert ybe.read_tags_yaml() == []
-
-
-def test_read_tags_yaml_strips_repeated_markers(clean_state, tmp_path):
-    (tmp_path / "data.yaml").write_text("nc: 1\nnames: [fire]\n", encoding="utf-8")
-    ybe.state.STATE["data_yaml"] = str(tmp_path / "data.yaml")
-    (tmp_path / "tags.yaml").write_text("- - fire\n- smoke\n", encoding="utf-8")
-    assert ybe.read_tags_yaml() == ["fire", "smoke"]
-
-
-def test_save_tags_yaml_writes_plain_list_when_missing(clean_state, tmp_path):
-    (tmp_path / "data.yaml").write_text("nc: 1\nnames: [fire]\n", encoding="utf-8")
-    ybe.state.STATE["data_yaml"] = str(tmp_path / "data.yaml")
-    path = ybe.save_tags_yaml(["fire", "smoke"])
-    assert path == str(tmp_path / "tags.yaml")
-    assert (tmp_path / "tags.yaml").read_text() == "- fire\n- smoke\n"
-    assert ybe.read_tags_yaml() == ["fire", "smoke"]
-
-
-def test_save_tags_yaml_preserves_other_content(clean_state, tmp_path):
-    ybe.state.STATE["data_yaml"] = str(tmp_path / "data.yaml")
-    (tmp_path / "tags.yaml").write_text(
-        "version: 2\nnames:\n  - a\ntags:\n  - old\n", encoding="utf-8",
-    )
-    ybe.save_tags_yaml(["new", "fire"])
-    text = (tmp_path / "tags.yaml").read_text()
-    assert "version: 2" in text
-    assert "names:" in text and "- a" in text
-    assert "old" not in text
-    assert ybe.read_tags_yaml() == ["new", "fire"]
-
-
-def test_save_tags_yaml_normalises_plain_list(clean_state, tmp_path):
-    ybe.state.STATE["data_yaml"] = str(tmp_path / "data.yaml")
-    (tmp_path / "tags.yaml").write_text(
-        "- fire\n- smoke\n- other\n", encoding="utf-8",
-    )
-    ybe.save_tags_yaml(["fire", "smoke", "new"])
-    text = (tmp_path / "tags.yaml").read_text()
-    assert text.count("- ") == 3
-    assert "other" not in text
-    assert ybe.read_tags_yaml() == ["fire", "smoke", "new"]
 
 
 # --------------------------------------------------------------------------- #
@@ -1586,7 +1388,6 @@ def test_api_action_run_can_run_a_hook_by_name(clean_state, tmp_path):
     [
         "app_select_next_box",
         "app_select_prev_box",
-        "app_clear_tags",
         "app_copy_labels_from_prev",
     ],
 )
@@ -2067,28 +1868,6 @@ def test_resolve_filter_options_expands_class_names():
     assert ybe.resolve_filter_options(None, ["x"]) is None
 
 
-def test_load_filters_parses_tag_names_token(clean_state):
-    body = (
-        "name: ByTag\n"
-        "arguments:\n"
-        "  - name: tag_name\n"
-        "    options: {DATASET_TAG_NAMES}\n"
-        "steps:\n"
-        "  - echo {TAG_NAME}\n"
-    )
-    write_filter(clean_state, "ByTag.yaml", body)
-    arg = ybe.load_filters()[0]["ByTag"]["arguments"][0]
-    assert arg["options"] == [ybe.FILTER_TAG_NAMES_TOKEN]
-
-
-def test_resolve_filter_options_expands_tag_names():
-    token = ybe.FILTER_TAG_NAMES_TOKEN
-    assert ybe.resolve_filter_options([token], [], ["fire", "smoke"]) == ["fire", "smoke"]
-    assert ybe.resolve_filter_options([token], ["x"]) == []
-    assert ybe.resolve_filter_options([ybe.FILTER_CLASS_NAMES_TOKEN, token],
-                                      ["a"], ["t"]) == ["a", "t"]
-
-
 def test_normalize_filter_chain_rejects_value_outside_options(clean_state):
     write_filter(clean_state, "ByClass.yaml",
                  filter_yaml("echo hi", name="ByClass",
@@ -2149,67 +1928,9 @@ def test_class_filter_script_contains_and_not_contains(clean_state, tmp_path, mo
     assert result["ok"] and [e["name"] for e in result["images"]] == ["b.jpg", "c.jpg"]
 
 
-def test_shipped_tag_filters_use_tag_token(monkeypatch):
-    monkeypatch.setattr(ybe.config, "FILTERS_DIR", str(Path(ybe.config.BASE_DIR) / "filters"))
-    monkeypatch.setattr(ybe.config, "USER_FILTERS_DIR", str(Path(ybe.config.BASE_DIR) / "nope"))
-    filters, errors = ybe.load_filters()
-    assert errors == []
-    for name in ("Has tag", "Does not have tag"):
-        arg = filters[name]["arguments"][0]
-        assert arg["name"] == "tag_name"
-        assert arg["required"] is True
-        assert arg["options"] == [ybe.FILTER_TAG_NAMES_TOKEN]
-
-
-def test_shipped_tag_filters_end_to_end(clean_state, tmp_path, monkeypatch):
-    root = make_dataset(tmp_path, splits=("train",), images=("a", "b", "c"))
-    tags = root / "tags" / "train"
-    tags.mkdir(parents=True, exist_ok=True)
-    (tags / "a.txt").write_text("fire\n", encoding="utf-8")
-    (tags / "b.txt").write_text("smoke\n", encoding="utf-8")
-    (root / "tags.yaml").write_text("- fire\n- smoke\n", encoding="utf-8")
-    load_into_state(root)
-    monkeypatch.setattr(ybe.config, "FILTERS_DIR", str(Path(ybe.config.BASE_DIR) / "filters"))
-    monkeypatch.setattr(ybe.config, "USER_FILTERS_DIR", str(Path(ybe.config.BASE_DIR) / "nope"))
-    monkeypatch.setattr(ybe.config, "APP_SCRIPT_DIR", str(Path(ybe.config.BASE_DIR) / "scripts"))
-
-    chain, error = ybe._normalize_filter_chain(
-        [{"name": "Has tag", "arguments": {"tag_name": "fire"}}])
-    assert error is None
-    result = ybe.run_filter_chain(chain, "train")
-    assert result["ok"] and [e["name"] for e in result["images"]] == ["a.jpg"]
-
-    result = ybe.run_filter_chain(
-        [{"name": "Does not have tag", "arguments": {"tag_name": "fire"}}], "train")
-    assert result["ok"] and [e["name"] for e in result["images"]] == ["b.jpg", "c.jpg"]
-
-
-def test_tag_filter_script_honors_custom_tags_dir(clean_state, tmp_path, monkeypatch):
-    root = make_dataset(tmp_path, splits=("train",), images=("a", "b"))
-    custom = tmp_path / "mytags" / "train"
-    custom.mkdir(parents=True, exist_ok=True)
-    (custom / "a.txt").write_text("fire\n", encoding="utf-8")
-    load_into_state(root)
-    ybe.state.STATE["splits"][0]["tags_dir"] = str(custom)
-    monkeypatch.setattr(ybe.config, "APP_SCRIPT_DIR", str(Path(ybe.config.BASE_DIR) / "scripts"))
-    write_filter(clean_state, "ByTag.yaml",
-                 filter_yaml(
-                     "{PYTHON} {APP_SCRIPT_DIR}/tag_filter.py {INPUT_PIPE} {OUTPUT_PIPE} "
-                     "--tag {TAG_NAME} --tags-dir {TAGS_DIR}",
-                     name="ByTag",
-                     arguments=[{"name": "tag_name", "required": True,
-                                 "options": ybe.FILTER_TAG_NAMES_TOKEN}]))
-
-    chain, error = ybe._normalize_filter_chain(
-        [{"name": "ByTag", "arguments": {"tag_name": "fire"}}])
-    assert error is None
-    result = ybe.run_filter_chain(chain, "train")
-    assert result["ok"] and [e["name"] for e in result["images"]] == ["a.jpg"]
-
-
-def _load_shipped_script(name):
-    """Import a helper from app/scripts/ by path (not on sys.path)."""
-    path = Path(ybe.config.BASE_DIR) / "scripts" / name
+def _load_package_script(name):
+    """Import a tags-extension helper by path (not on sys.path)."""
+    path = Path(ybe.config.BASE_DIR) / "extensions" / "tags" / "scripts" / name
     spec = importlib.util.spec_from_file_location(name[:-3], path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -2217,41 +1938,19 @@ def _load_shipped_script(name):
 
 
 def test_tag_image_swaps_only_the_images_segment(tmp_path):
-    mod = _load_shipped_script("tag_image.py")
+    mod = _load_package_script("tag_image.py")
     image = tmp_path / "images_backup" / "dataset" / "images" / "train" / "a.jpg"
     # a folder named `images_backup` must be left alone; only the `images` segment
     # is swapped, matching the app's own rule.
-    assert mod.tag_file_path(str(image)) == str(
+    assert mod.tag_file_path(str(image), "") == str(
         tmp_path / "images_backup" / "dataset" / "tags" / "train" / "a.txt")
 
 
 def test_tag_image_uses_custom_tags_dir(tmp_path):
-    mod = _load_shipped_script("tag_image.py")
+    mod = _load_package_script("tag_image.py")
     image = tmp_path / "dataset" / "images" / "train" / "a.jpg"
     custom = tmp_path / "mytags" / "train"
     assert mod.tag_file_path(str(image), str(custom)) == str(custom / "a.txt")
-
-
-def test_api_action_run_exposes_tags_dir(clean_state, tmp_path, monkeypatch):
-    root = make_dataset(tmp_path, splits=("train",), images=("a",))
-    custom = tmp_path / "mytags"
-    (custom / "train").mkdir(parents=True)
-    write_action(
-        tmp_path,
-        "TagIt.yaml",
-        "steps:\n"
-        "  - {PYTHON} {APP_SCRIPT_DIR}/tag_image.py {IMAGE_PATH} fire --tags-dir {TAGS_DIR}\n",
-    )
-    monkeypatch.setattr(ybe.config, "APP_SCRIPT_DIR", str(Path(ybe.config.BASE_DIR) / "scripts"))
-    client = ybe.app.test_client()
-    load_dataset(client, root)
-    client.post("/api/tags-dir", json={"tags_dir": str(custom)})
-
-    payload = client.post(
-        "/api/actions/run", json={"action": "TagIt", "target": "train/a.jpg"}
-    ).get_json()
-    assert payload["ok"] is True
-    assert (custom / "train" / "a.txt").read_text(encoding="utf-8") == "fire\n"
 
 
 def test_run_filter_substitutes_placeholders_and_args(clean_state):
@@ -2647,7 +2346,6 @@ def test_view_state_saved_on_split_and_filter(clean_state, tmp_path):
     assert ybe._load_views()[str(root / "data.yaml")] == {
         "split": "train",
         "filters": [{"name": "OnlyA", "arguments": {}}],
-        "tags_dir": None,
     }
 
 
@@ -3590,7 +3288,7 @@ def write_widget(root, fname, body, subdir="widgets"):
 
 
 WIDGET_YAML = """\
-api_version: 4
+api_version: 5
 name: Tools
 title: Tools
 controls:
@@ -3703,7 +3401,7 @@ def write_package(root, pid, manifest, parts=None):
 
 
 PKG_MANIFEST = """\
-api_version: 4
+api_version: 5
 name: My Pack
 description: demo
 version: 1.0.0
@@ -3795,13 +3493,13 @@ def test_extensions_run_package_settings(clean_state):
 PANEL_JS = "window.YBE.state.getTags().then(function (t) { document.title = t.join(); });\n"
 
 UI_MANIFEST = """\
-api_version: 4
+api_version: 5
 name: My Pack
 description: demo
 version: 1.0.0
 active: true
 ui:
-  api_version: 1
+  api_version: 2
   title: My Panel
   script: panel.js
   location: right
@@ -3810,8 +3508,9 @@ ui:
 
 
 def test_plugin_api_status():
-    assert ybe.plugin_api_status(1) == "current"
-    assert ybe.plugin_api_status(2) == "newer"
+    cur = ybe.config.PLUGIN_API_VERSION
+    assert ybe.plugin_api_status(cur) == "current"
+    assert ybe.plugin_api_status(cur + 1) == "newer"
     assert ybe.plugin_api_status(0) == "outdated"
     assert ybe.plugin_api_status(None) == "outdated"
 
@@ -3821,7 +3520,7 @@ def test_load_packages_parses_ui(clean_state):
     pkgs, errors = ybe.load_packages()
     assert errors == []
     ui = pkgs[0]["ui"]
-    assert ui["api_version"] == 1
+    assert ui["api_version"] == 2
     assert ui["title"] == "My Panel"
     assert ui["script"] == "panel.js"
     assert ui["location"] == "right"
@@ -3847,7 +3546,7 @@ def test_api_config_includes_panel_ui(clean_state):
     cfg = ybe.app.test_client().get("/api/config").get_json()
     ui = cfg["extension_packages"][0]["ui"]
     assert ui["script"] == "panel.js" and ui["status"] == "current"
-    assert cfg["plugin_api_version"] == 1
+    assert cfg["plugin_api_version"] == ybe.config.PLUGIN_API_VERSION
 
 
 def test_extension_script_route_serves_text(clean_state):

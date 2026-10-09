@@ -357,6 +357,7 @@ function applyExtensionConfig(cfg) {
   widgetDefs = cfg.widget_defs || [];
   widgetErrors = cfg.widget_errors || [];
   extensionPackages = cfg.extension_packages || [];
+  extensionAppActions = cfg.extension_app_actions || [];
   pluginApiVersion = cfg.plugin_api_version || 1;
   renderActionBuilder();
   renderHookBuilder();

@@ -70,27 +70,31 @@ references).
 | `app_refresh_images_list` | — | re-scan the image folders; stay on the same image by path |
 | `app_reload_images_list` | — | re-read the server list **without** re-scanning the disk |
 | `app_refresh_image` | — | re-fetch the current image's pixels (cache-busted) |
-| `app_refresh_image_labels` | — | re-read the current image's labels from disk (keeps pixels and tags) |
-| `app_refresh_image_tags` | — | re-read the current image's tags from disk (keeps pixels and labels) |
-| `app_refresh_image_all` | — | re-read the current image's pixels, labels and tags |
+| `app_refresh_image_labels` | — | re-read the current image's labels from disk (keeps pixels) |
+| `app_refresh_image_all` | — | re-read the current image's pixels and labels |
 | `app_help` | `F1` | open the built-in help (tutorial + How to?) |
 | `app_select_next_box` | — | select the next box (same as `app_sel_box`, callable from a step) |
 | `app_select_prev_box` | — | select the previous box |
-| `app_clear_tags` | — | remove every tag from the current image |
-| `app_copy_labels_from_prev` | — | copy the previous image's boxes and tags onto the current one |
+| `app_copy_labels_from_prev` | — | copy the previous image's boxes onto the current one |
 
 The actions with no default key at the end are meant to be called from an
 action/hook `steps` or `after_success` rather than bound to a key. The
 `app_refresh_image_*` actions are useful after an external tool rewrote the
-current image's label or tag file, so the UI picks up the change without a full
-page reload.
+current image's label file, so the UI picks up the change without a full page
+reload.
+
+Every app action also broadcasts `before_app_action` / `after_app_action` to the
+extension panels, so an extension can refresh its own per-image data when (for
+example) `app_refresh_image_all` or `app_copy_labels_from_prev` runs. Extension
+packages can define their own actions, used as `ext.<package>.<name>`; see
+[extension actions](extension-actions.md).
 
 `app_force_draw` is special: its binding is a *modifier* (`Ctrl`, `Alt`,
 `Shift`, `Meta`, or a `+`-joined combination), not a key.
 
 Editing actions (`app_del`, `app_save`, `app_undo`, `app_redo`, `app_ch_box`,
-`app_fix_box`, `app_clear_tags`, `app_copy_labels_from_prev`) do nothing in
-read-only mode; navigation, `app_drop` and `app_show_hide` still work.
+`app_fix_box`, `app_copy_labels_from_prev`) do nothing in read-only mode;
+navigation, `app_drop` and `app_show_hide` still work.
 
 ## User actions
 
@@ -140,7 +144,6 @@ Leave them unquoted; the app shell-quotes each value for you.
 | ----------- | ----- |
 | `{IMAGE_PATH}` | path of the current image |
 | `{LABEL_PATH}` | path of the current image's label file (may not exist yet) |
-| `{TAGS_DIR}` | tags folder for the current image's split (honours a custom tags dir) |
 | `{DATASET_PATH}` | root path of the loaded dataset |
 | `{DATA_YAML_PATH}` | path of the loaded data.yaml |
 | `{IMAGE_INDEX}` | 1-based position of the current image (matches the counter) |

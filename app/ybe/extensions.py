@@ -244,17 +244,15 @@ FILTER_RESERVED_PLACEHOLDERS = {
     "SPLIT",
     "INPUT_PIPE",
     "OUTPUT_PIPE",
-    "TAGS_DIR",
 }
 # A filter argument name; its in-place placeholder is the upper-cased name.
 _FILTER_ARG_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-# Dynamic option tokens: expand to the loaded dataset's class / tag names.
+# Dynamic option tokens: expand to the loaded dataset's class names.
 FILTER_CLASS_NAMES_TOKEN = "{DATASET_CLASS_NAMES}"
-FILTER_TAG_NAMES_TOKEN = "{DATASET_TAG_NAMES}"
 
 
-def resolve_filter_options(options, classes, tags=None):
-    """Expand dynamic option tokens (e.g. `{DATASET_CLASS_NAMES}`, `{DATASET_TAG_NAMES}`).
+def resolve_filter_options(options, classes):
+    """Expand dynamic option tokens (e.g. `{DATASET_CLASS_NAMES}`).
 
     Non-token options are kept as-is; a token expands in place (deduplicated).
     Used both to fill the UI dropdown and to validate a submitted value.
@@ -263,12 +261,7 @@ def resolve_filter_options(options, classes, tags=None):
         return options
     resolved = []
     for opt in options:
-        if opt == FILTER_CLASS_NAMES_TOKEN:
-            values = classes
-        elif opt == FILTER_TAG_NAMES_TOKEN:
-            values = tags or []
-        else:
-            values = [opt]
+        values = classes if opt == FILTER_CLASS_NAMES_TOKEN else [opt]
         for value in values:
             if value and value not in resolved:
                 resolved.append(value)

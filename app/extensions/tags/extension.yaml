@@ -1,0 +1,68 @@
+# Tags extension package.
+#
+# This ships the whole tags feature: a backend plugin (`backend.py`) that owns
+# tags.yaml, the per-image tag files and the tags folder, and a sandboxed UI
+# panel (`panel.js`) that renders the tag bar. It is shipped `active: false`, so
+# nothing loads until you enable it under Settings > Extensions.
+api_version: 5
+id: tags
+name: Tags
+description: Label whole images with tags from tags.yaml (tag bar, Alt+1..9).
+version: 1.0.0
+author: yolo-box-editor
+active: false
+
+# The backend plugin registers /api/tags and /api/tags-dir and exposes the
+# `tags.*` capabilities the panel calls through `YBE.call`.
+backend: backend.py
+
+# Extension-defined app actions. They are reachable from steps/after_success as
+# `ext.tags.<name>` (e.g. `ext.tags.clear_tags`) and each keeps a backend
+# capability as a headless fallback.
+app_actions:
+  - name: refresh_image_tags
+    label: Refresh image tags
+    capability: tags.get
+  - name: clear_tags
+    label: Clear image tags
+    capability: tags.clear
+  - name: copy_tags_from_prev
+    label: Copy tags from previous image
+    capability: tags.copyFromPrev
+  - name: toggle_tag_1
+    label: Toggle tag 1
+    shortcut: Alt+1
+  - name: toggle_tag_2
+    label: Toggle tag 2
+    shortcut: Alt+2
+  - name: toggle_tag_3
+    label: Toggle tag 3
+    shortcut: Alt+3
+  - name: toggle_tag_4
+    label: Toggle tag 4
+    shortcut: Alt+4
+  - name: toggle_tag_5
+    label: Toggle tag 5
+    shortcut: Alt+5
+  - name: toggle_tag_6
+    label: Toggle tag 6
+    shortcut: Alt+6
+  - name: toggle_tag_7
+    label: Toggle tag 7
+    shortcut: Alt+7
+  - name: toggle_tag_8
+    label: Toggle tag 8
+    shortcut: Alt+8
+  - name: toggle_tag_9
+    label: Toggle tag 9
+    shortcut: Alt+9
+
+ui:
+  api_version: 2
+  title: Tags
+  script: panel.js
+  location: bottom
+  height: 96
+
+events:
+  - after_app_action

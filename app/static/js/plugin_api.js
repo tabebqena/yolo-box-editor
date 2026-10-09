@@ -16,6 +16,14 @@ const PANELS = {};
 // Monotonic counter for nothing security-critical; just a tie-breaker.
 let panelSeq = 0;
 
+// Extension app actions are named `ext.<extension_id>.<action>` in steps and
+// events (must match EXTENSION_ACTION_PREFIX in ybe/config.py). The lifecycle
+// bus below caps how many times an event may recursively trigger another action.
+const EXT_ACTION_PREFIX = 'ext.';
+const MAX_EVENT_DEPTH = 8;
+// Monotonic id so one action chain's events share a label.
+let actionChainSeq = 0;
+
 // CSS custom properties forwarded into the sandbox so a panel can match the app.
 const YBE_THEME_VARS = [
   '--bg', '--bg-raised', '--bg-sunken', '--bg-hover', '--bg-bar',
@@ -69,28 +77,13 @@ function ybeNormalizeBoxes(raw) {
 }
 
 /**
- * Validate/normalize a submitted tag list.
- * @param {*} raw
- * @returns {string[]}
- */
-function ybeNormalizeStrings(raw) {
-  if (!Array.isArray(raw)) throw new Error('tags must be a list');
-  const out = [];
-  raw.forEach((t) => {
-    if (typeof t !== 'string') return;
-    const s = t.trim();
-    if (s && s.indexOf('\n') < 0 && out.indexOf(s) < 0) out.push(s);
-  });
-  return out;
-}
-
-/**
  * The whitelisted capability table. Every panel request resolves here; anything
  * not listed is rejected. State getters return copies; mutators reuse the real
  * editor functions so undo/dirty/read-only behave as for the built-in UI.
  * @returns {Object<string, Function>}
  */
-function ybePanelMethods() {
+function ybePanelMethods(panel) {
+  const packageId = (panel && panel.packageId) || '';
   return {
     'state.getImage': () => (currentIndex >= 0 && images[currentIndex])
       ? { split: images[currentIndex].split, name: images[currentIndex].name } : null,
@@ -98,29 +91,12 @@ function ybePanelMethods() {
     'state.getBoxes': () => boxes.map((b) => ({
       class: b.class, cx: b.cx, cy: b.cy, w: b.w, h: b.h, fixed: !!b.fixed,
     })),
-    'state.getTags': () => imageTags.slice(),
-    'state.getAvailableTags': () => availableTags.slice(),
     'state.getClasses': () => classes.slice(),
     'state.getActiveSplit': () => activeSplit,
     'state.getImageCount': () => images.length,
     'state.isDatasetLoaded': () => !!datasetLoaded,
-    'callbacks.addTag': (a) => { ybeRequireWritable(); addTag(String(a[0])); return true; },
-    'callbacks.removeTag': (a) => { ybeRequireWritable(); removeTag(String(a[0])); return true; },
-    'callbacks.toggleTag': (a) => {
-      ybeRequireWritable();
-      const name = String(a[0]);
-      if (imageTags.indexOf(name) >= 0) removeTag(name); else addTag(name);
-      return true;
-    },
-    'callbacks.setTags': (a) => {
-      ybeRequireWritable();
-      pushUndo();
-      imageTags = ybeNormalizeStrings(a[0]);
-      markDirty();
-      renderTagBar();
-      emitUiEvent('tags_changed', { tags: imageTags.slice() });
-      return true;
-    },
+    // Package backend capabilities (only the caller's own package is reachable).
+    'call': (a) => capabilityCall(packageId, String(a[0]), Array.isArray(a[1]) ? a[1] : []),
     'callbacks.setBoxes': (a) => {
       ybeRequireWritable();
       const list = ybeNormalizeBoxes(a[0]);
@@ -151,16 +127,23 @@ function ybePanelMethods() {
     'callbacks.markDirty': () => { markDirty(); return true; },
     'callbacks.draw': () => { draw(); return true; },
     'callbacks.save': async () => { ybeRequireWritable(); return await save(); },
-    'callbacks.runAction': async (a) => {
+    'callbacks.runAction': async (a, ctx) => {
+      const name = String(a[0]);
       const opts = (a[1] && typeof a[1] === 'object') ? a[1] : {};
-      return await runAction(String(a[0]), opts);
+      if (name.startsWith('app_') || name.startsWith(EXT_ACTION_PREFIX)) {
+        const ev = { preventDefault() {} };
+        return await invokeAppAction(name, ev, () => runCoreAppAction(name, ev), ctx);
+      }
+      return await runAction(name, opts);
     },
     'callbacks.refreshImage': async (a) => {
       const map = {
         pixels: 'app_refresh_image', labels: 'app_refresh_image_labels',
-        tags: 'app_refresh_image_tags', all: 'app_refresh_image_all',
+        all: 'app_refresh_image_all',
       };
-      return await runAppAction(map[String(a[0])] || map.all, { preventDefault() {} });
+      const name = map[String(a[0])];
+      if (!name) return null;
+      return await runAppAction(name, { preventDefault() {} });
     },
     'callbacks.toast': (a) => {
       toast(String(a[0]), (a[1] && typeof a[1] === 'object') ? a[1] : {});
@@ -190,12 +173,120 @@ function ybePanelMethods() {
  * @param {Array<*>} args
  * @returns {Promise<*>}
  */
-async function ybeHandleRequest(method, args) {
+async function ybeHandleRequest(method, args, ctx, panel) {
   if (typeof method !== 'string') throw new Error('invalid YBE method');
-  const table = ybePanelMethods();
+  const table = ybePanelMethods(panel);
   const fn = Object.prototype.hasOwnProperty.call(table, method) ? table[method] : null;
   if (!fn) throw new Error('unknown YBE method: ' + method);
-  return await fn(Array.isArray(args) ? args : []);
+  return await fn(Array.isArray(args) ? args : [], ctx);
+}
+
+/**
+ * Split a fully-qualified extension app-action id (`ext.<ext>.<name>`).
+ * @param {string} id
+ * @returns {{extension:string, name:string}|null}
+ */
+function actionExtId(id) {
+  if (typeof id !== 'string' || !id.startsWith(EXT_ACTION_PREFIX)) return null;
+  const rest = id.slice(EXT_ACTION_PREFIX.length);
+  const dot = rest.indexOf('.');
+  if (dot <= 0) return null;
+  return { extension: rest.slice(0, dot), name: rest.slice(dot + 1) };
+}
+
+/**
+ * The current image's `split/name` key, or null.
+ * @returns {string|null}
+ */
+function currentImageKey() {
+  return (currentIndex >= 0 && images[currentIndex])
+    ? images[currentIndex].split + '/' + images[currentIndex].name : null;
+}
+
+/**
+ * Call one of a package's backend capabilities through the host.
+ * @param {string} packageId
+ * @param {string} method
+ * @param {Array<*>} args
+ * @returns {Promise<*>}
+ */
+async function capabilityCall(packageId, method, args) {
+  const { res, data } = await apiPost('/api/extensions/call',
+    { package: packageId, method, args: args || [] });
+  if (!res.ok || data.ok === false) {
+    throw new Error((data && data.error) || ('capability failed: ' + method));
+  }
+  return data.value;
+}
+
+/**
+ * Run one extension app action. If the owning panel is mounted it receives an
+ * `app_action` event; otherwise the action's declared backend capability is
+ * called with the current image key (headless fallback for steps).
+ * @param {string} extension
+ * @param {string} name
+ * @param {{depth?:number, chain?:string}} ctx
+ * @returns {Promise<*>}
+ */
+async function callExtensionAction(extension, name, ctx) {
+  const panelName = 'panel.' + extension;
+  const payload = {
+    action: EXT_ACTION_PREFIX + extension + '.' + name,
+    extension, name,
+    depth: ctx ? ctx.depth : 0, chain: ctx ? ctx.chain : null,
+  };
+  if (PANELS[panelName]) {
+    panelPost(panelName, { kind: 'evt', event: 'app_action', payload });
+    return null;
+  }
+  const pkg = (extensionPackages || []).find((p) => p.id === extension);
+  const declared = pkg && (pkg.app_actions || []).find((a) => a.name === name);
+  if (!declared || !declared.capability) {
+    throw new Error('extension action not available: ' + extension + '.' + name);
+  }
+  const key = currentImageKey();
+  return await capabilityCall(extension, declared.capability, key ? [key] : []);
+}
+
+/**
+ * Run an app action through the lifecycle bus: broadcast `before_app_action`,
+ * run it, then broadcast `after_app_action` to every panel. `ctx` carries the
+ * recursion chain when the action was triggered from a panel handling an event;
+ * exceeding MAX_EVENT_DEPTH refuses the action.
+ * @param {string} name
+ * @param {Event} e
+ * @param {Function} coreRunner
+ * @param {{depth?:number, chain?:string}} [ctx]
+ * @returns {Promise<*>}
+ */
+async function invokeAppAction(name, e, coreRunner, ctx) {
+  const depth = ctx ? (Number(ctx.depth) || 0) + 1 : 0;
+  const chain = (ctx && ctx.chain) ? ctx.chain : ('c' + (++actionChainSeq));
+  if (depth > MAX_EVENT_DEPTH) {
+    const err = new Error('app action event chain exceeded ' + MAX_EVENT_DEPTH + ' levels');
+    toast(err.message, { type: 'error' });
+    throw err;
+  }
+  const ext = actionExtId(name);
+  const info = {
+    action: name,
+    extension: ext ? ext.extension : null,
+    name: ext ? ext.name : name,
+    source: ctx ? 'event' : 'ui',
+    depth, chain,
+  };
+  emitUiEvent('before_app_action', info);
+  try {
+    const out = ext
+      ? await callExtensionAction(ext.extension, ext.name, { depth, chain })
+      : (typeof coreRunner === 'function' ? await coreRunner() : null);
+    emitUiEvent('after_app_action', Object.assign({ ok: true, error: null }, info));
+    return out;
+  } catch (err) {
+    emitUiEvent('after_app_action', Object.assign(
+      { ok: false, error: String((err && err.message) || err) }, info));
+    throw err;
+  }
 }
 
 /**
@@ -285,7 +376,7 @@ function handlePanelMessage(name, data) {
   if (!PANELS[name] || !data || data.__ybe !== true) return;
   if (data.kind === 'req') {
     Promise.resolve()
-      .then(() => ybeHandleRequest(data.method, data.args))
+      .then(() => ybeHandleRequest(data.method, data.args, data.ctx, PANELS[name]))
       .then((value) => panelPost(name, {
         kind: 'res', id: data.id, ok: true, value: value === undefined ? null : value,
       }))
@@ -405,12 +496,24 @@ function __ybeIframeStub() {
   var seq = 0;
   var handlers = {};
   var TIMEOUT = 20000;
+  // The chain context of the most recent lifecycle event. Attached to every
+  // outgoing action call so the host can bound event-triggered recursion.
+  var lastCtx = null;
+  var ctxTimer = null;
 
-  function call(method, args) {
+  function rememberCtx(payload) {
+    if (!payload) return;
+    lastCtx = { chain: payload.chain || null, depth: Number(payload.depth) || 0 };
+    if (ctxTimer) clearTimeout(ctxTimer);
+    ctxTimer = setTimeout(function () { lastCtx = null; }, 1000);
+  }
+
+  function call(method, args, ctx) {
     return new Promise(function (resolve, reject) {
       var id = ++seq;
       pending[id] = { resolve: resolve, reject: reject };
-      parent.postMessage({ __ybe: true, kind: 'req', id: id, method: method, args: args || [] }, '*');
+      parent.postMessage({ __ybe: true, kind: 'req', id: id, method: method,
+        args: args || [], ctx: ctx || null }, '*');
       setTimeout(function () {
         if (pending[id]) { delete pending[id]; reject(new Error('YBE timeout: ' + method)); }
       }, TIMEOUT);
@@ -452,6 +555,7 @@ function __ybeIframeStub() {
       if (d.ok) p.resolve(d.value);
       else p.reject(new Error(d.error || 'YBE error'));
     } else if (d.kind === 'evt') {
+      if (d.event === 'after_app_action') rememberCtx(d.payload);
       dispatch(d.event, d.payload);
     } else if (d.kind === 'theme') {
       applyTheme(d.css);
@@ -465,29 +569,24 @@ function __ybeIframeStub() {
     readonly: false,
     on: on,
     off: off,
+    call: function (method, args) { return call('call', [method, args], lastCtx); },
     state: {
       getImage: function () { return call('state.getImage'); },
       getImageIndex: function () { return call('state.getImageIndex'); },
       getBoxes: function () { return call('state.getBoxes'); },
-      getTags: function () { return call('state.getTags'); },
-      getAvailableTags: function () { return call('state.getAvailableTags'); },
       getClasses: function () { return call('state.getClasses'); },
       getActiveSplit: function () { return call('state.getActiveSplit'); },
       getImageCount: function () { return call('state.getImageCount'); },
       isDatasetLoaded: function () { return call('state.isDatasetLoaded'); },
     },
     callbacks: {
-      addTag: function (n) { return call('callbacks.addTag', [n]); },
-      removeTag: function (n) { return call('callbacks.removeTag', [n]); },
-      toggleTag: function (n) { return call('callbacks.toggleTag', [n]); },
-      setTags: function (l) { return call('callbacks.setTags', [l]); },
       setBoxes: function (l) { return call('callbacks.setBoxes', [l]); },
       selectBox: function (i) { return call('callbacks.selectBox', [i]); },
       clearSelection: function () { return call('callbacks.clearSelection'); },
       markDirty: function () { return call('callbacks.markDirty'); },
       draw: function () { return call('callbacks.draw'); },
       save: function () { return call('callbacks.save'); },
-      runAction: function (n, o) { return call('callbacks.runAction', [n, o]); },
+      runAction: function (n, o) { return call('callbacks.runAction', [n, o], lastCtx); },
       refreshImage: function (k) { return call('callbacks.refreshImage', [k]); },
       toast: function (m, o) { return call('callbacks.toast', [m, o]); },
       setStatus: function (m) { return call('callbacks.setStatus', [m]); },

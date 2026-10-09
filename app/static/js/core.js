@@ -192,6 +192,7 @@ let filterDefs = [];
 let widgetDefs = []; // loaded custom widget definitions
 let widgetErrors = []; // validation errors from widgets/
 let extensionPackages = []; // loaded extension packages (Settings > Extensions)
+let extensionAppActions = []; // declared extension app actions (id/label/shortcut)
 let yamlEditor = null; // the file currently open in the raw YAML editor
 let undoStack = [];   // snapshots of `boxes` before each edit (fresh per image)
 // Snapshots replayed by the redo action, mirroring `undoStack`.
@@ -208,8 +209,6 @@ let dirty = false;
 let readonly = false;
 // Whether a dataset has been loaded successfully.
 let datasetLoaded = false;
-let availableTags = [];     // dataset-wide list from tags.yaml (toggle order for Alt+n)
-let imageTags = [];         // current image's tags
 let boxesVisible = true;    // `app_show_hide`: draw the box overlay or not
 let boxDetailsVisible = true; // `app_box_details`: draw handles/labels/buttons or outlines only
 let isolateSelected = false; // `app_isolate_box`: draw only the selected box

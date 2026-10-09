@@ -38,19 +38,15 @@ import os
 # Re-exports only (see the note above): everything below is defined in `ybe`.
 from ybe.parsing import (
     _extract_yaml_block,
-    _is_toplevel_list_item,
     _line_comment,
-    _normalize_tags,
     _parse_api_version,
     _parse_data_yaml,
     _parse_version,
     _parse_yaml_names_value,
-    _read_tag_lines,
     _read_text,
     _read_text_lines,
     _read_yaml_names,
     _strip_comment,
-    _toplevel_list_names,
     _version_newer,
     _yaml_scalar,
     parse_shortcut_line,
@@ -86,13 +82,11 @@ from ybe.dataset import (
     _load_dataset,
     _parse_label_file,
     _split_by_name,
-    _tags_dir_for,
     is_image,
     label_path,
     read_classes,
     scan_images,
     scan_splits,
-    tag_path,
 )
 from ybe.filters import (
     _clear_filter,
@@ -105,7 +99,6 @@ from ybe.filters import (
 )
 from ybe.extensions import (
     FILTER_CLASS_NAMES_TOKEN,
-    FILTER_TAG_NAMES_TOKEN,
     _bump_api_version_text,
     _clean_extension_entries,
     _clean_filter_arguments,
@@ -156,13 +149,6 @@ from ybe.shortcuts import (
     user_shortcut_names,
     write_user_shortcuts,
 )
-from ybe.tags import (
-    read_tags_yaml,
-    register_available_tags,
-    save_tags_yaml,
-    tags_yaml_path,
-    write_image_tags,
-)
 from ybe.userconfig import (
     DISABLED_KIND_KEYS,
     _disabled_extensions,
@@ -170,7 +156,6 @@ from ybe.userconfig import (
     _load_settings,
     _load_views,
     _push_recent,
-    _restore_tags_dir,
     _restore_view,
     _save_view,
     _set_extension_disabled,

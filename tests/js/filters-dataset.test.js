@@ -154,19 +154,6 @@ test('reloadSplitImages rescans and applies the selected split payload', async (
 });
 
 
-test('setTagsDir posts the tag folder', async () => {
-  app.$('tagsDirInput').value = '/data/tags';
-  let posted = null;
-  app.fetchMock.on('/api/tags-dir', (url, method, entry) => {
-    posted = JSON.parse(entry.body);
-    return { body: { ok: true, tags_dir: '/data/tags' } };
-  });
-  app.fetchMock.on('/api/config', () => ({ body: CONFIG }));
-  await app.api.setTagsDir();
-  await app.flush();
-  assert.equal(posted.tags_dir, '/data/tags');
-});
-
 test('loadDataset posts the path, reloads and closes the modals', async () => {
   let posted = null;
   app.fetchMock.on('/api/data', (url, method, entry) => {

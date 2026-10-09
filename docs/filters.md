@@ -53,10 +53,9 @@ steps:                      # one shell command per entry, run in order
   UI and cannot be selected (a saved chain that used it drops that step).
 - An argument with `options` is shown as a dropdown and the app rejects a value
   that is not one of them. Besides literal lists, the token
-  `{DATASET_CLASS_NAMES}` expands to the loaded dataset's class names and
-  `{DATASET_TAG_NAMES}` to its available tags (`tags.yaml`), e.g.
-  `options: {DATASET_TAG_NAMES}` — so a tag filter can never be given a typo'd
-  tag. Other dynamic tokens may be added later.
+  `{DATASET_CLASS_NAMES}` expands to the loaded dataset's class names, so a
+  class filter can never be given a typo'd class. Other dynamic tokens may be
+  added later.
 - A filter with no `steps` (e.g. a comments-only template you copied) is
   ignored.
 - An argument name must be letters, digits and `_` (not starting with a digit)
@@ -76,7 +75,6 @@ pipe paths and each argument:
 | `{SPLIT}` | `train` / `val` / `test`, or `""` on *All splits* |
 | `{INPUT_PIPE}` | file with the candidate image paths, one absolute path per line |
 | `{OUTPUT_PIPE}` | file the filter must write the kept image paths to |
-| `{TAGS_DIR}` | tags folder of the active split (empty on *All splits*) |
 | `{APP_DIR}` | the folder holding `app.py` (the shipped code) |
 | `{HOME_DIR}` | your user folder (the working directory of every run) |
 | `{APP_SCRIPT_DIR}` | the shipped helper scripts (`app/scripts/`) |
@@ -130,14 +128,14 @@ backed by `app/scripts/example_filter.py`; copy it to a new `<Name>.yaml` in
   built from the dataset's `names` (`options: {DATASET_CLASS_NAMES}`).
 - **Does not contain class** — `app/filters/not_contains_class.yaml`; the
   inverse.
-- **Has tag** — `app/filters/has_tag.yaml`; keeps only the images that have the
-  chosen tag. The tag is picked from a dropdown built from the dataset's
-  `tags.yaml` (`options: {DATASET_TAG_NAMES}`).
-- **Does not have tag** — `app/filters/not_has_tag.yaml`; the inverse.
 
 Both class filters use `app/scripts/class_filter.py`, which maps the class name
 to its id via `data.yaml` and checks each image's `labels/.../*.txt` file (an
-image with no label file contains no class). Both tag filters use
-`app/scripts/tag_filter.py`, which checks each image's tag file (found via
-`{TAGS_DIR}`, or by swapping the last `images` segment for `tags` on *All
-splits*); an image with no tag file has no tags.
+image with no label file contains no class).
+
+The **Has tag** / **Does not have tag** filters ship with the tags extension
+package (`app/extensions/tags/filters/`); enable it under **Settings →
+Extensions** to use them. They use
+`app/extensions/tags/scripts/tag_filter.py`, which checks each image's tag file
+(found by swapping the last `images` segment for `tags`, or the dataset's custom
+tags folder); an image with no tag file has no tags.

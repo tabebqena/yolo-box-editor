@@ -34,13 +34,6 @@ let panelSide = 'left';
  * markup; the other locations are the floating window or an edge panel.
  */
 const WIDGETS = {
-  tags: {
-    frame: 'tagFloat', body: 'tagFloatBody',
-    content: () => el('tagBar'),
-    parent: () => qs('#dockBottom .imagebar'),
-    key: 'ybe_tags_dock', select: 'tagsDockSel',
-    visibleKey: 'ybe_tags_visible', visibleSw: 'tagsVisibleSw',
-  },
   boxes: {
     frame: 'boxFloat', body: 'boxFloatBody',
     content: () => qs('.boxes-section'),
@@ -179,8 +172,9 @@ function widgetNames() { return Object.keys(WIDGETS); }
  * @returns {string} The widget name.
  */
 function widgetNameForFrame(win) {
-  if (!win) return 'tags';
-  return widgetNames().find((n) => WIDGETS[n].frame === win.id) || 'tags';
+  const names = widgetNames();
+  if (!win) return names[0];
+  return names.find((n) => WIDGETS[n].frame === win.id) || names[0];
 }
 /**
  * Settings key for a widget's dock location.
@@ -329,10 +323,6 @@ function setWidgetVisible(name, on) {
 function applyWidget(name) {
   placeWidget(name, getDock(name));
   const on = getWidgetVisible(name);
-  if (name === 'tags') {
-    renderTagBar(); // tags only show with a dataset/image; it reads the flag
-    return;
-  }
   const frame = widgetFrame(name);
   const content = widgetContent(name);
   if (content) content.classList.toggle('hidden', !on);
@@ -635,16 +625,9 @@ function initAppearance() {
     dockState[name] = savedDock(dockKey(name));
     visibleState[name] = savedVisible(WIDGETS[name].visibleKey);
   });
-  // migrate the old "detach into a floating window" checkboxes
-  const tagsKey = dockKey('tags');
+  // migrate the old "detach into a floating window" checkbox
   const boxesKey = dockKey('boxes');
-  if (settingsGet(tagsKey) === null && localStorage.getItem(LEGACY_DETACH_TAGS_KEY) === '1') dockState.tags = 'float';
   if (settingsGet(boxesKey) === null && localStorage.getItem(LEGACY_DETACH_BOXES_KEY) === '1') dockState.boxes = 'float';
-  // migrate the old View > Tags switch (now the Tags widget's Show toggle)
-  if (settingsGet(WIDGETS.tags.visibleKey) === null
-      && localStorage.getItem(LEGACY_TAGGING_KEY) !== null) {
-    visibleState.tags = localStorage.getItem(LEGACY_TAGGING_KEY) !== '0';
-  }
   try {
     localStorage.removeItem(LEGACY_DETACH_TAGS_KEY);
     localStorage.removeItem(LEGACY_DETACH_BOXES_KEY);

@@ -327,15 +327,9 @@ const APP_SHORTCUT_HANDLERS = {
   },
   app_select_next_box: (e) => { e.preventDefault(); selectRelativeBox(1); },
   app_select_prev_box: (e) => { e.preventDefault(); selectRelativeBox(-1); },
-  app_clear_tags: () => {
-    if (readonly || currentIndex < 0 || !imageTags.length) return;
-    pushUndo();
-    imageTags = [];
-    markDirty();
-    renderTagBar();
-  },
-  // Copy the previous image's boxes and tags onto the current one. The action
-  // is opt-in (a hook/action step), so no-op quietly on the first image.
+  // Copy the previous image's boxes onto the current one. The action is opt-in
+  // (a hook/action step), so no-op quietly on the first image. Extensions can
+  // observe the `after_app_action` event to copy their own per-image data.
   app_copy_labels_from_prev: async () => {
     if (readonly || currentIndex <= 0) return;
     const prev = images[currentIndex - 1];
@@ -343,12 +337,10 @@ const APP_SHORTCUT_HANDLERS = {
     if (!data) throw new Error('could not read previous annotations');
     pushUndo();
     boxes = Array.isArray(data.boxes) ? data.boxes.map((b) => ({ ...b })) : [];
-    imageTags = Array.isArray(data.tags) ? [...data.tags] : [];
     clearBoxSelection();
     justDrawn = false;
     markDirty();
     syncClassSelect(-1);
-    renderTagBar();
     draw();
   },
   app_sel_points: (e) => { tabCycleRow(e); },
@@ -436,23 +428,13 @@ const APP_SHORTCUT_HANDLERS = {
     applyImageLabels(data.boxes);
     dbg('refresh image labels', { index: currentIndex });
   },
-  // Re-read the current image's tags from disk. Keeps the pixels and labels.
-  app_refresh_image_tags: async (e) => {
-    e.preventDefault();
-    const data = await fetchCurrentAnnotations();
-    if (!data) { dbg('refresh tags skipped (no image)'); return; }
-    applyImageTags(data.tags);
-    dbg('refresh image tags', { index: currentIndex });
-  },
-  // Re-fetch everything for the current image: pixels, labels and tags.
+  // Re-fetch the current image's pixels and labels. Extensions observe this via
+  // `after_app_action` to refresh their own per-image data (e.g. tags).
   app_refresh_image_all: async (e) => {
     e.preventDefault();
     if (currentIndex < 0) { dbg('refresh image all skipped (no image)'); return; }
     const data = await fetchCurrentAnnotations();
-    if (data) {
-      applyImageLabels(data.boxes);
-      applyImageTags(data.tags);
-    }
+    if (data) applyImageLabels(data.boxes);
     displayImage('/api/image' + keyQuery(images[currentIndex]) + '&_=' + Date.now());
     dbg('refresh image all', { index: currentIndex });
   },
@@ -496,12 +478,23 @@ function applyImagesPayload(data, anchor, label) {
  * @param {Event} [e] Original event, if any.
  * @returns {Promise<void>}
  */
-async function runAppAction(name, e) {
+async function runCoreAppAction(name, e) {
   const handler = APP_SHORTCUT_HANDLERS[name];
   if (!handler) {
     throw new Error(`unknown app action: ${name}`);
   }
   return handler(e || { preventDefault() {} });
+}
+
+/**
+ * Run an app action (core `app_*` or extension `ext.<id>.<name>`) through the
+ * lifecycle bus so every panel sees `before_app_action` / `after_app_action`.
+ * @param {string} name
+ * @param {Event} [e] Original event, if any.
+ * @returns {Promise<*>}
+ */
+async function runAppAction(name, e) {
+  return invokeAppAction(name, e, () => runCoreAppAction(name, e));
 }
 
 /**
@@ -574,6 +567,13 @@ function dispatchAppShortcut(e) {
     const info = appShortcuts[name];
     if (info && shortcutMatches(e, info.shortcut)) {
       runAppAction(name, e).catch((err) => console.error(`[shortcut] ${name}:`, err));
+      return true;
+    }
+  }
+  // Extension-defined app actions carry a default binding in their manifest.
+  for (const def of extensionAppActions) {
+    if (def.shortcut && shortcutMatches(e, def.shortcut)) {
+      runAppAction(def.id, e).catch((err) => console.error(`[shortcut] ${def.id}:`, err));
       return true;
     }
   }
@@ -651,15 +651,6 @@ function onGlobalKeyDown(e) {
   }
 
   if (e.target.matches('input, select, textarea')) return;
-  // Alt + digit toggles the matching available tag (Alt+1 = first in tags.yaml)
-  if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code.startsWith('Digit')) {
-    const n = parseInt(e.code.slice(5), 10);
-    if (n >= 1 && n <= availableTags.length) {
-      e.preventDefault();
-      toggleTagByNumber(n);
-      return;
-    }
-  }
   if (dispatchAppShortcut(e)) return;
   runActionForShortcut(e);
 }
@@ -719,10 +710,6 @@ function wireNavigation() {
     setDataYaml();
   });
   el('setDataBtn').addEventListener('click', setDataYaml);
-  el('tagsDirBtn').addEventListener('click', setTagsDir);
-  el('tagsDirInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') setTagsDir();
-  });
 
   const counterInput = el('counter');
   counterInput.addEventListener('focus', () => counterInput.select());
@@ -769,38 +756,6 @@ function wireEditingControls() {
       }
     });
   }
-}
-
-/**
- * Wire the tag bar: add/submit, expand and input keyboard handling.
- * @returns {void}
- */
-function wireTags() {
-  el('addTagBtn').addEventListener('click', () => {
-    if (el('tagInput').classList.contains('hidden')) openTagInput();
-    else closeTagInput();
-  });
-  el('tagSubmitBtn').addEventListener('click', () => {
-    addTagFromInput();
-    closeTagInput();
-  });
-  el('tagExpandBtn').addEventListener('click', () => {
-    const bar = el('tagBar');
-    const expanded = bar.classList.toggle('expanded');
-    el('tagExpandBtn').title = expanded ? 'Show fewer tags' : 'Show all tags';
-    applyTagOverflow();
-  });
-  el('tagInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !readonly) {
-      e.preventDefault();
-      addTagFromInput();
-      closeTagInput();
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      closeTagInput();
-    }
-  });
-  window.addEventListener('resize', applyTagOverflow);
 }
 
 /**
@@ -920,7 +875,6 @@ function wireEvents() {
   wireCanvas();
   wireNavigation();
   wireEditingControls();
-  wireTags();
   wireUpdates();
   wireSettings();
   wireDatasetModals();

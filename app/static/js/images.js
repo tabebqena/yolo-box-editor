@@ -9,7 +9,6 @@ function resetToEmptyImage() {
   currentIndex = -1;
   boxes = [];
   clearBoxSelection();
-  imageTags = [];
   imgW = 0;
   imgH = 0;
   releaseFrame();
@@ -17,7 +16,6 @@ function resetToEmptyImage() {
   canvas.height = 0;
   updateNav();
   renderSidePanel();
-  renderTagBar();
 }
 
 /**
@@ -63,10 +61,8 @@ async function loadConfig(startIdx = 0, opts = {}) {
   activeSplit = cfg.active_split || null;
   activeFilters = cfg.active_filters || [];
   classes = cfg.classes || ['class_0'];
-  availableTags = cfg.tags || [];
   datasetLoaded = !!cfg.data_yaml;
   el('dataYaml').value = cfg.data_yaml || '';
-  el('tagsDirInput').value = cfg.tags_dir || '';
   currentDataYaml = cfg.data_yaml || '';
   {
     const dsPath = cfg.dataset_path || cfg.data_yaml || '';
@@ -166,8 +162,8 @@ async function postJson(url, body) {
 }
 
 /**
- * Fetch the current image's annotations (labels and tags) from the server.
- * @returns {Promise<Object|null>} `{boxes, tags}`, or null when no image is open.
+ * Fetch the current image's annotations (labels) from the server.
+ * @returns {Promise<Object|null>} `{boxes}`, or null when no image is open.
  */
 async function fetchCurrentAnnotations() {
   if (currentIndex < 0 || !images[currentIndex]) return null;
@@ -193,23 +189,6 @@ function applyImageLabels(boxList) {
   updateHistoryButtons();
   renderSidePanel();
   draw();
-}
-
-/**
- * Replace the current image's tags with a freshly read list.
- *
- * Like `applyImageLabels`, the tags now match disk, so the history is reset.
- * @param {string[]} tagList - The tags read from the server.
- * @returns {void}
- */
-function applyImageTags(tagList) {
-  imageTags = Array.isArray(tagList) ? [...tagList] : [];
-  undoStack = [];
-  redoStack = [];
-  dirty = false;
-  updateHistoryButtons();
-  renderTagBar();
-  emitUiEvent('tags_changed', { tags: imageTags.slice() });
 }
 
 /**
@@ -291,16 +270,13 @@ function loadImage(i) {
     .then((data) => {
       if (requested !== currentIndex) return; // a newer loadImage superseded us
       boxes = Array.isArray(data && data.boxes) ? data.boxes : [];
-      imageTags = (data && data.tags) || [];
       undoStack = []; // history is per image
       redoStack = [];
       const imageUrl = '/api/image' + q + '&_=' + Date.now();
       displayImage(imageUrl);
       rememberLastImage();
-      renderTagBar();
       updateHistoryButtons();
-      dbg('loadImage resolved', { index: currentIndex, boxes: boxes.length,
-        tags: imageTags.length, src: imageUrl });
+      dbg('loadImage resolved', { index: currentIndex, boxes: boxes.length, src: imageUrl });
       emitUiEvent('image_loaded', { split: entry.split, name: entry.name });
       runHook('on_image_loaded');
     }).catch((err) => {
@@ -448,201 +424,4 @@ async function go(delta) {
   // loadImage advances currentIndex
   runHook(delta < 0 ? 'on_prev' : 'on_next');
   loadImage(next);
-}
-
-// ------------------------------------------------------------------------- //
-// tagging (per-image tag bar)
-// ------------------------------------------------------------------------- //
-/**
- * Show a tag action status message as a toast.
- * @param {string} msg - Message text.
- * @param {string} [type='info'] - Toast type.
- * @returns {void}
- */
-function setTagStatus(msg, type = 'info') {
-  toast(msg, { type, timeout: type === 'error' ? undefined : 2500 });
-}
-
-/**
- * Build a clickable tag badge for the tag bar.
- * @param {string} name - Tag name.
- * @param {boolean} active - Whether the tag is on the current image.
- * @param {number|null} num - Alt-number shortcut, if any.
- * @returns {HTMLElement} The created badge.
- */
-function tagBadge(name, active, num) {
-  const b = mk('button', 'tag-badge' + (active ? ' active' : ''));
-  b.type = 'button';
-  if (num) b.appendChild(mk('span', 'tag-badge-num', String(num)));
-  b.appendChild(document.createTextNode(name));
-  b.title = active
-    ? `Remove tag "${name}" from this image${num ? ` (Alt+${num})` : ''}`
-    : `Add tag "${name}" to this image${num ? ` (Alt+${num})` : ''}`;
-  b.addEventListener('click', () => {
-    if (readonly || currentIndex < 0) return;
-    if (active) removeTag(name);
-    else addTag(name);
-  });
-  return b;
-}
-
-/**
- * Show the overflow (…) button when the tag badges are too wide for the row.
- * @returns {void}
- */
-function applyTagOverflow() {
-  const bar = el('tagBar');
-  const badges = el('tagBadges');
-  const btn = el('tagExpandBtn');
-  if (!bar || !badges || !btn || bar.classList.contains('hidden')) return;
-  if (bar.classList.contains('expanded')) {
-    btn.classList.remove('hidden');
-    return;
-  }
-  const overflow = badges.scrollWidth > badges.clientWidth + 1;
-  btn.classList.toggle('hidden', !overflow);
-}
-
-/**
- * Render the per-image tag bar, including orphan and warning states.
- * @returns {void}
- */
-function renderTagBar() {
-  const bar = el('tagBar');
-  const show = getWidgetVisible('tags') && datasetLoaded && currentIndex >= 0;
-  bar.classList.toggle('hidden', !show);
-  if (getDock('tags') !== 'default') el('tagFloat').classList.toggle('hidden', !show);
-  if (!show) {
-    bar.classList.remove('expanded');
-    el('tagExpandBtn').classList.add('hidden');
-    updateDockPanels();
-    return;
-  }
-
-  const wrap = el('tagBadges');
-  wrap.innerHTML = '';
-  const on = new Set(imageTags);
-  const shown = new Set();
-  availableTags.forEach((t, i) => {
-    if (shown.has(t)) return;
-    shown.add(t);
-    wrap.appendChild(tagBadge(t, on.has(t), i + 1));
-  });
-  imageTags.forEach((t) => {
-    if (shown.has(t)) return; // orphan image tag not in tags.yaml
-    shown.add(t);
-    wrap.appendChild(tagBadge(t, true, null));
-  });
-
-  el('tagInput').disabled = readonly;
-  el('tagSubmitBtn').disabled = readonly;
-  el('addTagBtn').disabled = readonly;
-  el('tagHint').classList.toggle('hidden', availableTags.length === 0);
-
-  // Explain why a tag on the image is not a normal (defined) badge: either
-  // there is no tags.yaml at all, or the tag is new and is written to tags.yaml
-  // on the next save.
-  const warn = el('tagWarn');
-  const fresh = imageTags.filter((t) => !availableTags.includes(t));
-  let warnMsg = '';
-  if (!availableTags.length) {
-    warnMsg = 'No tags.yaml found beside data.yaml — add tags with +';
-  } else if (fresh.length) {
-    warnMsg = readonly
-      ? `${fresh.length} tag(s) not in tags.yaml`
-      : `${fresh.length} tag(s) not in tags.yaml — added on save`;
-  }
-  warn.textContent = warnMsg;
-  warn.classList.toggle('hidden', !warnMsg);
-
-  const dl = el('tagSuggestions');
-  dl.innerHTML = '';
-  availableTags.forEach((t) => dl.appendChild(option(t)));
-
-  // measure after the badges are laid out
-  requestAnimationFrame(applyTagOverflow);
-  updateDockPanels();
-}
-
-/**
- * Add a tag to the current image and mark it dirty.
- * @param {string} name - Tag to add.
- * @returns {void}
- */
-function addTag(name) {
-  if (readonly || currentIndex < 0) return;
-  if (imageTags.includes(name)) return;
-  pushUndo();
-  imageTags = [...imageTags, name];
-  markDirty();
-  renderTagBar();
-  emitUiEvent('tags_changed', { tags: imageTags.slice() });
-  setTagStatus(`Tag "${name}" added`);
-}
-
-/**
- * Remove a tag from the current image and mark it dirty.
- * @param {string} name - Tag to remove.
- * @returns {void}
- */
-function removeTag(name) {
-  if (readonly || currentIndex < 0) return;
-  pushUndo();
-  imageTags = imageTags.filter((t) => t !== name);
-  markDirty();
-  renderTagBar();
-  emitUiEvent('tags_changed', { tags: imageTags.slice() });
-  setTagStatus(`Tag "${name}" removed`);
-}
-
-/**
- * Show and focus the new-tag input.
- * @returns {void}
- */
-function openTagInput() {
-  if (readonly) return;
-  showEl('tagInput');
-  showEl('tagSubmitBtn');
-  el('tagInput').focus();
-}
-
-/**
- * Hide the new-tag input and its submit button.
- * @returns {void}
- */
-function closeTagInput() {
-  hideEl('tagInput');
-  hideEl('tagSubmitBtn');
-}
-
-/**
- * Add a tag typed into the input, after a basic duplicate/empty check.
- * @returns {void}
- */
-function addTagFromInput() {
-  if (readonly || currentIndex < 0) return;
-  const input = el('tagInput');
-  const name = input.value.trim();
-  if (!name) return;
-  input.value = '';
-  if (imageTags.includes(name)) {
-    setTagStatus(`Tag "${name}" is already on this image`);
-    return;
-  }
-  addTag(name);
-}
-
-/**
- * Toggle the available tag at the given 1-based number.
- * @param {number} n - 1-based tag position.
- * @returns {void}
- */
-function toggleTagByNumber(n) {
-  if (readonly || currentIndex < 0) return;
-  const i = n - 1;
-  if (i < 0 || i >= availableTags.length) return;
-  if (!getWidgetVisible('tags')) setWidgetVisible('tags', true);
-  const name = availableTags[i];
-  if (imageTags.includes(name)) removeTag(name);
-  else addTag(name);
 }

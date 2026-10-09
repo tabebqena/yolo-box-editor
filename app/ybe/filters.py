@@ -19,7 +19,6 @@ from ybe.extensions import (
     resolve_filter_options,
 )
 from ybe.pipes import _subprocess_env, build_command
-from ybe.tags import read_tags_yaml
 
 
 def _entry_path(entry):
@@ -83,7 +82,6 @@ def _read_filter_output(path, known):
 
 def _filter_placeholder_values(flt, data_yaml, split, input_pipe, output_pipe, arguments):
     """Substitution values for a filter's steps (shared paths + pipes + args)."""
-    split_entry = _split_by_name(split) if split else None
     values = {
         "DATASET_PATH": state.STATE["dataset_path"] or "",
         "DATA_YAML_PATH": data_yaml or "",
@@ -95,9 +93,6 @@ def _filter_placeholder_values(flt, data_yaml, split, input_pipe, output_pipe, a
         "SPLIT": split or "",
         "INPUT_PIPE": input_pipe,
         "OUTPUT_PIPE": output_pipe,
-        # The active split's tags folder (empty on All splits, so a helper falls
-        # back to deriving it from the image path).
-        "TAGS_DIR": (split_entry or {}).get("tags_dir") or "",
     }
     effective = effective_filter_arguments(flt, arguments)
     for arg in flt["arguments"]:
@@ -170,7 +165,7 @@ def _normalize_filter_chain(items):
             value = effective.get(arg["name"], "")
             if arg["required"] and not value.strip():
                 return None, f'Filter "{name}": argument "{arg["name"]}" is required'
-            options = resolve_filter_options(arg.get("options"), read_classes(), read_tags_yaml())
+            options = resolve_filter_options(arg.get("options"), read_classes())
             if options and value and value not in options:
                 return None, (
                     f'Filter "{name}": argument "{arg["name"]}" must be one of: '

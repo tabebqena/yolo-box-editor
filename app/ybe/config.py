@@ -155,14 +155,12 @@ APP_ACTIONS = {
     "app_reload_images_list",
     "app_refresh_image",
     "app_refresh_image_labels",
-    "app_refresh_image_tags",
     "app_refresh_image_all",
     "app_help",
     # Client-only actions meant to be called from an action/hook `steps` or
     # `after_success` (not bound to keys by default).
     "app_select_next_box",
     "app_select_prev_box",
-    "app_clear_tags",
     "app_copy_labels_from_prev",
 }
 
@@ -180,9 +178,7 @@ TIPS = [
     "Draw a box by dragging on the image; press Esc to drop a box you just drew by mistake.",
     "Select a box, then Tab cycles through its class and cx/cy/w/h fields; Esc leaves the row.",
     "Shift selects the next box, resuming from the last one you had active.",
-    "Alt+1 … Alt+9 toggles the matching tag from tags.yaml — no mouse needed.",
-    "Right-click a tag badge? No — just click any badge to toggle it on or off.",
-    "Settings → Layout lets every widget (Tags, Boxes, Actions, Navigation, Save) float or dock to any panel.",
+    "Settings → Layout lets every widget and panel float or dock to any edge.",
     "Drag a floating window by its title bar; the L/T/R/B buttons dock it to an edge.",
     "Resize the side, dock and bottom panels by dragging their divider — the size is remembered.",
     "Filters (Settings → Filters) narrow the image list; stack up to eight of them top to bottom.",
@@ -191,7 +187,6 @@ TIPS = [
     "Read-only mode (--readonly) is a safe way to browse a dataset without changing labels.",
     "Save (S) writes only when there are changes; Undo (Z) and Redo (Y) cover every edit.",
     "After an external tool edits the current image, use app_refresh_image to reload it in place.",
-    "New tag names are added to tags.yaml when you save the image.",
     "Paste the path to your data.yaml in Settings → Dataset, or use the Recent… dropdown.",
     "Click a box on the image to select it; its row in the Boxes list becomes editable.",
     "Type a number in the counter and press Enter to jump straight to that image.",
@@ -212,6 +207,12 @@ MAX_CASCADE_DEPTH = 8  # max actions run by one execution (root + after_success)
 # In a steps/after_success entry, another action is named `action_<Name>` so a
 # bare action name can never be confused with a shell command.
 ACTION_REF_PREFIX = "action_"
+# An extension-defined app action is named `<extension_id>.<name>` in steps and
+# events (e.g. `tags.clear_tags`). The prefix keeps it distinct from core `app_*`.
+EXTENSION_ACTION_PREFIX = "ext."
+# Cap on how many times a lifecycle event may recursively trigger another
+# app action before the host refuses (see js/plugin_api.js).
+MAX_EVENT_DEPTH = 8
 
 # Event hooks live in the hooks/ folder and fire on app events (never from a
 # toolbar button or a shortcut). A hook file is named `on_<event>.yaml`; when the
@@ -235,14 +236,16 @@ HOOK_EVENTS = (
 # widget/package file format changes: the UI compares a file's `api_version:`
 # against this to flag files that predate (or postdate) the format it understands.
 # v2 added custom widgets; v3 added extension packages; v4 added sandboxed UI
-# panels (`ui:` in an extension manifest).
-EXTENSION_API_VERSION = 4
+# panels (`ui:` in an extension manifest); v5 added backend plugins
+# (`backend:`) and extension-defined app actions (`app_actions:`).
+EXTENSION_API_VERSION = 5
 
 # The UI-panel plugin API version. Separate from EXTENSION_API_VERSION because a
 # panel's JavaScript talks to the app through `YBE`, whose shape evolves on its
 # own schedule. A package declares it as `ui.api_version:`; the UI compares it
-# against this to block panels written for a newer API.
-PLUGIN_API_VERSION = 1
+# against this to block panels written for a newer API. v2 added `YBE.call`
+# (package backend capabilities) and the `before_/after_app_action` event bus.
+PLUGIN_API_VERSION = 2
 
 # Placeholder catalogs offered by the UI's click-to-insert palette. Keep them in
 # sync with the values built in `api_action_run` and `_filter_placeholder_values`
@@ -250,7 +253,6 @@ PLUGIN_API_VERSION = 1
 ACTION_PLACEHOLDERS = (
     ("IMAGE_PATH", "path of the current image"),
     ("LABEL_PATH", "path of the current image's label file (may not exist yet)"),
-    ("TAGS_DIR", "tags folder for the current image's split (honours a custom tags dir)"),
     ("DATASET_PATH", "root path of the loaded dataset"),
     ("DATA_YAML_PATH", "path of the loaded data.yaml"),
     ("IMAGE_INDEX", "1-based position of the current image in the list"),
@@ -267,7 +269,6 @@ FILTER_PLACEHOLDERS = (
     ("SPLIT", "active split (train/val/test) or empty on All splits"),
     ("INPUT_PIPE", "file with the candidate image paths (one per line)"),
     ("OUTPUT_PIPE", "file to write the kept image paths to"),
-    ("TAGS_DIR", "tags folder for the active split (empty on All splits)"),
     ("APP_DIR", "the shipped code folder (app/)"),
     ("HOME_DIR", "your user folder (the working directory of every run)"),
     ("APP_SCRIPT_DIR", "the shipped helper scripts (app/scripts/)"),

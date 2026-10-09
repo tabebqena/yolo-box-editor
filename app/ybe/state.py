@@ -22,7 +22,6 @@ STATE = {
     "filter_images": None,  # cached filter-chain result (list of {split, name})
     "filter_error": None,   # last filter failure/notice message (shown in the UI)
     "classes": [],  # resolved class names from data.yaml `names`
-    "tags_dir": None,  # per-dataset override for the tags folder (None = derive)
     "readonly": False,
     "debug": False,  # --debug: the UI logs verbose messages to the browser console
     "keep_pipe": False,  # --keep-pipe: do not delete the {PIPE_PATH} file after a run

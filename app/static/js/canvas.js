@@ -79,7 +79,6 @@ function blankImage() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   boxes = [];
   clearBoxSelection();
-  imageTags = [];
   draw();
 }
 
@@ -759,7 +758,6 @@ function applyReadonly() {
   if (classSel) classSel.disabled = readonly;
   setActionButtonsDisabled(readonly);
   updateHistoryButtons();
-  renderTagBar();
   draw();
   emitReadonlyChange();
 }

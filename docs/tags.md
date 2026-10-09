@@ -1,8 +1,13 @@
 # Tags
 
+> Tags ships as an **extension package**. Enable **Tags** under
+> **Settings → Extensions** to show the tag panel (its location is set under
+> **Settings → Layout**). Everything below still describes the tag files and the
+> behaviour, which are unchanged.
+
 YOLO has no canonical tagging scheme, so this app defines a minimal one. The tag
-controls show in the bottom bar by default; show/hide them with the **Tags**
-widget in **Settings → Layout**.
+controls show as a panel; enable the package and show/hide it under
+**Settings → Layout**.
 
 ![Tag bar: active tags filled, inactive outlined](tags.svg)
 

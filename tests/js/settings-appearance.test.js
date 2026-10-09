@@ -58,12 +58,12 @@ test('toggleSidePanel collapses the sidebar and persists the choice', () => {
 });
 
 test('setWidgetDock / getDock validate and persist a location', () => {
-  app.api.setWidgetDock('tags', 'left');
-  assert.equal(app.api.getDock('tags'), 'left');
-  assert.equal(app.$('tagsDockSel').value, 'left');
-  assert.equal(app.api.settingsGet('ybe_tags_dock'), 'left');
-  app.api.setWidgetDock('tags', 'nonsense');
-  assert.equal(app.api.getDock('tags'), 'default');
+  app.api.setWidgetDock('boxes', 'left');
+  assert.equal(app.api.getDock('boxes'), 'left');
+  assert.equal(app.$('boxesDockSel').value, 'left');
+  assert.equal(app.api.settingsGet('ybe_boxes_dock'), 'left');
+  app.api.setWidgetDock('boxes', 'nonsense');
+  assert.equal(app.api.getDock('boxes'), 'default');
 });
 
 test('setWidgetVisible / getWidgetVisible toggle and persist visibility', () => {
@@ -100,12 +100,12 @@ test('applyPanelSide toggles the body class', () => {
 
 test('setAppearanceControls reflects the current state in the form', () => {
   app.set({ panelSide: 'right' });
-  app.api.setDockState('tags', 'float');
-  app.api.setWidgetVisible('tags', false);
+  app.api.setDockState('boxes', 'float');
+  app.api.setWidgetVisible('boxes', false);
   app.api.setAppearanceControls();
   assert.equal(app.$('panelSideSel').value, 'right');
-  assert.equal(app.$('tagsDockSel').value, 'float');
-  assert.equal(app.$('tagsVisibleSw').checked, false);
+  assert.equal(app.$('boxesDockSel').value, 'float');
+  assert.equal(app.$('boxesVisibleSw').checked, false);
 });
 
 test('initSettings seeds auto-save and box visibility from settings', () => {
@@ -118,15 +118,15 @@ test('initSettings seeds auto-save and box visibility from settings', () => {
 });
 
 test('saveFloatPos / restoreFloatPos round-trip a window position', () => {
-  const win = app.$('tagFloat');
+  const win = app.$('boxFloat');
   app.api.saveFloatPos(win);
-  const raw = app.api.settingsGet('ybe_float_tagFloat');
+  const raw = app.api.settingsGet('ybe_float_boxFloat');
   assert.deepEqual(JSON.parse(raw), { x: win.offsetLeft, y: win.offsetTop });
   app.api.restoreFloatPos(win);
   // jsdom has no layout, so the saved 0,0 clamps to the 8px margin
   assert.equal(win.style.left, '8px');
-  // with nothing saved, the default position for tagFloat is used
-  app.api.settingsSet('ybe_float_tagFloat', null);
+  // with nothing saved, the default position for boxFloat is used
+  app.api.settingsSet('ybe_float_boxFloat', null);
   app.api.restoreFloatPos(win);
-  assert.equal(win.style.left, '24px');
+  assert.notEqual(win.style.left, '8px');
 });

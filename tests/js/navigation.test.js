@@ -42,15 +42,14 @@ test('updateNav fills the counter and enables/disables the nav buttons', () => {
   assert.equal(app.$('nextBtn').disabled, true);
 });
 
-test('loadImage fetches annotations and tags for the image', async () => {
+test('loadImage fetches annotations for the image', async () => {
   setImages(IMAGES, -1);
-  annotations({ boxes: [{ class: 0, cx: 0.5, cy: 0.5, w: 0.2, h: 0.2 }], tags: ['fire'] });
+  annotations({ boxes: [{ class: 0, cx: 0.5, cy: 0.5, w: 0.2, h: 0.2 }] });
   app.api.loadImage(1);
   assert.equal(app.state().currentIndex, 1);
   await app.flush();
   assert.equal(app.state().boxes.length, 1);
   assert.equal(app.state().boxes[0].class, 0);
-  assert.deepEqual(plain(app.state().imageTags), ['fire']);
   assert.match(app.imageEl().src, /\/api\/image\?key=train%2Fb\.jpg/);
 });
 
@@ -72,8 +71,8 @@ test('a stale loadImage response does not overwrite a newer one', async () => {
   app.api.loadImage(1);
   assert.equal(app.state().currentIndex, 1);
   // resolve the first request afterwards: it must be ignored
-  resolvers[0]({ body: { ok: true, boxes: [{ class: 0, cx: 0.1, cy: 0.1, w: 0.1, h: 0.1 }], tags: [] } });
-  resolvers[1]({ body: { ok: true, boxes: [], tags: [] } });
+  resolvers[0]({ body: { ok: true, boxes: [{ class: 0, cx: 0.1, cy: 0.1, w: 0.1, h: 0.1 }] } });
+  resolvers[1]({ body: { ok: true, boxes: [] } });
   await app.flush();
   assert.equal(app.state().boxes.length, 0);
 });

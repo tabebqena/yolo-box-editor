@@ -5,11 +5,11 @@
 // actions
 // ------------------------------------------------------------------------- //
 /**
- * Capture the current boxes and tags for the undo/redo history.
- * @returns {{boxes: Array<object>, tags: string[]}} A copy of the current state.
+ * Capture the current boxes for the undo/redo history.
+ * @returns {{boxes: Array<object>}} A copy of the current state.
  */
 function snapshot() {
-  return { boxes: boxes.map((b) => ({ ...b })), tags: [...imageTags] };
+  return { boxes: boxes.map((b) => ({ ...b })) };
 }
 
 /**
@@ -37,19 +37,17 @@ function pushUndo() {
 /**
  * Apply a history snapshot to the current image. Shared by undo/redo; the
  * caller has already moved the snapshot between the two stacks.
- * @param {{boxes: Array<object>, tags: string[]}} snap - The snapshot to restore.
+ * @param {{boxes: Array<object>}} snap - The snapshot to restore.
  * @param {string} label - Debug label for the source of the change.
  */
 function applySnapshot(snap, label) {
   boxes = snap.boxes;
-  imageTags = snap.tags;
   clearBoxSelection();
   justDrawn = false;
   markDirty();
   syncClassSelect(-1);
   updateHistoryButtons();
-  renderTagBar();
-  dbg(label, { boxes: boxes.length, tags: imageTags.length,
+  dbg(label, { boxes: boxes.length,
     undo: undoStack.length, redo: redoStack.length });
   draw();
 }
@@ -155,14 +153,12 @@ async function save(opts = {}) {
   try {
     const { res, data } = await apiPost(
       '/api/annotations' + keyQuery(images[currentIndex]),
-      { boxes, tags: imageTags });
+      { boxes });
     if (res.ok && data.ok) {
       dirty = false;
       ok = true;
-      if (Array.isArray(data.available_tags)) availableTags = data.available_tags;
-      dbg('save ok', { index: currentIndex, count: data.count, tags: data.tags_count });
+      dbg('save ok', { index: currentIndex, count: data.count });
       if (!opts.silent) toast(`Saved ${data.count} box(es)`, { type: 'success' });
-      renderTagBar();
       updateHistoryButtons();
       emitUiEvent('saved', { count: data.count });
       runHook('on_after_save');
@@ -278,28 +274,6 @@ async function setSplit(split) {
     populateSplitSelect();
   } finally {
     setSplitBusy(false);
-  }
-}
-
-/**
- * Set the per-dataset tags folder (empty restores the images -> tags default).
- */
-async function setTagsDir() {
-  const anchor = captureImageAnchor(false);
-  try {
-    const { res, data } = await apiPost('/api/tags-dir',
-      { tags_dir: el('tagsDirInput').value.trim() });
-    if (res.ok && data.ok) {
-      dbg('tags dir changed', { tags_dir: data.tags_dir });
-      toast('Tags folder updated', { type: 'success' });
-      await loadConfig(0, { noResume: true, anchor });
-    } else {
-      dbgWarn('tags dir update failed', { status: res.status, error: data.error });
-      toast(data.error || 'Tags folder update failed', { type: 'error' });
-    }
-  } catch (err) {
-    dbgWarn('tags dir update error', err);
-    toast('Error: ' + err.message, { type: 'error' });
   }
 }
 

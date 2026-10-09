@@ -1,0 +1,9 @@
+# Keep only the images that do NOT have the chosen tag.
+api_version: 5
+name: Does not have tag
+description: Keep only images that do not have the chosen tag.
+arguments:
+  - name: tag_name
+    required: true
+steps:
+  - {PYTHON} {APP_DIR}/extensions/tags/scripts/tag_filter.py {INPUT_PIPE} {OUTPUT_PIPE} --tag {TAG_NAME} --split {SPLIT} --data-yaml {DATA_YAML_PATH} --invert

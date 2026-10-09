@@ -2,6 +2,10 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.0.0
+- Tags is now an **extension package** (Settings > Extensions), shipped disabled: enable it to label whole images. The rest of the app is unchanged, so your `tags.yaml` and tag files keep working. The old `app_refresh_image_tags` / `app_clear_tags` actions are gone; use `ext.tags.refresh_image_tags` / `ext.tags.clear_tags` instead.
+- Extensions can now ship a **backend** (Flask routes + capabilities) and declare their own **app actions** (`app_actions:` in `extension.yaml`, used as `ext.<package>.<name>` in steps/shortcuts). Every app action now emits `before_app_action` / `after_app_action` to all panels so extensions can cooperate, with a depth cap that stops runaway loops.
+
 ## 9.0.0
 - Extension packages can now add their own **UI panel** — custom HTML/CSS/JS shown docked or floating like a widget. A panel runs sandboxed in its own opaque-origin iframe with no network and cannot touch the app's page; it talks to the app only through the async `YBE` object (read editor state, edit tags/boxes, run actions, subscribe to events). Declare it with a `ui:` block in `extension.yaml`. This is code, not data: only install panels you trust.
 

@@ -302,9 +302,10 @@ when you change image.
 
 ### Tags
 
-Tags label a whole image (`tags.yaml` beside `data.yaml` lists them). Click a
-badge to toggle it, `+` adds a new name (written to `tags.yaml` on save), and
-`Alt+1`…`Alt+9` toggles by number. See [tags](docs/tags.md).
+Tags label a whole image and ship as an extension package (enable **Tags**
+under **Settings → Extensions**). `tags.yaml` beside `data.yaml` lists them; click
+a badge to toggle it, `+` adds a new name, and `Alt+1`…`Alt+9` toggles by number.
+See [tags](docs/tags.md).
 
 ### Filters
 
@@ -346,7 +347,7 @@ after_success:
 
 Each `steps` / `after_success` entry is an `app_*` built-in, a `backend_*`
 built-in, an `action_<Name>` reference, or a shell command. Placeholders include
-`{IMAGE_PATH}`, `{LABEL_PATH}`, `{TAGS_DIR}`, `{DATASET_PATH}`,
+`{IMAGE_PATH}`, `{LABEL_PATH}`, `{DATASET_PATH}`,
 `{DATA_YAML_PATH}`, `{IMAGE_INDEX}`, `{APP_DIR}`, `{HOME_DIR}`,
 `{APP_SCRIPT_DIR}`, `{USER_SCRIPT_DIR}`, `{PYTHON}` and `{PIPE_PATH}`. Start
 Python steps with `{PYTHON}`, and name helper scripts explicitly. See

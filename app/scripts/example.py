@@ -42,7 +42,7 @@ would do; this shows the Python form):
     from pathlib import Path
 
     image_path, tag = sys.argv[1], sys.argv[2]
-    tags_dir = sys.argv[3] if len(sys.argv) > 3 else ""   # pass {TAGS_DIR}
+    tags_dir = sys.argv[3] if len(sys.argv) > 3 else ""   # or left blank to derive it
     if tags_dir:
         tag_file = Path(tags_dir) / (Path(image_path).stem + ".txt")
     else:

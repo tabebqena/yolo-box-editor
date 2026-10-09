@@ -13,6 +13,7 @@ from ybe import config, state
 from ybe.dataset import scan_images
 from ybe.extensions import load_actions
 from ybe.filters import _clear_filter, apply_filters
+from ybe.packages import extension_app_action_ids
 from ybe.pipes import _subprocess_env, build_command, remove_pipe
 from ybe.userconfig import _disabled_extensions
 
@@ -66,6 +67,10 @@ def _resolve_entry(entry, actions_by_name):
     """
     if entry in config.APP_ACTIONS:
         return ("app", entry)
+    if entry.startswith(config.EXTENSION_ACTION_PREFIX):
+        if entry in extension_app_action_ids():
+            return ("app", entry)
+        return ("bad", f"unknown extension app action: {entry}")
     if entry.startswith("app_"):
         return ("bad", f"unknown app action: {entry}")
     if entry in config.BACKEND_ACTION_NAMES:

@@ -4,6 +4,42 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.0.0] - 2026-10-09
+
+### Changed
+
+- **Tags is now an extension package.** The whole tags feature moved out of the
+  core into `app/extensions/tags/` (a backend plugin, a sandboxed UI panel, the
+  `has_tag`/`not_has_tag` filters and the tag helper scripts). It ships
+  `active: false`, so enable it under **Settings → Extensions** to label images.
+  Existing datasets need no change; `tags.yaml` and the per-image tag files are
+  read exactly as before.
+- The `app_refresh_image_tags` and `app_clear_tags` built-in actions are gone;
+  the tags package provides `ext.tags.refresh_image_tags` and
+  `ext.tags.clear_tags` instead. `app_refresh_image_all` and
+  `app_copy_labels_from_prev` stay (boxes/labels only); extensions observe them
+  through the new `after_app_action` event.
+- The extension format version is now `5` (added `backend:` and `app_actions:`);
+  the UI-panel plugin API is now `2` (added `YBE.call` and the lifecycle bus).
+
+### Added
+
+- **Backend plugins for extension packages.** A package may ship a `backend:`
+  module whose `register(ctx)` adds Flask routes and returns a `{method:
+  callable}` capability table, reachable from the panel as
+  `YBE.call('<method>', args)` and headlessly via `POST /api/extensions/call`.
+  Only shipped packages are loaded, keeping user packages unable to run
+  in-process code by default.
+- **Extension-defined app actions.** A manifest `app_actions:` list declares
+  actions named `ext.<package>.<name>`; they can be used in action/hook `steps`,
+  bound to shortcuts, and reach the package's panel (or, when unmounted, its
+  declared backend capability) with the current image key.
+- **App-action lifecycle bus.** Every app action broadcasts
+  `before_app_action` / `after_app_action` to all panels, so extensions can
+  cooperate. The injected `YBE` stub tags actions triggered from an event with
+  the chain depth and the host refuses the action past `MAX_EVENT_DEPTH`,
+  bounding recursion.
+
 ## [9.0.0] - 2026-10-09
 
 ### Added

@@ -4,7 +4,7 @@
 # token the app expands into the loaded dataset's class names, so the UI shows a
 # dropdown and only valid classes can be picked. Without a dataset the options
 # fall back to the dataset's `class_0` default.
-api_version: 4
+api_version: 5
 name: Contains class
 description: Keep only images whose label contains the chosen class.
 arguments:

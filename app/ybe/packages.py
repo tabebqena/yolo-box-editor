@@ -81,6 +81,7 @@ def _parse_manifest(text):
         "id": None, "name": None, "description": None, "version": None,
         "author": None, "active": True, "api_version": None,
         "settings": None, "events": [], "ui": None,
+        "backend": None, "app_actions": [],
     }
     lines = text.splitlines(keepends=True)
     for raw in lines:
@@ -93,12 +94,16 @@ def _parse_manifest(text):
         key, value = key.strip(), _strip_comment(value)
         if key == "api_version":
             data["api_version"] = _parse_api_version(value)
-        elif key in ("id", "name", "description", "version", "author"):
+        elif key in ("id", "name", "description", "version", "author", "backend"):
             if value:
                 data[key] = _yaml_scalar(value)
         elif key == "active":
             if value:
                 data["active"] = value.lower() not in ("false", "no", "0")
+
+    actions_block = _indented_block(text, "app_actions")
+    if actions_block:
+        data["app_actions"] = _parse_app_actions(actions_block)
 
     # `settings:` is a widget-shaped block (title + controls); reuse the widget
     # parser/validator so both share one control format.
@@ -128,6 +133,43 @@ def _parse_manifest(text):
         if ui is not None:
             data["ui"] = ui
     return data
+
+
+def _parse_app_actions(block):
+    """Parse an `app_actions:` block into a list of action dicts.
+
+    Format (dedented by `_indented_block`):
+        - name: refresh_image_tags
+          label: Refresh image tags
+          shortcut: Alt+R          # optional default binding
+          capability: tags.load    # optional backend fallback
+    """
+    entries = []
+    current = None
+    for raw in block.splitlines():
+        s = raw.strip()
+        if not s or s.startswith("#"):
+            continue
+        if s.startswith("- "):
+            current = {"name": None, "label": None, "shortcut": None, "capability": None}
+            entries.append(current)
+            s = s[2:].strip()
+            if not s:
+                continue
+        if current is None or ":" not in s:
+            continue
+        key, _, value = s.partition(":")
+        key, value = key.strip(), _yaml_scalar(_strip_comment(value))
+        if key in current and value:
+            current[key] = value
+    out = []
+    for entry in entries:
+        if not entry["name"]:
+            continue
+        if not entry["label"]:
+            entry["label"] = entry["name"]
+        out.append(entry)
+    return out
 
 
 def _parse_ui(block):
@@ -177,17 +219,16 @@ def plugin_api_status(version):
     return "current"
 
 
-def package_script_path(pkg):
-    """Absolute path of a package's `ui.script`, or None when missing/unsafe.
+def package_relative_path(pkg, rel):
+    """Resolve `rel` inside a package folder, or None when missing/unsafe.
 
     Resolves the real path and requires it to stay inside the package folder, so
     a `..` or absolute path can never escape it.
     """
-    script = (pkg.get("ui") or {}).get("script")
-    if not script:
+    if not rel:
         return None
     base = os.path.realpath(pkg["path"])
-    target = os.path.realpath(os.path.join(base, script))
+    target = os.path.realpath(os.path.join(base, rel))
     try:
         if os.path.commonpath([base, target]) != base:
             return None
@@ -196,6 +237,45 @@ def package_script_path(pkg):
     if not os.path.isfile(target):
         return None
     return target
+
+
+def package_script_path(pkg):
+    """Absolute path of a package's `ui.script`, or None when missing/unsafe."""
+    return package_relative_path(pkg, (pkg.get("ui") or {}).get("script"))
+
+
+def package_backend_path(pkg):
+    """Absolute path of a package's `backend:` module, or None when missing/unsafe."""
+    return package_relative_path(pkg, pkg.get("backend"))
+
+
+def extension_app_action_defs(only_active=True):
+    """Every declared extension app action as a list of dicts.
+
+    Each dict: `{id, extension, name, label, shortcut, capability, source}` where
+    `id` is the fully-qualified `<extension_id>.<name>` used in steps and events.
+    """
+    out = []
+    for pkg in load_packages()[0]:
+        if only_active and not pkg["active"]:
+            continue
+        for entry in pkg["app_actions"]:
+            name = entry["name"]
+            out.append({
+                "id": config.EXTENSION_ACTION_PREFIX + pkg["id"] + "." + name,
+                "extension": pkg["id"],
+                "name": name,
+                "label": entry["label"],
+                "shortcut": entry["shortcut"],
+                "capability": entry["capability"],
+                "source": pkg["source"],
+            })
+    return out
+
+
+def extension_app_action_ids():
+    """The set of valid extension app-action ids (`<ext>.<name>`)."""
+    return {d["id"] for d in extension_app_action_defs()}
 
 
 def _discover_parts(path):
@@ -246,6 +326,8 @@ def load_packages():
                 "settings": data["settings"],
                 "events": data["events"],
                 "ui": data["ui"],
+                "backend": data["backend"],
+                "app_actions": data["app_actions"],
                 "parts": _discover_parts(path),
                 "source": source,
                 "path": path,

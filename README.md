@@ -142,9 +142,10 @@ Every action can be rebound in **Settings → Shortcuts → Edit** (or by hand i
 
 ## Tags at a glance
 
-`tags.yaml` (beside `data.yaml`) lists the available tags; each image's tags are
-stored in a `tags/` folder beside `images/` and `labels/`. Active tags are green,
-inactive ones are outlined, and clicking toggles.
+Tags ships as the **Tags extension package** — enable it under **Settings →
+Extensions**. `tags.yaml` (beside `data.yaml`) lists the available tags; each
+image's tags are stored in a `tags/` folder beside `images/` and `labels/`.
+Active tags are green, inactive ones are outlined, and clicking toggles.
 
 ![Tag bar](docs/tags.svg)
 

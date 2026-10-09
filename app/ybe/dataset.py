@@ -35,18 +35,6 @@ def _labels_dir_for(images_dir):
     return _replace_images_segment(images_dir, "labels")
 
 
-def _tags_dir_for(images_dir, split_name=None):
-    """The tags dir: the per-dataset override, else `images` -> `tags`.
-
-    An override is a base folder; each split keeps its own subfolder
-    (`<override>/<split>`), matching the default `tags/<split>` layout.
-    """
-    override = state.STATE.get("tags_dir")
-    if override:
-        return os.path.join(override, split_name) if split_name else override
-    return _replace_images_segment(images_dir, "tags")
-
-
 def scan_splits():
     """Parse data.yaml and build the list of {name, images_dir, labels_dir} splits."""
     splits = []
@@ -80,7 +68,6 @@ def scan_splits():
                 "name": key,
                 "images_dir": images_dir,
                 "labels_dir": _labels_dir_for(images_dir),
-                "tags_dir": _tags_dir_for(images_dir, key),
             }
         )
     return splits
@@ -119,15 +106,6 @@ def label_path(entry):
         return None
     stem = os.path.splitext(entry["name"])[0]
     return os.path.join(split["labels_dir"], stem + ".txt")
-
-
-def tag_path(entry):
-    """Per-image tag file: same stem as the image, stored under the split's tags dir."""
-    split = _split_by_name(entry["split"])
-    if split is None:
-        return None
-    stem = os.path.splitext(entry["name"])[0]
-    return os.path.join(split["tags_dir"], stem + ".txt")
 
 
 def _parse_label_file(path):

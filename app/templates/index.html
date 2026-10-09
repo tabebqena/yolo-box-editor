@@ -88,20 +88,6 @@
       <div id="dockBottomBody" class="dock-body"></div>
       <div id="dockBottomResizer" class="dock-resizer" title="Drag to resize the panel"></div>
       <div class="imagebar">
-        <div id="tagBar" class="tagbar hidden">
-          <span class="tagbar-title">Tags</span>
-          <span id="tagHint" class="tagbar-hint hidden">Alt+1..9 toggles</span>
-          <span id="tagWarn" class="tagbar-warn hidden"></span>
-          <div id="tagBadges" class="tag-badges"></div>
-          <button id="tagExpandBtn" class="tag-expand hidden" title="Show all tags">&#8230;</button>
-          <div class="tagbar-add">
-            <input id="tagInput" class="tag-input hidden" type="text" placeholder="add a tag…"
-                   list="tagSuggestions" maxlength="64">
-            <datalist id="tagSuggestions"></datalist>
-            <button id="tagSubmitBtn" type="button" class="tag-add-btn hidden" title="Add the tag (Enter)">&#10003;</button>
-            <button id="addTagBtn" type="button" class="tag-add-btn" title="Add a tag">+</button>
-          </div>
-        </div>
         <div class="imagebar-nav">
           <button id="prevBtn" title="Previous (←)">&#9664; Prev</button>
           <input id="counter" class="counter" type="text" inputmode="numeric"
@@ -115,20 +101,6 @@
         </div>
       </div>
     </section>
-  </div>
-
-  <div id="tagFloat" class="float-window hidden">
-    <div class="float-head">
-      <span class="float-title">Tags</span>
-      <div class="float-actions">
-        <button type="button" class="float-dock" data-dock="float" title="Float freely">&#10697;</button>
-        <button type="button" class="float-dock" data-dock="left" title="Dock to the left panel">&#8676;</button>
-        <button type="button" class="float-dock" data-dock="right" title="Dock to the right panel">&#8677;</button>
-        <button type="button" class="float-dock" data-dock="bottom" title="Dock to the bottom panel">&#8681;</button>
-        <button type="button" class="float-close" data-float-close="tags" title="Back to the default position">&#10005;</button>
-      </div>
-    </div>
-    <div id="tagFloatBody" class="float-body"></div>
   </div>
 
   <div id="boxFloat" class="float-window hidden">
@@ -234,25 +206,6 @@
 
           <div class="widget-setting">
             <div class="widget-setting-head">
-              <span class="settings-group-title">Tags</span>
-              <label class="widget-toggle" for="tagsVisibleSw" title="Show or hide the tag bar">
-                <input type="checkbox" id="tagsVisibleSw"><span>Show</span>
-              </label>
-            </div>
-            <label class="settings-row" for="tagsDockSel" title="Where the tag bar lives">
-              <span class="widget-field-label">Location</span>
-              <select id="tagsDockSel">
-                <option value="default">Default (bottom bar)</option>
-                <option value="float">Floating window</option>
-                <option value="left">Left panel</option>
-                <option value="right">Right panel</option>
-                <option value="bottom">Bottom panel</option>
-              </select>
-            </label>
-          </div>
-
-          <div class="widget-setting">
-            <div class="widget-setting-head">
               <span class="settings-group-title">Boxes</span>
               <label class="widget-toggle" for="boxesVisibleSw" title="Show or hide the box list">
                 <input type="checkbox" id="boxesVisibleSw"><span>Show</span>
@@ -339,14 +292,8 @@
             <input id="dataYaml" type="text" placeholder="/path/to/data.yaml">
             <button id="setDataBtn" class="primary">Load</button>
           </div>
-          <label class="settings-group-title" for="tagsDirInput">Tags folder</label>
-          <div class="dataset-row">
-            <input id="tagsDirInput" type="text"
-                   placeholder="default: tags/ beside images &amp; labels">
-            <button id="tagsDirBtn">Save</button>
-          </div>
-          <p class="hint">Per-dataset. Each split uses a subfolder
-            here; leave empty to derive <code>tags/</code> from the images path.</p>
+          <p class="hint">Tags are provided by the <strong>Tags</strong> extension
+            (Settings → Extensions). Enable it to label whole images.</p>
         </section>
 
         <section class="settings-panel" data-panel="filters">

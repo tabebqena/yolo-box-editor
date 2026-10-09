@@ -20,16 +20,14 @@ function ready(overrides = {}) {
     classes: ['cat', 'dog'],
     datasetLoaded: true,
     boxes: [box()],
-    imageTags: [],
     ...overrides,
   });
 }
 
-test('snapshot deep-copies boxes and tags', () => {
-  ready({ imageTags: ['fire'] });
+test('snapshot deep-copies boxes', () => {
+  ready();
   const snap = app.api.snapshot();
   assert.deepEqual(plain(snap.boxes), [box()]);
-  assert.deepEqual(plain(snap.tags), ['fire']);
   snap.boxes[0].cx = 0.9;
   assert.equal(app.state().boxes[0].cx, 0.5);
 });
@@ -219,26 +217,25 @@ test('markDirty schedules an auto-save only when auto-save is on', () => {
 test('flushAutoSave writes pending edits and clears the timer', async () => {
   ready({ autoSave: true, dirty: true });
   app.fetchMock.on('/api/annotations?key=train%2Fa.jpg', () => ({
-    body: { ok: true, count: 1, tags_count: 0, available_tags: ['fire'] },
+    body: { ok: true, count: 1 },
   }));
   const ok = await app.api.flushAutoSave();
   assert.equal(ok, true);
   assert.equal(app.state().dirty, false);
   assert.equal(app.state().autoSaveTimer, null);
-  assert.deepEqual(plain(app.state().availableTags), ['fire']);
 });
 
-test('save posts the boxes and tags and clears dirty', async () => {
-  ready({ boxes: [box()], imageTags: ['fire'] });
+test('save posts the boxes and clears dirty', async () => {
+  ready({ boxes: [box()] });
   let posted = null;
   app.fetchMock.onPrefix('/api/annotations', (url, method, entry) => {
     posted = JSON.parse(entry.body);
-    return { body: { ok: true, count: 1, tags_count: 1, available_tags: [] } };
+    return { body: { ok: true, count: 1 } };
   });
   const ok = await app.api.save();
   assert.equal(ok, true);
   assert.equal(posted.boxes.length, 1);
-  assert.deepEqual(posted.tags, ['fire']);
+  assert.equal(posted.tags, undefined);
   assert.equal(app.state().dirty, false);
 });
 
@@ -271,35 +268,23 @@ test('runAppAction dispatches the built-in action handlers', async () => {
 });
 
 test('app_refresh_image_labels reloads boxes from the server', async () => {
-  ready({ boxes: [box()], imageTags: ['old'], dirty: true });
+  ready({ boxes: [box()], dirty: true });
   app.fetchMock.onPrefix('/api/annotations', () => ({
-    body: { boxes: [box({ cx: 0.25 }), box({ cx: 0.75 })], tags: ['new'] },
+    body: { boxes: [box({ cx: 0.25 }), box({ cx: 0.75 })] },
   }));
   await app.api.runAppAction('app_refresh_image_labels', { preventDefault() {} });
   assert.equal(app.state().boxes.length, 2);
   assert.equal(app.state().boxes[0].cx, 0.25);
-  assert.deepEqual(app.state().imageTags, ['old']); // labels only
   assert.equal(app.state().dirty, false);
 });
 
-test('app_refresh_image_tags reloads tags from the server', async () => {
-  ready({ boxes: [box()], imageTags: ['old'] });
+test('app_refresh_image_all reloads boxes', async () => {
+  ready({ boxes: [box()] });
   app.fetchMock.onPrefix('/api/annotations', () => ({
-    body: { boxes: [box({ cx: 0.9 })], tags: ['fire', 'review'] },
-  }));
-  await app.api.runAppAction('app_refresh_image_tags', { preventDefault() {} });
-  assert.deepEqual(plain(app.state().imageTags), ['fire', 'review']);
-  assert.equal(app.state().boxes[0].cx, 0.5); // tags only
-});
-
-test('app_refresh_image_all reloads boxes and tags', async () => {
-  ready({ boxes: [box()], imageTags: ['old'] });
-  app.fetchMock.onPrefix('/api/annotations', () => ({
-    body: { boxes: [box({ cx: 0.3 })], tags: ['a', 'b'] },
+    body: { boxes: [box({ cx: 0.3 })] },
   }));
   await app.api.runAppAction('app_refresh_image_all', { preventDefault() {} });
   assert.equal(app.state().boxes[0].cx, 0.3);
-  assert.deepEqual(plain(app.state().imageTags), ['a', 'b']);
 });
 
 test('app_refresh_image_labels is a no-op without an image', async () => {
@@ -469,35 +454,24 @@ test('app_select_next_box / app_select_prev_box wrap the selection', () => {
   assert.equal(app.state().selected, 2);
 });
 
-test('app_clear_tags removes every tag and marks the image dirty', () => {
-  ready({ imageTags: ['fire', 'smoke'], dirty: false });
-  app.api.runAppAction('app_clear_tags', { preventDefault() {} });
-  assert.deepEqual(plain(app.state().imageTags), []);
-  assert.equal(app.state().dirty, true);
-});
-
-test('app_clear_tags / app_copy_labels_from_prev do nothing in read-only mode', async () => {
-  ready({ readonly: true, imageTags: ['fire'], images: [{ split: 'train', name: 'a.jpg' }] });
-  app.api.runAppAction('app_clear_tags', { preventDefault() {} });
-  assert.deepEqual(plain(app.state().imageTags), ['fire']);
+test('app_copy_labels_from_prev does nothing in read-only mode', async () => {
+  ready({ readonly: true, images: [{ split: 'train', name: 'a.jpg' }] });
   await app.api.runAppAction('app_copy_labels_from_prev', { preventDefault() {} });
   assert.equal(app.state().dirty, false);
 });
 
-test('app_copy_labels_from_prev copies boxes and tags from the previous image', async () => {
+test('app_copy_labels_from_prev copies boxes from the previous image', async () => {
   ready({
     images: [{ split: 'train', name: 'a.jpg' }, { split: 'train', name: 'b.jpg' }],
     currentIndex: 1,
     boxes: [],
-    imageTags: ['mine'],
   });
   app.fetchMock.on('/api/annotations?key=train%2Fa.jpg', () => ({
-    body: { boxes: [box({ cx: 0.3 })], tags: ['fire'] },
+    body: { boxes: [box({ cx: 0.3 })] },
   }));
   await app.api.runAppAction('app_copy_labels_from_prev', { preventDefault() {} });
   assert.equal(app.state().boxes.length, 1);
   assert.equal(app.state().boxes[0].cx, 0.3);
-  assert.deepEqual(plain(app.state().imageTags), ['fire']);
   assert.equal(app.state().dirty, true);
 });
 

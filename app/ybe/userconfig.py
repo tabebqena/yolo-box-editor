@@ -11,7 +11,6 @@ import os
 import threading
 
 from ybe import config, state
-from ybe.dataset import scan_splits
 from ybe.extensions import load_filters
 from ybe.filters import apply_filters
 
@@ -167,7 +166,6 @@ def _save_view(data_yaml, split, active_filters):
             entry = {}
         entry["split"] = split
         entry["filters"] = list(active_filters or [])
-        entry["tags_dir"] = state.STATE.get("tags_dir")
         cfg["views"][data_yaml] = entry
 
     _update_config(mutate)
@@ -228,15 +226,6 @@ def _set_extension_disabled(kind, name, disabled):
     return _disabled_extensions()
 
 
-def _restore_tags_dir(data_yaml):
-    """Apply a dataset's remembered tags folder and re-derive the split paths."""
-    view = _load_views().get(data_yaml) if data_yaml else None
-    tags_dir = view.get("tags_dir") if isinstance(view, dict) else None
-    state.STATE["tags_dir"] = tags_dir if tags_dir and os.path.isdir(tags_dir) else None
-    if state.STATE["splits"]:
-        state.STATE["splits"] = scan_splits()
-
-
 def _load_settings():
     """Read the cross-browser UI settings (a flat `{key: value}` map)."""
     return _load_config()["settings"]
@@ -271,7 +260,6 @@ def _restore_view(data_yaml):
     view = _load_views().get(data_yaml)
     if not isinstance(view, dict):
         return
-    _restore_tags_dir(data_yaml)
     split = view.get("split")
     if split in {s["name"] for s in state.STATE["splits"]}:
         state.STATE["active_split"] = split

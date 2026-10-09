@@ -15,6 +15,8 @@ before. A package only changes *where* files may live — never *what* they do.
 ```
 extensions/my-tools/
   extension.yaml          # the manifest (see below)
+  backend.py              # optional backend plugin (routes + capabilities)
+  panel.js                # optional sandboxed UI panel (see extensions-ui.md)
   actions/*.yaml          # same format as a flat action
   hooks/on_<event>.yaml   # same format as a flat hook
   filters/*.yaml          # same format as a flat filter
@@ -29,13 +31,20 @@ The user folder is read after the shipped one and wins on an id clash.
 ## The manifest
 
 ```yaml
-api_version: 4
+api_version: 5
 id: my-tools              # optional; the folder name is used otherwise
 name: My Tools
 description: A short summary shown in the Extensions tab.
 version: 1.0.0
 author: you
 active: true              # false keeps the package listed but loads nothing from it
+backend: backend.py       # optional backend plugin (see extension-actions.md)
+
+# Optional extension-defined app actions, used as ext.<package>.<name>.
+app_actions:
+  - name: clear_tags
+    label: Clear image tags
+    shortcut: Alt+C
 
 # Optional Settings > Extensions subtab. Its controls use the same format as a
 # widget (buttons, select, checkbox, input). A button runs an action (by name)
@@ -101,3 +110,6 @@ stick to the built-in event names.
 
 Reserved action prefixes (`app_`, `backend_`, `action_`, `on_`) still apply
 inside packages: name a package action `Example: refresh` rather than `app_...`.
+Extension **app actions**, however, are declared in the manifest's `app_actions:`
+list under their bare name and reached as `ext.<package>.<name>` — so they never
+collide with a core `app_*`. See [extension actions](extension-actions.md).

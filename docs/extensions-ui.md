@@ -16,11 +16,11 @@ Add a `ui:` block to `extension.yaml` (see
 [extension packages](extensions.md)):
 
 ```yaml
-api_version: 4
+api_version: 5
 name: My Tools
 active: true
 ui:
-  api_version: 1          # the YBE plugin API version your script expects
+  api_version: 2          # the YBE plugin API version your script expects
   title: My Panel         # frame header and Layout-tab label
   script: panel.js        # relative to the package folder
   location: float         # float | left | right | bottom (default float)
@@ -40,26 +40,15 @@ panel's DOM and call `YBE`:
 
 ```js
 (async function () {
-  const tags = await YBE.state.getAvailableTags();
-  const current = await YBE.state.getTags();
-  document.body.textContent = '';
-  const h = document.createElement('h3');
-  h.textContent = 'Tags';
-  document.body.appendChild(h);
-  tags.forEach((t) => {
-    const b = document.createElement('button');
-    b.textContent = t + (current.includes(t) ? ' ✓' : '');
-    b.addEventListener('click', async () => {
-      try { await YBE.callbacks.toggleTag(t); } catch (e) { /* read-only */ }
-    });
-    document.body.appendChild(b);
-  });
+  const img = await YBE.state.getImage();
+  const boxes = await YBE.state.getBoxes();
+  document.body.textContent = img ? img.name + ' — ' + boxes.length + ' box(es)' : 'No image';
 
-  YBE.on('tags_changed', (p) => console.log('tags now', p.tags));
+  YBE.on('image_loaded', () => location.reload()); // simple refresh hook
 }());
 ```
 
-Always write dataset strings (tag/class names) with `textContent`, never
+Always write dataset strings (class names) with `textContent`, never
 `innerHTML`.
 
 ## `YBE` reference
@@ -72,8 +61,6 @@ Everything is **async** — reads and writes return Promises.
 | `YBE.state.getImage()` | `{split, name}` or `null` |
 | `YBE.state.getImageIndex()` | current image index |
 | `YBE.state.getBoxes()` | copy of the boxes (`[{class,cx,cy,w,h}]`) |
-| `YBE.state.getTags()` | copy of the current image's tags |
-| `YBE.state.getAvailableTags()` | copy of the dataset's `tags.yaml` list |
 | `YBE.state.getClasses()` | copy of the class names |
 | `YBE.state.getActiveSplit()` | active split name or `null` |
 | `YBE.state.getImageCount()` | number of images in the current list |
@@ -86,14 +73,13 @@ All of these refuse in read-only mode.
 
 | Call | Effect |
 | ---- | ------ |
-| `YBE.callbacks.addTag(name)` / `removeTag(name)` / `toggleTag(name)` | edit the current image's tags (undo/dirty aware) |
-| `YBE.callbacks.setTags(list)` | replace the current image's tags |
+| `YBE.call(method, args)` | call one of **your package's** backend capabilities (see [backend plugins](extension-actions.md)); other packages are not reachable |
 | `YBE.callbacks.setBoxes(list)` | replace the boxes (validated, clamped to 0..1) |
 | `YBE.callbacks.selectBox(i)` / `clearSelection()` | change the box selection |
 | `YBE.callbacks.markDirty()` / `draw()` | mark changed / repaint |
 | `YBE.callbacks.save()` | save the current image |
-| `YBE.callbacks.runAction(name, {confirm})` | run an action (confirm is on by default) |
-| `YBE.callbacks.refreshImage(kind)` | `'pixels'` / `'labels'` / `'tags'` / `'all'` |
+| `YBE.callbacks.runAction(name, {confirm})` | run an action or extension action (confirm is on by default) |
+| `YBE.callbacks.refreshImage(kind)` | `'pixels'` / `'labels'` / `'all'` |
 | `YBE.callbacks.toast(msg, opts)` / `setStatus(msg)` | show a message |
 | `YBE.callbacks.openSettings(tab)` | open Settings (optionally on a tab) |
 | `YBE.callbacks.getSetting(key)` / `setSetting(key, value)` | per-panel prefs (no `localStorage` in the sandbox) |
@@ -107,11 +93,12 @@ available.
 | `image_loaded` | `{split, name}` |
 | `images_list_loaded` | `{count}` |
 | `boxes_changed` | `{}` |
-| `tags_changed` | `{tags}` |
 | `selection_changed` | `{indices}` |
 | `dataset_loaded` | `{dataYaml}` |
 | `saved` | `{count}` |
 | `readonly_changed` | `{readonly}` |
+| `before_app_action` / `after_app_action` | `{action, extension, name, source, depth, chain, ok?, error?}` — see [extension actions](extension-actions.md) |
+| `app_action` | `{action, extension, name, depth, chain}` — sent to a package's panel when one of its app actions runs |
 
 The bridge also pushes `theme` (CSS variables) at start-up so the panel can match
 the app's colours, and reports the panel's height back so the frame sizes itself.

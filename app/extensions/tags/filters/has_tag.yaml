@@ -1,0 +1,12 @@
+# Keep only the images that have the chosen tag.
+#
+# Shipped by the tags extension package. The helper reads the dataset's tags
+# folder (including a per-dataset override) when `--tags-dir` is not given.
+api_version: 5
+name: Has tag
+description: Keep only images that have the chosen tag.
+arguments:
+  - name: tag_name
+    required: true
+steps:
+  - {PYTHON} {APP_DIR}/extensions/tags/scripts/tag_filter.py {INPUT_PIPE} {OUTPUT_PIPE} --tag {TAG_NAME} --split {SPLIT} --data-yaml {DATA_YAML_PATH}

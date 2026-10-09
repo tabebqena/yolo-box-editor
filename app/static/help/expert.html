@@ -31,7 +31,7 @@ after_success:          # app actions to run afterwards
 </ul>
 <p>Placeholders (leave them <strong>unquoted</strong>; the app quotes them for
 you): <code>{IMAGE_PATH}</code>, <code>{LABEL_PATH}</code>,
-<code>{TAGS_DIR}</code>, <code>{DATASET_PATH}</code>,
+<code>{DATASET_PATH}</code>,
 <code>{DATA_YAML_PATH}</code>, <code>{IMAGE_INDEX}</code>,
 <code>{APP_DIR}</code>, <code>{HOME_DIR}</code>,
 <code>{APP_SCRIPT_DIR}</code>, <code>{USER_SCRIPT_DIR}</code>,
@@ -40,8 +40,7 @@ you): <code>{IMAGE_PATH}</code>, <code>{LABEL_PATH}</code>,
 rather than <code>python</code>, and name a helper explicitly:
 <code>{PYTHON} {USER_SCRIPT_DIR}/helper.py …</code>. Ship-style helpers live in
 <code>app/scripts/</code> (<code>class_filter.py</code>,
-<code>example.py</code>, <code>example_filter.py</code>,
-<code>tag_image.py</code>).</p>
+<code>example.py</code>, <code>example_filter.py</code>).</p>
 
 <h3>Filters — narrow the image list</h3>
 <p>A filter is one YAML file in <code>filters/</code>. It reads candidate image
@@ -60,8 +59,8 @@ steps:
 <code>{OUTPUT_PIPE}</code> to the action list; each declared argument becomes an
 upper-cased token (<code>threshold</code> → <code>{THRESHOLD}</code>). An argument
 with <code>options</code> renders as a dropdown, and
-<code>options: {DATASET_CLASS_NAMES}</code> or <code>{DATASET_TAG_NAMES}</code>
-builds it from the loaded dataset. Chain up to 8 filters in
+<code>options: {DATASET_CLASS_NAMES}</code> builds it from the loaded dataset.
+Chain up to 8 filters in
 <strong>Settings → Filters → Active chain</strong>. See
 <code>app/filters/example.yaml</code> and
 <code>app/scripts/example_filter.py</code> for a working starting point.</p>

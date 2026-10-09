@@ -39,7 +39,6 @@ from ybe.dataset import (
     label_path,
     read_classes,
     scan_splits,
-    tag_path,
 )
 from ybe.extensions import (
     _bump_api_version_text,
@@ -62,8 +61,14 @@ from ybe.extensions import (
 )
 from ybe.widgets import load_widgets, sanitize_widget_values
 from ybe.filters import _clear_filter, apply_filters
-from ybe.packages import load_packages, package_script_path, plugin_api_status
-from ybe.parsing import _normalize_tags, _read_tag_lines, _read_text
+from ybe.packages import (
+    extension_app_action_defs,
+    load_packages,
+    package_script_path,
+    plugin_api_status,
+)
+from ybe.plugins import call_capability, install as install_plugins
+from ybe.parsing import _read_text
 from ybe.pipes import create_pipe
 from ybe.shortcuts import (
     _valid_shortcut,
@@ -73,7 +78,6 @@ from ybe.shortcuts import (
     user_shortcut_names,
     write_user_shortcuts,
 )
-from ybe.tags import read_tags_yaml, register_available_tags, write_image_tags
 from ybe.update import changelog_for, check_for_update, read_version, update_status
 from ybe.userconfig import (
     DISABLED_KIND_KEYS,
@@ -81,7 +85,6 @@ from ybe.userconfig import (
     _load_recent,
     _load_settings,
     _push_recent,
-    _restore_tags_dir,
     _save_view,
     _set_extension_disabled,
     _update_settings,
@@ -101,6 +104,9 @@ app = Flask(
 # key from `config.SECRET_KEY_FILE`, so a real run keeps sessions across
 # restarts and app updates.
 app.secret_key = secrets.token_hex(32)
+
+# Load active shipped packages' backend plugins (routes + capabilities).
+install_plugins(app)
 
 
 # --------------------------------------------------------------------------- #
@@ -250,14 +256,13 @@ def api_config():
     widgets, widget_errors = load_widgets()
     packages, package_errors = load_packages()
     classes = read_classes()
-    tags = read_tags_yaml()
     filter_catalog = sorted(
         (
             {
                 "name": f["name"],
                 "description": f["description"],
                 "arguments": [
-                    {**arg, "options": resolve_filter_options(arg.get("options"), classes, tags)}
+                    {**arg, "options": resolve_filter_options(arg.get("options"), classes)}
                     for arg in f["arguments"]
                 ],
             }
@@ -331,18 +336,20 @@ def api_config():
             "parts": p["parts"],
             "settings": p["settings"],
             "events": p["events"],
+            "app_actions": p["app_actions"],
+            "backend": bool(p["backend"]),
             "ui": _extension_ui_payload(p["ui"]),
             "api_version": p["api_version"],
             "status": api_version_status(p["api_version"]),
         }
         for p in packages
     ]
+    ext_app_actions = extension_app_action_defs()
     return jsonify(
         {
             "data_yaml": state.STATE["data_yaml"],
             "dataset_path": state.STATE["dataset_path"],
             "classes": classes,
-            "tags": tags,
             "images": _current_images(),
             "active_split": state.STATE["active_split"],
             "filters": filter_catalog,
@@ -352,7 +359,6 @@ def api_config():
             "filter_errors": filter_errors,
             "recent_data_yamls": _load_recent(),
             "settings": _load_settings(),
-            "tags_dir": state.STATE.get("tags_dir"),
             "tips": config.TIPS,
             "actions": [a["name"] for a in actions if a["name"] not in disabled["action"]],
             "action_defs": action_defs,
@@ -363,7 +369,8 @@ def api_config():
             "widget_errors": widget_errors,
             "extension_packages": extension_packages,
             "package_errors": package_errors,
-            "app_actions": sorted(config.APP_ACTIONS),
+            "app_actions": sorted(config.APP_ACTIONS) + [d["id"] for d in ext_app_actions],
+            "extension_app_actions": ext_app_actions,
             "backend_actions": sorted(config.BACKEND_ACTION_NAMES),
             "hook_events": list(config.HOOK_EVENTS),
             "extension_api_version": config.EXTENSION_API_VERSION,
@@ -391,7 +398,6 @@ def api_config():
                     "name": s["name"],
                     "images_dir": s["images_dir"],
                     "labels_dir": s["labels_dir"],
-                    "tags_dir": s["tags_dir"],
                 }
                 for s in state.STATE["splits"]
             ],
@@ -500,7 +506,6 @@ def api_data():
         return jsonify({"ok": False, "error": f"not a file: {path}"}), 400
 
     _load_dataset(path)
-    _restore_tags_dir(state.STATE["data_yaml"])  # re-apply this dataset's tags folder
     _clear_filter()  # a filter belongs to the dataset that was active
     names = {s["name"] for s in state.STATE["splits"]}
     if state.STATE["active_split"] not in names:
@@ -664,7 +669,6 @@ def _image_action_values(entry, split):
     return {
         "IMAGE_PATH": os.path.join(split["images_dir"], entry["name"]),
         "LABEL_PATH": label_path(entry),
-        "TAGS_DIR": split["tags_dir"],
         "DATASET_PATH": state.STATE["dataset_path"] or "",
         "DATA_YAML_PATH": state.STATE["data_yaml"] or "",
         "IMAGE_INDEX": str(position or 0),
@@ -1090,6 +1094,28 @@ def api_extension_script():
     )
 
 
+@app.route("/api/extensions/call", methods=["POST"])
+def api_extension_call():
+    """Call one backend capability of an active package (headless fallback).
+
+    Used by the host when an extension app action runs with its panel unmounted,
+    and available to any authenticated caller. Read-only is enforced inside the
+    capability, not here.
+    """
+    data = request.get_json(silent=True) or {}
+    pid = (data.get("package") or "").strip()
+    method = (data.get("method") or "").strip()
+    args = data.get("args")
+    pkg = next((p for p in load_packages()[0] if p["id"] == pid and p["active"]), None)
+    if pkg is None:
+        return jsonify({"ok": False, "error": "unknown or inactive package"}), 404
+    try:
+        value = call_capability(pid, method, args if isinstance(args, list) else [])
+    except Exception as exc:  # noqa: BLE001 - report the capability's own error
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify({"ok": True, "value": value})
+
+
 # --- single image and its annotations -------------------------------------- #
 @app.route("/api/image")
 def api_image():
@@ -1105,10 +1131,10 @@ def api_image():
 
 @app.route("/api/annotations", methods=["GET", "POST"])
 def api_annotations():
-    """Read/write one image's annotations: its boxes and tags.
+    """Read/write one image's annotations: its boxes (labels).
 
-    GET returns `{"boxes": [...], "tags": [...]}`. POST writes the label file,
-    the image's tag file, and adds any new tag names to tags.yaml.
+    GET returns `{"boxes": [...]}`. POST writes the label file. Tags live in the
+    tags extension package (`/api/tags`).
     """
     entry = _request_entry()
     split = _split_by_name(entry["split"])
@@ -1124,7 +1150,6 @@ def api_annotations():
                     {"class": c, "cx": cx, "cy": cy, "w": w, "h": h}
                     for c, cx, cy, w, h in boxes
                 ],
-                "tags": _read_tag_lines(tag_path(entry)),
             }
         )
 
@@ -1160,43 +1185,4 @@ def api_annotations():
             f.write("\n")
 
     payload = {"ok": True, "count": len(lines)}
-    # Tags ride along with the save: write the image's tag file and register any
-    # new names in tags.yaml. Absent `tags` leaves tag files untouched (a plain
-    # label write from an older client).
-    if "tags" in data:
-        tags = _normalize_tags(data.get("tags"))
-        write_image_tags(entry, tags)
-        payload["tags_count"] = len(tags)
-        payload["available_tags"] = register_available_tags(tags)
     return jsonify(payload)
-
-
-@app.route("/api/tags-dir", methods=["POST"])
-def api_tags_dir():
-    """Set (or clear) the per-dataset tags folder and re-derive the split paths.
-
-    Body `{"tags_dir": "<folder>"}` sets an override base folder (each split uses
-    `<folder>/<split>`); an empty value restores the default `images` -> `tags`
-    derivation. Saved with the dataset's view state.
-    """
-    if not state.STATE["splits"]:
-        return jsonify({"ok": False, "error": "no dataset loaded"}), 400
-    if state.STATE["readonly"]:
-        return jsonify({"ok": False, "error": "read-only mode"}), 403
-
-    data = request.get_json(silent=True) or {}
-    raw = (data.get("tags_dir") or "").strip()
-    path = os.path.abspath(os.path.expanduser(raw)) if raw else None
-    if path and not os.path.isdir(path):
-        return jsonify({"ok": False, "error": f"not a folder: {path}"}), 400
-
-    state.STATE["tags_dir"] = path
-    state.STATE["splits"] = scan_splits()
-    if state.STATE["active_filters"]:
-        error = apply_filters(state.STATE["active_filters"])
-        if error:
-            state.STATE["filter_error"] = error
-    _save_view(state.STATE["data_yaml"], state.STATE["active_split"], state.STATE["active_filters"])
-    cfg = api_config().get_json()
-    cfg["ok"] = True
-    return jsonify(cfg)

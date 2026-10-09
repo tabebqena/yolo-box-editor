@@ -12,11 +12,11 @@ beforeEach(() => { app = createApp(); });
 afterEach(() => { app.cleanup(); });
 
 test('ybeHandleRequest returns state copies', async () => {
-  app.set({ imageTags: ['a', 'b'] });
-  const tags = await app.api.ybeHandleRequest('state.getTags', []);
-  assert.deepEqual(plain(tags), ['a', 'b']);
-  tags.push('c');
-  assert.deepEqual(plain(app.state().imageTags), ['a', 'b']);
+  app.set({ boxes: [{ class: 0, cx: 0.1, cy: 0.2, w: 0.3, h: 0.4 }] });
+  const boxes = await app.api.ybeHandleRequest('state.getBoxes', []);
+  assert.deepEqual(plain(boxes), [{ class: 0, cx: 0.1, cy: 0.2, w: 0.3, h: 0.4, fixed: false }]);
+  boxes[0].cx = 0.9;
+  assert.equal(app.state().boxes[0].cx, 0.1);
 });
 
 test('ybeHandleRequest rejects unknown methods', async () => {
@@ -24,26 +24,27 @@ test('ybeHandleRequest rejects unknown methods', async () => {
     /unknown YBE method/);
 });
 
+test('the `call` capability forwards to the caller package backend', async () => {
+  let posted = null;
+  app.fetchMock.on('/api/extensions/call', (u, m, entry) => {
+    posted = JSON.parse(entry.body);
+    return { body: { ok: true, value: ['fire'] } };
+  });
+  const value = await app.api.ybeHandleRequest(
+    'call', ['tags.available', []], null, { packageId: 'tags' });
+  assert.deepEqual(plain(value), ['fire']);
+  assert.deepEqual(posted, { package: 'tags', method: 'tags.available', args: [] });
+});
+
 test('mutating callbacks refuse in read-only mode', async () => {
   app.set({
     readonly: true,
     images: [{ split: 'train', name: 'a.jpg' }],
     currentIndex: 0,
-    imageTags: [],
+    boxes: [],
   });
-  await assert.rejects(() => app.api.ybeHandleRequest('callbacks.addTag', ['x']),
+  await assert.rejects(() => app.api.ybeHandleRequest('callbacks.setBoxes', [[]]),
     /read-only/);
-});
-
-test('callbacks.addTag adds a tag', async () => {
-  app.set({
-    readonly: false,
-    images: [{ split: 'train', name: 'a.jpg' }],
-    currentIndex: 0,
-    imageTags: [],
-  });
-  await app.api.ybeHandleRequest('callbacks.addTag', ['fire']);
-  assert.deepEqual(plain(app.state().imageTags), ['fire']);
 });
 
 test('callbacks.setBoxes validates and clamps', async () => {
