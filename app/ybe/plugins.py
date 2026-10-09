@@ -15,7 +15,7 @@ until a request arrives.
 import importlib.util
 import os
 
-from ybe import config, state
+from ybe import config, extension_flags, state
 from ybe.packages import load_packages, package_backend_path
 
 
@@ -59,6 +59,12 @@ def install(app):
     Called once at server setup. A backend that fails to import/register is
     skipped so one broken package cannot take the server down.
     """
+    # Seed the tags enable/disable flag on first run (covers git-clone users who
+    # never go through the installer).
+    try:
+        extension_flags.ensure_migrated()
+    except Exception:  # noqa: BLE001 - migration must never block startup
+        pass
     PLUGIN_CAPABILITIES.clear()
     for pkg in load_packages()[0]:
         if not pkg["active"] or not pkg.get("backend"):

@@ -82,6 +82,15 @@ function buildPackagePanel(pkg) {
   if (pkg.version) head.appendChild(mk('span', 'ext-badge', 'v' + pkg.version));
   head.appendChild(versionBadge(pkg));
   if (!pkg.active) head.appendChild(mk('span', 'ext-badge ext-badge-outdated', 'disabled'));
+
+  const toggle = mk('label', 'package-active');
+  const cb = mk('input');
+  cb.type = 'checkbox';
+  cb.checked = !!pkg.active;
+  cb.title = 'Enable or disable this package (restart the app to apply)';
+  cb.addEventListener('change', () => setPackageActive(pkg, cb));
+  toggle.append(cb, mk('span', null, 'Enabled'));
+  head.appendChild(toggle);
   panel.appendChild(head);
   if (pkg.description) panel.appendChild(mk('p', 'hint', pkg.description));
   if (pkg.author) panel.appendChild(mk('p', 'hint', 'by ' + pkg.author));
@@ -97,6 +106,28 @@ function buildPackagePanel(pkg) {
     panel.appendChild(buildPackageSettings(pkg));
   }
   return panel;
+}
+
+/**
+ * Persist a package's enabled/disabled override (needs a restart to apply).
+ * @param {object} pkg - The package definition.
+ * @param {HTMLInputElement} cb - The checkbox that changed.
+ * @returns {Promise<void>}
+ */
+async function setPackageActive(pkg, cb) {
+  const want = cb.checked;
+  try {
+    const { res, data } = await apiPost('/api/extensions/active',
+      { package: pkg.id, active: want });
+    if (!res.ok || data.ok === false) throw new Error(data.error || 'request failed');
+    pkg.active = want;
+    toast((want ? 'Enabled ' : 'Disabled ') + pkg.name + ' — restart the app to apply',
+      { type: 'success' });
+  } catch (e) {
+    cb.checked = !want;
+    dbgWarn('package toggle failed', e);
+    toast('Could not change "' + pkg.name + '": ' + e.message, { type: 'error' });
+  }
 }
 
 /**

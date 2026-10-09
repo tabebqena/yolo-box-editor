@@ -13,7 +13,7 @@ list of extra event names the package emits. No function here executes anything.
 
 import os
 
-from ybe import config
+from ybe import config, extension_flags
 from ybe.parsing import (
     _parse_api_version,
     _read_text,
@@ -332,6 +332,12 @@ def load_packages():
                 "source": source,
                 "path": path,
             }
+    # A user-level enable/disable override (extensions.json) wins over the
+    # manifest's own `active:`, so a package can be turned on/off across updates.
+    overrides = extension_flags.load_flags()
+    for pid, pkg in merged.items():
+        if pid in overrides:
+            pkg["active"] = overrides[pid]
     return list(merged.values()), errors
 
 

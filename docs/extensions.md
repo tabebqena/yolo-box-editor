@@ -69,6 +69,30 @@ events: []
 The `parts` shown in the app are discovered automatically from the package's
 subfolders, so `provides:` is not required.
 
+## Enabling and disabling
+
+A manifest's `active:` is the shipped default and is replaced on upgrade, so the
+per-user on/off choice lives in `<home>/extensions.json`:
+
+```json
+{ "active": { "tags": true } }
+```
+
+This override wins over the manifest and survives updates. The tags extension
+seeds it on first run/install: a **fresh install enables** it, while an **update
+keeps the old tag-bar visibility** (`tags` / `ybe_tags_visible` in `config.json`).
+
+Change it with the **Enabled** toggle on each package's **Settings →
+Extensions** subtab, by editing the file, or with the helper script:
+
+```bash
+python app/scripts/migrate_tags_extension.py --home <user folder>          # migrate
+python app/scripts/migrate_tags_extension.py --home <user folder> --disable
+```
+
+Enabling/disabling a package takes effect after a **server restart** (its routes
+are registered at startup).
+
 ## Precedence
 
 Files are read in this order (later wins on a name clash):

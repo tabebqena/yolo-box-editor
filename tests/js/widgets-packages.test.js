@@ -112,6 +112,22 @@ test('renderExtensionsTab builds one subtab per package', () => {
   assert.ok(body.querySelector('.widget-button'));
 });
 
+test('the package Enabled toggle posts the override', async () => {
+  app.set({ extensionPackages: [PACKAGE] });
+  app.api.renderExtensionsTab();
+  let body = null;
+  app.fetchMock.on('/api/extensions/active', (url, method, entry) => {
+    body = JSON.parse(entry.body);
+    return { body: { ok: true, active: false } };
+  });
+  const cb = app.$('extensionTabBody').querySelector('.package-active input');
+  assert.equal(cb.checked, true);
+  cb.checked = false;
+  cb.dispatchEvent(new app.window.Event('change', { bubbles: true }));
+  await app.flush();
+  assert.deepEqual(body, { package: 'mypack', active: false });
+});
+
 test('renderExtensionsTab shows a hint with no packages', () => {
   app.set({ extensionPackages: [] });
   app.api.renderExtensionsTab();

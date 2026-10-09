@@ -21,7 +21,7 @@ from flask import (
     send_from_directory,
     session,
 )
-from ybe import config, state
+from ybe import config, extension_flags, state
 from ybe.auth import auth_enabled, set_user, verify_user
 from ybe.commands import (
     _advance_execution,
@@ -67,7 +67,7 @@ from ybe.packages import (
     package_script_path,
     plugin_api_status,
 )
-from ybe.plugins import call_capability, install as install_plugins
+from ybe.plugins import call_capability
 from ybe.parsing import _read_text
 from ybe.pipes import create_pipe
 from ybe.shortcuts import (
@@ -104,9 +104,6 @@ app = Flask(
 # key from `config.SECRET_KEY_FILE`, so a real run keeps sessions across
 # restarts and app updates.
 app.secret_key = secrets.token_hex(32)
-
-# Load active shipped packages' backend plugins (routes + capabilities).
-install_plugins(app)
 
 
 # --------------------------------------------------------------------------- #
@@ -1092,6 +1089,23 @@ def api_extension_script():
         mimetype="text/javascript",
         headers={"Cache-Control": "no-store"},
     )
+
+
+@app.route("/api/extensions/active", methods=["POST"])
+def api_extension_active():
+    """Enable or disable a package (writes the per-user override).
+
+    Body `{"package": "<id>", "active": true|false}`. The change needs a server
+    restart to load/unload the package's backend routes. This is a user
+    preference, not a dataset write, so read-only does not block it.
+    """
+    data = request.get_json(silent=True) or {}
+    pid = (data.get("package") or "").strip()
+    if not pid:
+        return jsonify({"ok": False, "error": "package is required"}), 400
+    active = bool(data.get("active"))
+    extension_flags.set_flag(pid, active)
+    return jsonify({"ok": True, "package": pid, "active": active})
 
 
 @app.route("/api/extensions/call", methods=["POST"])

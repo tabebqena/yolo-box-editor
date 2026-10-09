@@ -4,6 +4,24 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.2.0] - 2026-10-09
+
+### Added
+
+- **Per-user package enable/disable.** A package's manifest `active:` is code
+  replaced on upgrade, so the on/off choice now lives in
+  `<home>/extensions.json` (`{"active": {"tags": true}}`) and survives updates.
+  Settings → Extensions has an **Enabled** toggle for each package (restart to
+  apply), and `app/scripts/migrate_tags_extension.py --enable|--disable`
+  changes it from the command line.
+
+### Changed
+
+- The tags extension is **enabled by default**. On the first run/install the old
+  tag-bar visibility is migrated into the flag: a fresh install enables tags,
+  while an update keeps the previous `tags` / `ybe_tags_visible` setting. The
+  installer runs this migration after each install/update.
+
 ## [10.1.0] - 2026-10-09
 
 ### Added

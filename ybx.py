@@ -332,6 +332,30 @@ def place_app(src, dest):
         warn("could not fully remove %s (a file is still in use); it will be cleaned up later" % old)
 
 
+def migrate_tags_extension(opts):
+    """Seed the tags extension's enable/disable flag from the old user config.
+
+    Fresh install -> enabled; update -> the old tags-visibility setting. Writes
+    `<dir>/extensions.json` so later updates keep the user's choice. Best-effort:
+    a failure here never fails the install.
+    """
+    script = os.path.join(opts.dir, "app", "scripts", "migrate_tags_extension.py")
+    if not os.path.isfile(script):
+        return
+    python = venv_python(opts.dir)
+    if not os.path.isfile(python):
+        python = sys.executable
+    try:
+        subprocess.run(
+            [python, script, "--home", opts.dir],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        warn("could not migrate the tags extension flag (continuing)")
+
+
 # --------------------------------------------------------------------------- #
 # virtual environment
 # --------------------------------------------------------------------------- #
@@ -613,6 +637,7 @@ def do_install(opts):
         for name in USER_DIRS:
             os.makedirs(os.path.join(opts.dir, name), exist_ok=True)
         setup_venv(opts)
+        migrate_tags_extension(opts)
         install_self(opts, app_src)
         make_launcher(opts)
 

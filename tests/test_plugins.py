@@ -10,7 +10,7 @@ import pytest
 from flask import Flask
 
 import app as ybe
-from ybe import plugins
+from ybe import extension_flags, plugins
 from ybe.packages import (
     _parse_manifest,
     extension_app_action_defs,
@@ -41,6 +41,7 @@ def clean_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe.config, "USER_SCRIPT_DIR", str(tmp_path / "scripts"))
     ybe.state.STATE.clear()
     ybe.state.STATE.update(_DEFAULT_STATE)
+    monkeypatch.setattr(ybe.state, "USERS", {})
     return tmp_path
 
 
@@ -160,6 +161,17 @@ def test_tags_mutations_refuse_readonly(clean_state, tmp_path, monkeypatch):
     ybe.state.STATE["readonly"] = True
     with pytest.raises(PermissionError):
         caps["tags.set"]("train/a.jpg", ["fire"])
+
+
+def test_api_extensions_active_sets_flag(clean_state, tmp_path):
+    client = ybe.app.test_client()
+    resp = client.post("/api/extensions/active", json={"package": "tags", "active": False})
+    assert resp.status_code == 200
+    assert resp.get_json()["active"] is False
+    assert extension_flags.load_flags() == {"tags": False}
+    resp = client.post("/api/extensions/active", json={"package": "tags", "active": True})
+    assert resp.get_json()["active"] is True
+    assert extension_flags.load_flags() == {"tags": True}
 
 
 def test_install_loads_shipped_backend_and_call_capability(clean_state, tmp_path, monkeypatch):

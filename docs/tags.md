@@ -1,8 +1,10 @@
 # Tags
 
-> Tags ships as an **extension package**. Enable **Tags** under
-> **Settings → Extensions** to show the tag panel (its location is set under
-> **Settings → Layout**). Everything below still describes the tag files and the
+> Tags ships as an **extension package**. It is enabled by default on a fresh
+> install; if you previously hid the tag bar, the update carries that choice
+> over. The on/off flag lives in `<home>/extensions.json` and can be changed
+> with `app/scripts/migrate_tags_extension.py --disable` / `--enable` (restart
+> the app after). Everything below still describes the tag files and the
 > behaviour, which are unchanged.
 
 YOLO has no canonical tagging scheme, so this app defines a minimal one. The tag

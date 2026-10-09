@@ -127,6 +127,7 @@ from ybe.packages import (
     package_script_path,
     plugin_api_status,
 )
+from ybe.plugins import install as install_plugins
 from ybe.widgets import (
     _parse_widget_file,
     _validate_widget,
@@ -307,6 +308,11 @@ def main():
     # register an account with `ybe users --create NAME` to turn the login gate
     # on (`ybe users` lists them, and those commands work while the app runs).
     load_users()
+
+    # Load active shipped packages' backend plugins (routes + capabilities) and
+    # seed the tags enable/disable flag on first run. Done at startup rather than
+    # at import so importing the app has no filesystem side effects.
+    install_plugins(app)
 
     # Background update check (a no-op with --no-update-check).
     start_update_checker()

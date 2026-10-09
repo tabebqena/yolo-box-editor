@@ -302,8 +302,9 @@ when you change image.
 
 ### Tags
 
-Tags label a whole image and ship as an extension package (enable **Tags**
-under **Settings → Extensions**). `tags.yaml` beside `data.yaml` lists them; click
+Tags label a whole image and ship as an extension package (the **Tags**
+extension is on by default; toggle it under **Settings → Extensions**).
+`tags.yaml` beside `data.yaml` lists them; click
 a badge to toggle it, `+` adds a new name, and `Alt+1`…`Alt+9` toggles by number.
 See [tags](docs/tags.md).
 
