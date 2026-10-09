@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.11.0
+- The mouse-only **canvas toolbar** is now a slim strip above the image instead of a floating button bar over its top-left corner, so it no longer covers the image.
+
 ## 10.10.1
 - Fixed: an extension panel no longer goes blank when you move it to a different location (floating, left, right or bottom). The panel now reloads itself in its new spot instead of needing a full browser refresh.
 

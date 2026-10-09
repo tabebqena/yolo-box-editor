@@ -135,7 +135,7 @@ Full details: [install, update and run](docs/install.md).
 | `Ctrl+Shift+←` / `→` / `↑` / `↓` | narrow the selected box's matching border |
 | `Alt+1`…`Alt+9` | toggle a tag by number |
 
-Prefer the mouse? The small **canvas toolbar** (top-left of the image) has
+Prefer the mouse? The slim **canvas toolbar** (a thin strip above the image) has
 buttons for **new box**, **select all**, **Details**, **Isolate**, **Boxes** and
 **Draw on top**, so everything the keyboard can toggle is one click away too.
 

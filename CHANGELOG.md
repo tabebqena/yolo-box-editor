@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.11.0] - 2026-10-09
+
+### Changed
+
+- **The canvas toolbar is a thin strip above the image.** The mouse-only
+  controls (`+`, select all, Details, Isolate, Boxes, Draw) used to float over
+  the top-left corner of the canvas and could cover the image. They now sit in a
+  slim full-width strip above the image area, which takes no space while no
+  image is loaded.
+
 ## [10.10.1] - 2026-10-09
 
 ### Fixed
