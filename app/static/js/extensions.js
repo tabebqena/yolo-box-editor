@@ -354,9 +354,14 @@ function applyExtensionConfig(cfg) {
   actionDefs = cfg.action_defs || [];
   hookDefs = cfg.hook_defs || [];
   filterDefs = cfg.filter_defs || [];
+  widgetDefs = cfg.widget_defs || [];
+  widgetErrors = cfg.widget_errors || [];
+  extensionPackages = cfg.extension_packages || [];
   renderActionBuilder();
   renderHookBuilder();
   renderFilterBuilder();
+  renderCustomWidgets();
+  renderExtensionsTab();
 }
 
 /**

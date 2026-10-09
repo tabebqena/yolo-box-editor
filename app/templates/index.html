@@ -202,6 +202,7 @@
         <button class="settings-tab" type="button" role="tab" data-tab="filters">Filters</button>
         <button class="settings-tab" type="button" role="tab" data-tab="actions">Actions</button>
         <button class="settings-tab" type="button" role="tab" data-tab="hooks">Hooks</button>
+        <button class="settings-tab" type="button" role="tab" data-tab="extensions">Extensions</button>
         <button class="settings-tab" type="button" role="tab" data-tab="shortcuts">Shortcuts</button>
         <button class="settings-tab" type="button" role="tab" data-tab="updates">Updates</button>
         <button id="accountTabBtn" class="settings-tab hidden" type="button" role="tab" data-tab="account">Account</button>
@@ -325,6 +326,8 @@
               </select>
             </label>
           </div>
+
+          <div id="customWidgetSettings"></div>
         </section>
 
         <section class="settings-panel" data-panel="dataset">
@@ -397,6 +400,10 @@
           <div class="sub-panel" data-sub="existing">
             <div id="hookDefs" class="ext-builder"></div>
           </div>
+        </section>
+
+        <section class="settings-panel" data-panel="extensions">
+          <div id="extensionTabBody" class="ext-tab-body"></div>
         </section>
 
         <section class="settings-panel" data-panel="shortcuts">
@@ -597,6 +604,8 @@ python -m pip install -r app/requirements.txt</pre>
   <script src="{{ url_for('static', filename='js/images.js') }}"></script>
   <script src="{{ url_for('static', filename='js/editing.js') }}"></script>
   <script src="{{ url_for('static', filename='js/appearance.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/widgets.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/packages.js') }}"></script>
   <script src="{{ url_for('static', filename='js/help.js') }}"></script>
   <script src="{{ url_for('static', filename='js/events.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>

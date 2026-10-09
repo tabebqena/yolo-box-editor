@@ -1,0 +1,4 @@
+api_version: 3
+active: false
+steps:
+  - echo "saved {IMAGE_PATH}"

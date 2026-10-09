@@ -199,7 +199,7 @@ function dockSelectId(name) { return WIDGETS[name].select; }
  * @param {string} name - Widget name.
  * @returns {string} The dock location.
  */
-function getDock(name) { return dockState[name] || 'default'; }
+function getDock(name) { return dockState[name] || WIDGETS[name].defaultDock || 'default'; }
 /**
  * Set a widget's in-memory dock location (no persistence or reflow).
  * @param {string} name - Widget name.
@@ -365,6 +365,89 @@ function setWidgetDock(name, loc) {
   applyWidget(name);
 }
 
+// ---- custom widgets (see js/widgets.js) ----------------------------------- //
+/**
+ * Build the floating frame for a custom widget and attach it to the page.
+ * @param {string} name - Widget key.
+ * @param {string} title - Header title.
+ * @returns {{frame: HTMLElement, body: HTMLElement, hide: HTMLElement}}
+ */
+function createWidgetFrame(name, title) {
+  const frame = mk('div', 'float-window hidden');
+  frame.id = 'widgetFrame_' + name;
+  const head = mk('div', 'float-head');
+  head.appendChild(mk('span', 'float-title', title || name));
+  const actions = mk('div', 'float-actions');
+  [['float', 'Float freely', '\u29c9'],
+    ['left', 'Dock to the left panel', '\u21e4'],
+    ['right', 'Dock to the right panel', '\u21e5'],
+    ['bottom', 'Dock to the bottom panel', '\u2913']].forEach(([dock, tip, glyph]) => {
+    const b = mk('button', 'float-dock', glyph);
+    b.type = 'button';
+    b.dataset.dock = dock;
+    b.title = tip;
+    actions.appendChild(b);
+  });
+  const hide = mk('button', 'float-close', '\u00d7');
+  hide.type = 'button';
+  hide.title = 'Hide this widget';
+  actions.appendChild(hide);
+  head.appendChild(actions);
+  frame.appendChild(head);
+  const body = mk('div', 'float-body');
+  body.id = 'widgetBody_' + name;
+  frame.appendChild(body);
+  document.body.appendChild(frame);
+  return { frame, body, hide };
+}
+
+/**
+ * Register a custom widget in the dock system. A custom widget has no built-in
+ * default spot, so it starts floating and its close button hides it.
+ * @param {string} name - Widget key.
+ * @param {object} def - {frame, body, content, select, visibleSw}.
+ * @returns {void}
+ */
+function registerWidget(name, def) {
+  const key = 'ybe_widget_' + name + '_dock';
+  const visibleKey = 'ybe_widget_' + name + '_visible';
+  WIDGETS[name] = {
+    frame: def.frame.id,
+    body: def.body.id,
+    content: () => def.content,
+    parent: () => null,
+    key,
+    select: def.select,
+    visibleKey,
+    visibleSw: def.visibleSw,
+    defaultDock: 'float',
+    noDefault: true,
+  };
+  const saved = settingsGet(key);
+  dockState[name] = DOCK_LOCATIONS.includes(saved) && saved !== 'default' ? saved : 'float';
+  visibleState[name] = settingsGet(visibleKey) !== '0';
+  initFloatWindow(def.frame);
+  applyWidget(name);
+}
+
+/**
+ * Remove a previously registered custom widget and its frame.
+ * @param {string} name - Widget key.
+ * @returns {void}
+ */
+function unregisterWidget(name) {
+  const w = WIDGETS[name];
+  if (!w) return;
+  const frame = el(w.frame);
+  const content = w.content();
+  if (content && content.parentElement) content.parentElement.removeChild(content);
+  if (frame && frame.parentElement) frame.parentElement.removeChild(frame);
+  delete WIDGETS[name];
+  delete dockState[name];
+  delete visibleState[name];
+  updateDockPanels();
+}
+
 // ---- panel resizers ------------------------------------------------------- //
 /**
  * Clamp and apply the dock-side panel width.
@@ -496,7 +579,14 @@ function initFloatWindow(win) {
     btn.addEventListener('click', () => setWidgetDock(name, btn.dataset.dock));
   });
   const closeBtn = win.querySelector('.float-close');
-  if (closeBtn) closeBtn.addEventListener('click', () => setWidgetDock(name, 'default'));
+  if (closeBtn) {
+    // A custom widget has no built-in "default" spot, so its close button hides
+    // it instead of docking it back to a home it does not have.
+    closeBtn.addEventListener('click', () => {
+      if (WIDGETS[name] && WIDGETS[name].noDefault) setWidgetVisible(name, false);
+      else setWidgetDock(name, 'default');
+    });
+  }
   window.addEventListener('resize', () => {
     if (getDock(name) === 'float') setFloatPos(win, win.offsetLeft, win.offsetTop);
   });

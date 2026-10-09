@@ -98,6 +98,12 @@ Full details: [install, update and run](docs/install.md).
 - **Custom actions and hooks**: run your own commands on the current image, or
   automatically on events like `after_save`. See
   [actions and hooks](docs/actions-and-hooks.md).
+- **Custom widgets**: define your own dockable panel of buttons, dropdowns,
+  checkboxes and text inputs in a `widgets/*.yaml` file. See
+  [widgets](docs/widgets.md).
+- **Extension packages**: group actions, hooks, filters and widgets into an
+  `extensions/<name>/` folder, with its own Settings subtab. See
+  [extension packages](docs/extensions.md).
 - **Configurable shortcuts** in `shortcuts.txt`.
 - **Built-in help** — a 3-level tutorial (Beginner / Intermediate / Expert) and
   task-focused **How to?** recipes, reachable with **F1** or the **?** button in
@@ -151,6 +157,8 @@ missing, see [Why can't I see my tag?](docs/tags.md#why-cant-i-see-my-tag).
 - [install, update and run](docs/install.md) — installer, `ybe` commands, flags.
 - [dataset, files and formats](docs/dataset.md) — `data.yaml`, label format, where files live.
 - [actions and hooks](docs/actions-and-hooks.md) — custom commands and events.
+- [widgets](docs/widgets.md) — custom dockable control panels.
+- [extension packages](docs/extensions.md) — group extensions with a Settings subtab.
 - [filters](docs/filters.md) — narrow the image list with scripts.
 - [tags](docs/tags.md) — the tagging scheme and troubleshooting.
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each version.

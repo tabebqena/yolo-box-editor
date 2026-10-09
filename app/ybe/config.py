@@ -32,6 +32,8 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 ACTIONS_DIR = os.path.join(BASE_DIR, "actions")  # one YAML file per action
 HOOKS_DIR = os.path.join(BASE_DIR, "hooks")  # one YAML file per event hook
 FILTERS_DIR = os.path.join(BASE_DIR, "filters")  # one YAML file per filter
+WIDGETS_DIR = os.path.join(BASE_DIR, "widgets")  # one YAML file per custom widget
+EXTENSIONS_DIR = os.path.join(BASE_DIR, "extensions")  # one folder per extension package
 APP_SCRIPT_DIR = os.path.join(BASE_DIR, "scripts")  # shipped helper programs
 SHORTCUTS_FILE = os.path.join(BASE_DIR, "shortcuts.txt")
 VERSION_FILE = os.path.join(BASE_DIR, "VERSION")  # shipped app version
@@ -41,6 +43,8 @@ CHANGES_FILE = os.path.join(BASE_DIR, "CHANGES")  # per-version "what's new" not
 USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
 USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
 USER_FILTERS_DIR = os.path.join(YBX_HOME, "filters")
+USER_WIDGETS_DIR = os.path.join(YBX_HOME, "widgets")
+USER_EXTENSIONS_DIR = os.path.join(YBX_HOME, "extensions")
 USER_SCRIPT_DIR = os.path.join(YBX_HOME, "scripts")
 USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
 # One JSON file holds all per-user config: recent datasets, per-dataset views
@@ -85,6 +89,7 @@ FILTER_PIPES_DIR = os.path.join(tempfile.gettempdir(), "yolo-box-editor-filter-p
 def configure_home(path):
     """Point the user folders at `path` (the `--home` override)."""
     global YBX_HOME, USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR
+    global USER_WIDGETS_DIR, USER_EXTENSIONS_DIR
     global USER_SCRIPT_DIR, USER_SHORTCUTS_FILE, RECENT_FILE, VIEW_FILE
     global SETTINGS_FILE, UPDATE_CHECK_FILE, CONFIG_FILE, USERS_FILE
     global SECRET_KEY_FILE
@@ -92,6 +97,8 @@ def configure_home(path):
     USER_ACTIONS_DIR = os.path.join(YBX_HOME, "actions")
     USER_HOOKS_DIR = os.path.join(YBX_HOME, "hooks")
     USER_FILTERS_DIR = os.path.join(YBX_HOME, "filters")
+    USER_WIDGETS_DIR = os.path.join(YBX_HOME, "widgets")
+    USER_EXTENSIONS_DIR = os.path.join(YBX_HOME, "extensions")
     USER_SCRIPT_DIR = os.path.join(YBX_HOME, "scripts")
     USER_SHORTCUTS_FILE = os.path.join(YBX_HOME, "shortcuts.txt")
     CONFIG_FILE = os.path.join(YBX_HOME, "config.json")
@@ -105,7 +112,10 @@ def configure_home(path):
 
 def ensure_user_dirs():
     """Create the user folders when missing, so the home is usable right away."""
-    for dirpath in (USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR, USER_SCRIPT_DIR):
+    for dirpath in (
+        USER_ACTIONS_DIR, USER_HOOKS_DIR, USER_FILTERS_DIR,
+        USER_WIDGETS_DIR, USER_EXTENSIONS_DIR, USER_SCRIPT_DIR,
+    ):
         try:
             os.makedirs(dirpath, exist_ok=True)
         except OSError:
@@ -218,10 +228,11 @@ HOOK_EVENTS = (
     "box_edited",
 )
 
-# The extension YAML format version. Bump it only when the action/hook/filter
-# file format changes: the UI compares a file's `api_version:` against this to
-# flag files that predate (or postdate) the format it understands.
-EXTENSION_API_VERSION = 1
+# The extension YAML format version. Bump it only when the action/hook/filter/
+# widget/package file format changes: the UI compares a file's `api_version:`
+# against this to flag files that predate (or postdate) the format it understands.
+# v2 added custom widgets; v3 added extension packages.
+EXTENSION_API_VERSION = 3
 
 # Placeholder catalogs offered by the UI's click-to-insert palette. Keep them in
 # sync with the values built in `api_action_run` and `_filter_placeholder_values`

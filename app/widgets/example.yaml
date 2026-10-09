@@ -1,0 +1,47 @@
+# yolo-box-editor custom widgets: one YAML file per widget in a widgets/ dir.
+#
+# This file is a shipped, comments-only example and defines nothing (a widget
+# needs at least one control). Your own widgets live in <home>/widgets/ (next to
+# the app/ folder, or wherever --home points); the user folder is read after the
+# shipped one, so a same-named file wins and is never overwritten by an upgrade.
+# Copy this file to <Name>.yaml and edit it, or write your own.
+#
+# How it looks: a widget is one floating/dockable panel (Settings > Layout picks
+# its Location; its Show checkbox toggles it). Each widget may contain buttons,
+# selects, checkboxes and text inputs, in any order.
+#
+# Format (2-space indentation, whole-line # comments):
+#
+#   api_version: 3
+#   name: My tools            # optional; the file name is used otherwise
+#   title: My tools           # optional; shown in the frame header
+#   controls:
+#     - type: button
+#       label: Clean labels
+#       action: MyCleanAction # run a named action (from actions/*.yaml) ...
+#     - type: button
+#       label: Rescan
+#       steps:                # ... or inline steps / after_success
+#         - backend_rescan_images
+#     - type: select
+#       id: mode              # {WIDGET_MODE} in the button's steps
+#       label: Mode
+#       options: [fast, safe]
+#       default: safe
+#     - type: checkbox
+#       id: dry_run           # {WIDGET_DRY_RUN} -> "1" or "0"
+#       label: Dry run
+#       default: true
+#     - type: input
+#       id: suffix            # {WIDGET_SUFFIX}
+#       label: Suffix
+#       placeholder: _v2
+#       default: ""
+#
+# A non-button control's current value is passed to the action a button runs as
+# `{WIDGET_<ID>}` (its id upper-cased), alongside the usual placeholders
+# ({IMAGE_PATH}, {PIPE_PATH}, …). Steps run through the same action engine as
+# toolbar actions, so timeouts and after_success app actions behave identically.
+#
+# `action:` may name any action (including ones defined in an extension package);
+# inline `steps:` / `after_success:` accept the same entries as an action file.

@@ -1,0 +1,13 @@
+api_version: 3
+name: Package demo
+title: Package demo
+controls:
+  - type: button
+    label: Rescan images
+    steps:
+      - backend_rescan_images
+  - type: input
+    id: note
+    label: Note
+    placeholder: anything
+    default: ""

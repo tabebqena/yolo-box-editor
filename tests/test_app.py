@@ -116,6 +116,10 @@ def clean_state(tmp_path, monkeypatch):
     monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(tmp_path / "hooks"))
     monkeypatch.setattr(ybe.config, "FILTERS_DIR", str(tmp_path / "app-filters"))
     monkeypatch.setattr(ybe.config, "USER_FILTERS_DIR", str(tmp_path / "filters"))
+    monkeypatch.setattr(ybe.config, "WIDGETS_DIR", str(tmp_path / "app-widgets"))
+    monkeypatch.setattr(ybe.config, "USER_WIDGETS_DIR", str(tmp_path / "widgets"))
+    monkeypatch.setattr(ybe.config, "EXTENSIONS_DIR", str(tmp_path / "app-extensions"))
+    monkeypatch.setattr(ybe.config, "USER_EXTENSIONS_DIR", str(tmp_path / "extensions"))
     monkeypatch.setattr(ybe.config, "APP_SCRIPT_DIR", str(tmp_path / "app-scripts"))
     monkeypatch.setattr(ybe.config, "USER_SCRIPT_DIR", str(tmp_path / "scripts"))
     monkeypatch.setattr(ybe.config, "SHORTCUTS_FILE", str(tmp_path / "app-shortcuts.txt"))
@@ -3562,3 +3566,213 @@ def test_prompt_password_cancelled(monkeypatch):
     monkeypatch.setattr(ybe.auth.getpass, "getpass", boom)
     assert ybe._prompt_password() is None
 
+
+
+# --------------------------------------------------------------------------- #
+# custom widgets
+# --------------------------------------------------------------------------- #
+def write_widget(root, fname, body, subdir="widgets"):
+    """Write one custom-widget YAML into <root>/<subdir> (created on demand)."""
+    d = Path(root) / subdir
+    d.mkdir(parents=True, exist_ok=True)
+    (d / fname).write_text(body, encoding="utf-8")
+
+
+WIDGET_YAML = """\
+api_version: 3
+name: Tools
+title: Tools
+controls:
+  - type: button
+    label: Refresh
+    steps:
+      - app_refresh_images_list
+  - type: select
+    id: mode
+    label: Mode
+    options: [fast, safe]
+    default: safe
+  - type: checkbox
+    id: dry_run
+    label: Dry run
+    default: true
+  - type: input
+    id: suffix
+    label: Suffix
+    default: ""
+"""
+
+
+def test_load_widgets_parses_controls(clean_state):
+    write_widget(clean_state, "tools.yaml", WIDGET_YAML)
+    widgets, errors = ybe.load_widgets()
+    assert errors == []
+    w = widgets["Tools"]
+    assert [c["type"] for c in w["controls"]] == ["button", "select", "checkbox", "input"]
+    assert w["controls"][0]["steps"] == ["app_refresh_images_list"]
+    assert w["controls"][1]["default"] == "safe"
+    assert w["controls"][2]["default"] is True
+
+
+def test_load_widgets_rejects_unknown_control(clean_state):
+    write_widget(clean_state, "bad.yaml", "controls:\n  - type: slider\n    id: x\n")
+    widgets, errors = ybe.load_widgets()
+    assert widgets == {}
+    assert errors and "slider" in errors[0]
+
+
+def test_widget_select_default_falls_back(clean_state):
+    write_widget(clean_state, "w.yaml",
+                 "name: W\ncontrols:\n  - type: select\n    id: m\n"
+                 "    options: [a, b]\n    default: z\n")
+    widgets, _ = ybe.load_widgets()
+    assert widgets["W"]["controls"][0]["default"] == "a"
+
+
+def test_sanitize_widget_values(clean_state):
+    values, error = ybe.sanitize_widget_values({"mode": "fast", "dry_run": "1"})
+    assert error is None
+    assert values == {"WIDGET_MODE": "fast", "WIDGET_DRY_RUN": "1"}
+    assert ybe.sanitize_widget_values({"bad id": "x"})[1]
+
+
+def test_api_config_includes_widget_defs(clean_state):
+    write_widget(clean_state, "tools.yaml", WIDGET_YAML)
+    cfg = ybe.app.test_client().get("/api/config").get_json()
+    assert [d["name"] for d in cfg["widget_defs"]] == ["Tools"]
+    assert cfg["widget_defs"][0]["status"] == "current"
+    assert cfg["widget_errors"] == []
+
+
+def test_widget_run_injects_values(clean_state):
+    write_widget(clean_state, "tools.yaml", WIDGET_YAML)
+    root = make_dataset(clean_state)
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    resp = client.post("/api/widgets/run", json={
+        "widget": "Tools", "control": 0, "target": "train/a.jpg",
+        "values": {"mode": "fast", "dry_run": "1", "suffix": "x"},
+    })
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["client_action"] == "app_refresh_images_list"
+    run = ybe.state.EXECUTIONS[data["uid"]]
+    assert run["values"]["WIDGET_MODE"] == "fast"
+    assert run["values"]["WIDGET_DRY_RUN"] == "1"
+    assert run["values"]["WIDGET_SUFFIX"] == "x"
+    done = client.post("/api/actions/run",
+                       json={"uid": data["uid"], "result": {"ok": True}})
+    assert done.get_json()["ok"] is True
+
+
+def test_widget_run_rejects_non_button(clean_state):
+    write_widget(clean_state, "tools.yaml", WIDGET_YAML)
+    root = make_dataset(clean_state)
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    resp = client.post("/api/widgets/run", json={
+        "widget": "Tools", "control": 1, "target": "train/a.jpg", "values": {},
+    })
+    assert resp.status_code == 400
+
+
+# --------------------------------------------------------------------------- #
+# extension packages
+# --------------------------------------------------------------------------- #
+def write_package(root, pid, manifest, parts=None):
+    """Write an extension package (<root>/extensions/<pid>/) with optional parts."""
+    base = Path(root) / "extensions" / pid
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "extension.yaml").write_text(manifest, encoding="utf-8")
+    for sub, fname, body in (parts or []):
+        d = base / sub
+        d.mkdir(parents=True, exist_ok=True)
+        (d / fname).write_text(body, encoding="utf-8")
+    return base
+
+
+PKG_MANIFEST = """\
+api_version: 3
+name: My Pack
+description: demo
+version: 1.0.0
+author: me
+active: true
+settings:
+  title: Pack settings
+  controls:
+    - type: checkbox
+      id: verbose
+      label: Verbose
+      default: false
+    - type: button
+      label: Refresh
+      steps:
+        - app_refresh_images_list
+"""
+
+PACK_ACTION = "name: Pack action\nsteps:\n  - echo hi\n"
+
+
+def test_load_packages_discovers_parts(clean_state):
+    write_package(clean_state, "mypack", PKG_MANIFEST, [
+        ("actions", "pack_action.yaml", PACK_ACTION),
+        ("hooks", "on_after_save.yaml", "steps:\n  - echo hi\n"),
+        ("widgets", "pack_widget.yaml",
+         "name: Pack widget\ncontrols:\n  - type: button\n    label: B\n    steps:\n      - echo hi\n"),
+    ])
+    pkgs, errors = ybe.load_packages()
+    assert errors == []
+    assert [p["id"] for p in pkgs] == ["mypack"]
+    assert pkgs[0]["settings"]["controls"][0]["id"] == "verbose"
+    assert push_set(pkgs[0]["parts"]) == {"action", "hook", "widget"}
+
+
+def push_set(parts):
+    return set(parts)
+
+
+def test_package_parts_load_into_extensions(clean_state):
+    write_package(clean_state, "mypack", PKG_MANIFEST,
+                  [("actions", "pack_action.yaml", PACK_ACTION)])
+    entry = next(a for a in ybe.load_actions() if a["name"] == "Pack action")
+    assert entry["package"] == "mypack"
+
+
+def test_flat_file_wins_over_package_file(clean_state):
+    write_package(clean_state, "mypack", PKG_MANIFEST,
+                  [("actions", "same.yaml", "name: Same\nsteps:\n  - echo package\n")])
+    write_action(clean_state, "same.yaml", "name: Same\nsteps:\n  - echo flat\n")
+    entry = next(a for a in ybe.load_actions() if a["name"] == "Same")
+    assert entry["steps"] == ["echo flat"]
+
+
+def test_inactive_package_parts_are_not_loaded(clean_state):
+    write_package(clean_state, "mypack",
+                  PKG_MANIFEST.replace("active: true", "active: false"),
+                  [("actions", "pack_action.yaml", PACK_ACTION)])
+    assert all(a["name"] != "Pack action" for a in ybe.load_actions())
+    pkgs, _ = ybe.load_packages()
+    assert pkgs[0]["active"] is False
+
+
+def test_api_config_includes_extension_packages(clean_state):
+    write_package(clean_state, "mypack", PKG_MANIFEST)
+    cfg = ybe.app.test_client().get("/api/config").get_json()
+    assert [p["id"] for p in cfg["extension_packages"]] == ["mypack"]
+    assert cfg["extension_packages"][0]["source"] == "user"
+    assert cfg["package_errors"] == []
+
+
+def test_extensions_run_package_settings(clean_state):
+    write_package(clean_state, "mypack", PKG_MANIFEST)
+    root = make_dataset(clean_state)
+    client = ybe.app.test_client()
+    load_dataset(client, root)
+    resp = client.post("/api/extensions/run", json={
+        "package": "mypack", "control": 1, "target": "train/a.jpg", "values": {"verbose": "1"},
+    })
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["client_action"] == "app_refresh_images_list"
+    assert ybe.state.EXECUTIONS[data["uid"]]["values"]["WIDGET_VERBOSE"] == "1"

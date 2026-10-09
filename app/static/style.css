@@ -1342,3 +1342,57 @@ button.is-loading::after {
     scroll-behavior: auto !important;
   }
 }
+
+/* 15. custom widgets & extension packages -------------------------------- */
+.ext-tab-body { padding: 4px 2px; }
+
+/* custom widget body (floating frame or docked panel) */
+.widget-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  min-width: 180px;
+}
+.widget-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.widget-check { flex-direction: row; align-items: center; gap: 6px; }
+.widget-label { color: var(--text); }
+.widget-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.widget-button {
+  width: 100%;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+/* extension package subtab */
+.package-panel { display: flex; flex-direction: column; gap: 10px; padding: 4px 2px; }
+.package-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.package-name { font-weight: 600; }
+.package-parts { display: flex; flex-direction: column; gap: 10px; }
+.package-part { display: flex; flex-direction: column; gap: 4px; }
+.package-part-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+}
+.package-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}

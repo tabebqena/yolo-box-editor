@@ -188,6 +188,9 @@ let actionDefs = []; // [{name, steps, after_success, source, status, api_versio
 let hookDefs = [];
 // Loaded filter definitions (Settings > Filters).
 let filterDefs = [];
+let widgetDefs = []; // loaded custom widget definitions
+let widgetErrors = []; // validation errors from widgets/
+let extensionPackages = []; // loaded extension packages (Settings > Extensions)
 let yamlEditor = null; // the file currently open in the raw YAML editor
 let undoStack = [];   // snapshots of `boxes` before each edit (fresh per image)
 // Snapshots replayed by the redo action, mirroring `undoStack`.

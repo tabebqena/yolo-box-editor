@@ -22,7 +22,8 @@ const APP_JS = path.join(ROOT, 'app', 'static', 'app.js');
 // share one global lexical environment, then app.js (the entry point) runs.
 const MODULE_FILES = [
   'core.js', 'api.js', 'canvas.js', 'navigation.js', 'extensions.js', 'shortcuts.js',
-  'images.js', 'editing.js', 'appearance.js', 'help.js', 'events.js',
+  'images.js', 'editing.js', 'appearance.js', 'widgets.js', 'packages.js', 'help.js',
+  'events.js',
 ].map((f) => path.join(ROOT, 'app', 'static', 'js', f));
 
 // Top-level `let` declarations in app.js that tests may need to set directly.
@@ -35,7 +36,8 @@ const LET_STATE = [
   'shortcutErrors', 'shortcutDefaults', 'userShortcutNames', 'shortcutEditMode',
   'shortcutDraft', 'shortcutResets', 'hookErrors', 'filterErrors', 'appActions',
   'backendActions', 'hookEvents', 'extensionApiVersion', 'placeholders',
-  'actionDefs', 'hookDefs', 'filterDefs', 'yamlEditor', 'undoStack', 'redoStack',
+  'actionDefs', 'hookDefs', 'filterDefs', 'widgetDefs', 'widgetErrors',
+  'extensionPackages', 'customWidgetNames', 'yamlEditor', 'undoStack', 'redoStack',
   'moved', 'dragUndoPushed', 'imgW', 'imgH', 'dirty', 'readonly',
   'datasetLoaded', 'availableTags', 'imageTags', 'boxesVisible',
   'boxDetailsVisible', 'isolateSelected',

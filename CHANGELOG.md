@@ -4,6 +4,26 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [8.1.0] - 2026-10-09
+
+### Added
+
+- **Custom widgets.** Define your own floating/dockable panel in a
+  `widgets/*.yaml` file: it may contain buttons, dropdowns, checkboxes and text
+  inputs. A button runs an action (by name) or inline `steps` / `after_success`,
+  and the other controls' current values are passed to it as `{WIDGET_<ID>}`
+  placeholders. Each widget is placed and shown from Settings > Layout like the
+  built-in widgets. See `docs/widgets.md`.
+- **Extension packages.** An `extensions/<name>/` folder with an `extension.yaml`
+  manifest groups actions, hooks, filters and widgets into one unit and can add
+  its own **Settings > Extensions** subtab with declarative controls (the same
+  control format as widgets). Packages are an additive layer over the existing
+  `actions/`, `hooks/`, `filters/` and `widgets/` folders: flat files keep
+  loading and editing exactly as before, and a flat file always wins over a
+  package file of the same name. See `docs/extensions.md`.
+- The extension YAML format version is now `3` (was `1`); the UI flags older
+  files and the raw YAML editor bumps them on save.
+
 ## [8.0.0] - 2026-10-08
 
 ### Added

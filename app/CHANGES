@@ -2,6 +2,10 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 8.1.0
+- Custom widgets: define your own floating/dockable panel in a `widgets/*.yaml` file (copy `app/widgets/example.yaml`). It can hold buttons, dropdowns, checkboxes and text inputs; a button runs an action (or inline steps) and the other controls are passed along as `{WIDGET_<ID>}` placeholders. Pick each widget's show/location in Settings > Layout.
+- Extension packages: an `extensions/<name>/` folder with an `extension.yaml` groups actions, hooks, filters and widgets, and can add its own Settings > Extensions subtab with declarative controls. This layers on top of the existing folders — your flat actions/hooks/filters/widgets and their tabs are unchanged.
+
 ## 8.0.0
 - Login accounts now live behind a single `ybe users` command: run `ybe users` to list them, `ybe users --create NAME` to add one, `--update NAME` to change a password, and `--delete NAME` to remove one. It works even while the app is running. The old `--create-user` / `--list-users` flags are gone.
 

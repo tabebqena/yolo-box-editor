@@ -1,0 +1,7 @@
+api_version: 3
+name: Example: refresh list
+description: Re-scan the image folders (example package action).
+steps:
+  - backend_rescan_images
+after_success:
+  - app_refresh_images_list

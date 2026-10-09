@@ -1,0 +1,34 @@
+# Example extension package. It is shipped `active: false`, so nothing in it is
+# loaded until you set `active: true` (or copy it into <home>/extensions/ and
+# edit your copy). It still appears in Settings > Extensions so you can see the
+# manifest, its parts and the declarative settings subtab.
+#
+# An extension package is a folder that groups actions, hooks, filters and
+# widgets, and may add a Settings > Extensions subtab. It builds on top of the
+# existing actions/hooks/filters/widgets — those flat folders and their tabs are
+# unchanged, and a flat file always wins over a package file of the same name.
+api_version: 3
+name: Example package
+description: Demonstrates an extension package (actions, a hook, a widget, settings).
+version: 1.0.0
+author: yolo-box-editor
+active: false
+
+# The `settings:` block becomes this package's subtab. Its controls use the same
+# format as a widget; a button runs an action (by name) or inline steps, with the
+# other controls passed as {WIDGET_<ID>} placeholders.
+settings:
+  title: Example settings
+  controls:
+    - type: checkbox
+      id: verbose
+      label: Verbose
+      default: false
+    - type: button
+      label: Refresh image list
+      steps:
+        - app_refresh_images_list
+
+# Extra event names this package may emit (phase 2). Existing hooks fire on the
+# built-in events regardless.
+events: []

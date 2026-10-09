@@ -25,7 +25,7 @@ Each command row has **Insert placeholder** buttons (`{INPUT_PIPE}`,
 token from memory. Your filters are listed in the **Library** sub-tab under
 **Existing** and can be deleted there; shipped ones cannot.
 
-Every filter file carries an `api_version` (currently `1`). A missing or older
+Every filter file carries an `api_version` (currently `3`). A missing or older
 version is shown as **outdated** and can be opened in a raw YAML editor with its
 **YAML** button; saving bumps the version and keeps comments. A file **newer**
 than the app is blocked with a warning. Files without `api_version` still load.

@@ -51,6 +51,7 @@ from ybe.extensions import (
     _parse_extension_text,
     _placeholder_payload,
     _safe_extension_name,
+    _usable_extension_text,
     api_version_status,
     extension_file_for,
     load_actions,
@@ -58,7 +59,9 @@ from ybe.extensions import (
     load_hooks,
     resolve_filter_options,
 )
+from ybe.widgets import load_widgets, sanitize_widget_values
 from ybe.filters import _clear_filter, apply_filters
+from ybe.packages import load_packages
 from ybe.parsing import _normalize_tags, _read_tag_lines, _read_text
 from ybe.pipes import create_pipe
 from ybe.shortcuts import (
@@ -229,6 +232,8 @@ def api_config():
     actions = load_actions()
     hooks, hook_errors = load_hooks()
     filters, filter_errors = load_filters()
+    widgets, widget_errors = load_widgets()
+    packages, package_errors = load_packages()
     classes = read_classes()
     tags = read_tags_yaml()
     filter_catalog = sorted(
@@ -252,6 +257,7 @@ def api_config():
             "steps": a["steps"],
             "after_success": a["after_success"],
             "source": a["source"],
+            "package": a.get("package"),
             "api_version": a["api_version"],
             "status": api_version_status(a["api_version"]),
             "enabled": a["name"] not in disabled["action"],
@@ -265,6 +271,7 @@ def api_config():
             "steps": h["steps"],
             "after_success": h["after_success"],
             "source": h["source"],
+            "package": h.get("package"),
             "api_version": h["api_version"],
             "status": api_version_status(h["api_version"]),
             "enabled": h["name"] not in disabled["hook"],
@@ -278,10 +285,41 @@ def api_config():
             "arguments": f["arguments"],
             "steps": f["steps"],
             "source": f["source"],
+            "package": f.get("package"),
             "api_version": f["api_version"],
             "status": api_version_status(f["api_version"]),
         }
         for f in filters.values()
+    ]
+    widget_defs = [
+        {
+            "name": wgt["name"],
+            "title": wgt["title"],
+            "description": wgt["description"],
+            "controls": wgt["controls"],
+            "source": wgt["source"],
+            "package": wgt.get("package"),
+            "api_version": wgt["api_version"],
+            "status": api_version_status(wgt["api_version"]),
+        }
+        for wgt in widgets.values()
+    ]
+    extension_packages = [
+        {
+            "id": p["id"],
+            "name": p["name"],
+            "description": p["description"],
+            "version": p["version"],
+            "author": p["author"],
+            "active": p["active"],
+            "source": p["source"],
+            "parts": p["parts"],
+            "settings": p["settings"],
+            "events": p["events"],
+            "api_version": p["api_version"],
+            "status": api_version_status(p["api_version"]),
+        }
+        for p in packages
     ]
     return jsonify(
         {
@@ -305,6 +343,10 @@ def api_config():
             "hooks": [h["name"] for h in hooks if h["name"] not in disabled["hook"]],
             "hook_defs": hook_defs,
             "hook_errors": hook_errors,
+            "widget_defs": widget_defs,
+            "widget_errors": widget_errors,
+            "extension_packages": extension_packages,
+            "package_errors": package_errors,
             "app_actions": sorted(config.APP_ACTIONS),
             "backend_actions": sorted(config.BACKEND_ACTION_NAMES),
             "hook_events": list(config.HOOK_EVENTS),
@@ -590,10 +632,19 @@ def api_action_run():
         )
 
     pipe_path = create_pipe()
+    values = _image_action_values(entry, split)
+    # scratch file shared by every step and after_success action of this run
+    values["PIPE_PATH"] = pipe_path or ""
+    run, status, detail = begin_execution(action, name, values, pipe_path)
+    return _execution_response(run, status, detail)
+
+
+def _image_action_values(entry, split):
+    """The placeholder values shared by action and widget runs on one image."""
     # 1-based, matching the "current / total" counter shown in the UI; 0 when the
     # target is not part of the visible list (e.g. an off-filter image).
     position = _image_index(entry)
-    values = {
+    return {
         "IMAGE_PATH": os.path.join(split["images_dir"], entry["name"]),
         "LABEL_PATH": label_path(entry),
         "TAGS_DIR": split["tags_dir"],
@@ -609,10 +660,103 @@ def api_action_run():
         # the interpreter running the app; use {PYTHON} so steps work even when
         # `python` is not on PATH
         "PYTHON": sys.executable,
-        # scratch file shared by every step and after_success action of this run
-        "PIPE_PATH": pipe_path or "",
     }
-    run, status, detail = begin_execution(action, name, values, pipe_path)
+
+
+@app.route("/api/widgets/run", methods=["POST"])
+def api_widget_run():
+    """Run one button of a custom widget on the current image.
+
+    Body `{widget, control, target, values}`: `control` is the button's index in
+    the widget's `controls` list and `values` are the widget's current control
+    values (exposed as `{WIDGET_<ID>}` placeholders). The run reuses the action
+    engine, so it pauses at each client (`app_*`) action exactly like
+    `/api/actions/run`.
+    """
+    data = request.get_json(silent=True) or {}
+    widget_name = (data.get("widget") or "").strip()
+    target = (data.get("target") or "").strip()
+    widget = load_widgets()[0].get(widget_name)
+    if widget is None:
+        return jsonify({"ok": False, "error": f"unknown widget: {widget_name}"}), 400
+    control = _pick_control(widget["controls"], data.get("control"))
+    if control is None:
+        return jsonify({"ok": False, "error": "unknown widget button"}), 400
+    label = f"{widget_name}: {control.get('label') or 'Run'}"
+    return _execute_control(control, label, target, data.get("values"))
+
+
+@app.route("/api/extensions/run", methods=["POST"])
+def api_extensions_run():
+    """Run one button of an extension package's `settings:` block.
+
+    Body `{package, control, target, values}`; same contract as
+    `/api/widgets/run` but sourced from the package manifest's declarative
+    settings controls.
+    """
+    data = request.get_json(silent=True) or {}
+    pid = (data.get("package") or "").strip()
+    pkg = next((p for p in load_packages()[0] if p["id"] == pid), None)
+    if pkg is None:
+        return jsonify({"ok": False, "error": f"unknown package: {pid}"}), 400
+    settings = pkg.get("settings") or {}
+    control = _pick_control(settings.get("controls") or [], data.get("control"))
+    if control is None:
+        return jsonify({"ok": False, "error": "unknown package button"}), 400
+    label = f"{pkg['name']}: {control.get('label') or 'Run'}"
+    return _execute_control(control, label, (data.get("target") or "").strip(),
+                            data.get("values"))
+
+
+def _pick_control(controls, raw_index):
+    """Resolve a submitted button index to its control dict, or None."""
+    try:
+        index = int(raw_index)
+    except (TypeError, ValueError):
+        return None
+    if index < 0 or index >= len(controls):
+        return None
+    control = controls[index]
+    if control.get("type") != "button":
+        return None
+    return control
+
+
+def _execute_control(control, name, target, raw_values):
+    """Run a widget/package button through the action engine."""
+    entry = _entry_by_key(target)
+    if entry is None:
+        return (
+            jsonify({"ok": False, "error": f"image not in the current list: {target}"}),
+            400,
+        )
+    split = _split_by_name(entry["split"])
+    if split is None:
+        abort(404)
+
+    values, error = sanitize_widget_values(raw_values)
+    if error:
+        return jsonify({"ok": False, "error": error}), 400
+
+    action = {
+        "name": name,
+        "steps": list(control.get("steps") or []),
+        "after_success": list(control.get("after_success") or []),
+    }
+    if control.get("action"):
+        # A named action: expand its steps/after_success here, so the button
+        # behaves exactly like a toolbar action with extra {WIDGET_*} values.
+        named = next((a for a in load_actions() if a["name"] == control["action"]), None)
+        if named is None:
+            return jsonify({"ok": False, "error": f"unknown action: {control['action']}"}), 400
+        action["steps"] = list(named["steps"]) + action["steps"]
+        action["after_success"] = list(named["after_success"]) + action["after_success"]
+
+    pipe_path = create_pipe()
+    run_values = _image_action_values(entry, split)
+    run_values["PIPE_PATH"] = pipe_path or ""
+    run_values.update(values)
+    run, status, detail = begin_execution(action, name, run_values, pipe_path)
     return _execution_response(run, status, detail)
 
 
@@ -880,12 +1024,11 @@ def _save_extension_file():
         ), 400
 
     parsed = _parse_extension_text(kind, text)
-    if kind == "filter":
-        usable = bool(parsed.get("steps"))
-    else:
-        usable = bool(parsed.get("steps") or parsed.get("after_success"))
-    if not usable:
-        return jsonify({"ok": False, "error": "the file has no steps / after_success"}), 400
+    if not _usable_extension_text(kind, parsed):
+        return jsonify(
+            {"ok": False, "error": "the file is not a usable extension "
+             "(no steps / after_success, or no valid controls)"}
+        ), 400
 
     if found["source"] == "user":
         target = found["path"]

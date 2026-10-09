@@ -20,6 +20,7 @@ import os
 import re
 
 from ybe import config, state
+from ybe.packages import extension_sources
 from ybe.parsing import (
     _parse_api_version,
     _parse_yaml_names_value,
@@ -149,7 +150,7 @@ def load_actions():
     is read first, the user's <home>/actions/ second (it wins on a name clash).
     """
     merged = {}
-    for source, dirpath in (("shipped", config.ACTIONS_DIR), ("user", config.USER_ACTIONS_DIR)):
+    for source, dirpath, pkg in extension_sources("action"):
         for path in _action_files(dirpath):
             data = _parse_action_file(_read_text(path))
             name = _action_name(path, data["name"])
@@ -162,6 +163,7 @@ def load_actions():
                     "after_success": data["after_success"],
                     "api_version": data["api_version"],
                     "source": source,
+                    "package": pkg,
                     "path": path,
                 }
     return list(merged.values())
@@ -198,7 +200,7 @@ def load_hooks():
     """
     merged = {}
     errors = []
-    for source, dirpath in (("shipped", config.HOOKS_DIR), ("user", config.USER_HOOKS_DIR)):
+    for source, dirpath, pkg in extension_sources("hook"):
         for path in _action_files(dirpath):
             data = _parse_action_file(_read_text(path))
             event = _hook_event(path, data)
@@ -221,6 +223,7 @@ def load_hooks():
                 "after_success": data["after_success"],
                 "api_version": data["api_version"],
                 "source": source,
+                "package": pkg,
                 "path": path,
             }
     return list(merged.values()), errors
@@ -428,7 +431,7 @@ def load_filters():
     <home>/filters/ second (it wins on a name clash).
     """
     merged, errors = {}, []
-    for source, dirpath in (("shipped", config.FILTERS_DIR), ("user", config.USER_FILTERS_DIR)):
+    for source, dirpath, pkg in extension_sources("filter"):
         for path in _filter_files(dirpath):
             data = _parse_filter_file(_read_text(path))
             fname = os.path.basename(path)
@@ -446,6 +449,7 @@ def load_filters():
                 "steps": data["steps"],
                 "api_version": data["api_version"],
                 "source": source,
+                "package": pkg,
                 "path": path,
             }
     return merged, errors
@@ -647,7 +651,20 @@ def _parse_extension_text(kind, text):
     """Parse raw editor text with the parser for `kind`."""
     if kind in ("action", "hook"):
         return _parse_action_file(text)
+    if kind == "widget":
+        from ybe.widgets import _parse_widget_file
+        return _parse_widget_file(text)
     return _parse_filter_file(text)
+
+
+def _usable_extension_text(kind, parsed):
+    """Whether parsed text defines a usable extension of `kind`."""
+    if kind == "filter":
+        return bool(parsed.get("steps"))
+    if kind == "widget":
+        from ybe.widgets import _validate_widget
+        return _validate_widget("widget.yaml", parsed)[0] is not None
+    return bool(parsed.get("steps") or parsed.get("after_success"))
 
 
 def _extension_user_dir(kind):
@@ -656,6 +673,7 @@ def _extension_user_dir(kind):
         "action": config.USER_ACTIONS_DIR,
         "hook": config.USER_HOOKS_DIR,
         "filter": config.USER_FILTERS_DIR,
+        "widget": config.USER_WIDGETS_DIR,
     }.get(kind)
 
 
@@ -672,6 +690,9 @@ def extension_file_for(kind, name):
         entry = next((h for h in load_hooks()[0] if h["name"] == name), None)
     elif kind == "filter":
         entry = load_filters()[0].get(name)
+    elif kind == "widget":
+        from ybe.widgets import widget_file_for
+        return widget_file_for(name)
     if entry is None:
         return None
     return {
@@ -679,6 +700,7 @@ def extension_file_for(kind, name):
         "name": name,
         "path": entry["path"],
         "source": entry["source"],
+        "package": entry.get("package"),
         "api_version": entry.get("api_version"),
     }
 

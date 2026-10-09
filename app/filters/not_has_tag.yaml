@@ -2,7 +2,7 @@
 #
 # Same `{DATASET_TAG_NAMES}` dropdown as `has_tag.yaml`; the helper runs with
 # `--invert`.
-api_version: 1
+api_version: 3
 name: Does not have tag
 description: Keep only images that do not have the chosen tag.
 arguments:

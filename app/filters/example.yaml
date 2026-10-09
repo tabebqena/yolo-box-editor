@@ -10,7 +10,7 @@
 #
 # Format (2-space indentation, lines starting with # are ignored):
 #
-#   api_version: 1          # extension format version (see below)
+#   api_version: 3          # extension format version (see below)
 #   name: Keep every N-th   # optional; defaults to the file name
 #   description: ...        # optional; shown (trimmed) in the Filters tab
 #   active: true            # optional; false hides the filter everywhere
@@ -49,7 +49,7 @@
 # and the failing filter is named. Steps run with the working directory set to
 # {HOME_DIR}, so write files with explicit paths.
 
-api_version: 1
+api_version: 3
 name: Keep every N-th (example)
 description: Working example — keeps one image out of every N, optionally reversed.
 active: true
