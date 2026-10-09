@@ -13,6 +13,7 @@ import uuid
 
 from flask import (
     Flask,
+    Response,
     abort,
     jsonify,
     render_template,
@@ -61,7 +62,7 @@ from ybe.extensions import (
 )
 from ybe.widgets import load_widgets, sanitize_widget_values
 from ybe.filters import _clear_filter, apply_filters
-from ybe.packages import load_packages
+from ybe.packages import load_packages, package_script_path, plugin_api_status
 from ybe.parsing import _normalize_tags, _read_tag_lines, _read_text
 from ybe.pipes import create_pipe
 from ybe.shortcuts import (
@@ -226,6 +227,20 @@ def api_password():
 
 
 # --- app config, settings, shortcuts, presence ----------------------------- #
+def _extension_ui_payload(ui):
+    """The UI-panel descriptor for `/api/config`, or None when absent."""
+    if not ui:
+        return None
+    return {
+        "title": ui.get("title") or "",
+        "script": ui.get("script") or "",
+        "location": ui.get("location") or "float",
+        "height": ui.get("height"),
+        "api_version": ui.get("api_version"),
+        "status": plugin_api_status(ui.get("api_version")),
+    }
+
+
 @app.route("/api/config")
 def api_config():
     app_shortcuts, user_shortcuts, shortcut_errors = split_shortcuts(load_shortcuts())
@@ -316,6 +331,7 @@ def api_config():
             "parts": p["parts"],
             "settings": p["settings"],
             "events": p["events"],
+            "ui": _extension_ui_payload(p["ui"]),
             "api_version": p["api_version"],
             "status": api_version_status(p["api_version"]),
         }
@@ -351,6 +367,7 @@ def api_config():
             "backend_actions": sorted(config.BACKEND_ACTION_NAMES),
             "hook_events": list(config.HOOK_EVENTS),
             "extension_api_version": config.EXTENSION_API_VERSION,
+            "plugin_api_version": config.PLUGIN_API_VERSION,
             "placeholders": {
                 "action": _placeholder_payload(config.ACTION_PLACEHOLDERS),
                 "filter": _placeholder_payload(config.FILTER_PLACEHOLDERS),
@@ -1049,6 +1066,28 @@ def _save_extension_file():
 
     # Re-resolve so the reply reflects the user override and bumped version.
     return jsonify(_extension_file_payload(extension_file_for(kind, data.get("name")) or found, text))
+
+
+@app.route("/api/extensions/script")
+def api_extension_script():
+    """Serve an extension package's sandboxed UI-panel script.
+
+    The host app fetches this text (the sandboxed iframe has no network of its
+    own) and inlines it into a generated wrapper. Only active packages are
+    served, and the resolved path must stay inside the package folder.
+    """
+    pid = (request.args.get("package") or "").strip()
+    pkg = next((p for p in load_packages()[0] if p["id"] == pid and p["active"]), None)
+    if pkg is None or not pkg.get("ui"):
+        return jsonify({"ok": False, "error": "unknown or inactive package"}), 404
+    path = package_script_path(pkg)
+    if path is None:
+        return jsonify({"ok": False, "error": "panel script not found"}), 404
+    return Response(
+        _read_text(path),
+        mimetype="text/javascript",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 # --- single image and its annotations -------------------------------------- #

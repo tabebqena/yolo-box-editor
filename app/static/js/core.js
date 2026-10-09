@@ -182,6 +182,7 @@ let appActions = []; // built-in app action names (Settings > Actions/Hooks)
 let backendActions = []; // built-in server action names
 let hookEvents = []; // known hook events
 let extensionApiVersion = 1; // extension YAML format version the UI writes
+let pluginApiVersion = 1; // UI-panel (YBE) plugin API version the UI supports
 let placeholders = { action: [], filter: [] }; // click-to-insert catalogs
 let actionDefs = []; // [{name, steps, after_success, source, status, api_version}]
 // Loaded hook definitions (Settings > Hooks).
@@ -243,6 +244,7 @@ function selectOnlyBox(i) {
   selectedSet = new Set(i >= 0 ? [i] : []);
   selected = i;
   if (i >= 0) lastSelected = i;
+  emitUiEvent('selection_changed', { indices: selectionIndices() });
 }
 
 /**
@@ -251,6 +253,7 @@ function selectOnlyBox(i) {
 function clearBoxSelection() {
   selectedSet = new Set();
   selected = -1;
+  emitUiEvent('selection_changed', { indices: [] });
 }
 
 /**
@@ -269,6 +272,7 @@ function toggleBoxSelection(i) {
     lastSelected = i;
   }
   if (selected < 0) justDrawn = false;
+  emitUiEvent('selection_changed', { indices: selectionIndices() });
 }
 
 /**

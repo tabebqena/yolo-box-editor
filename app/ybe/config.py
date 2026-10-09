@@ -234,8 +234,15 @@ HOOK_EVENTS = (
 # The extension YAML format version. Bump it only when the action/hook/filter/
 # widget/package file format changes: the UI compares a file's `api_version:`
 # against this to flag files that predate (or postdate) the format it understands.
-# v2 added custom widgets; v3 added extension packages.
-EXTENSION_API_VERSION = 3
+# v2 added custom widgets; v3 added extension packages; v4 added sandboxed UI
+# panels (`ui:` in an extension manifest).
+EXTENSION_API_VERSION = 4
+
+# The UI-panel plugin API version. Separate from EXTENSION_API_VERSION because a
+# panel's JavaScript talks to the app through `YBE`, whose shape evolves on its
+# own schedule. A package declares it as `ui.api_version:`; the UI compares it
+# against this to block panels written for a newer API.
+PLUGIN_API_VERSION = 1
 
 # Placeholder catalogs offered by the UI's click-to-insert palette. Keep them in
 # sync with the values built in `api_action_run` and `_filter_placeholder_values`

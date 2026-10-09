@@ -22,8 +22,8 @@ const APP_JS = path.join(ROOT, 'app', 'static', 'app.js');
 // share one global lexical environment, then app.js (the entry point) runs.
 const MODULE_FILES = [
   'core.js', 'api.js', 'canvas.js', 'navigation.js', 'extensions.js', 'shortcuts.js',
-  'images.js', 'editing.js', 'appearance.js', 'widgets.js', 'packages.js', 'help.js',
-  'events.js',
+  'images.js', 'editing.js', 'appearance.js', 'widgets.js', 'plugin_api.js',
+  'packages.js', 'help.js', 'events.js',
 ].map((f) => path.join(ROOT, 'app', 'static', 'js', f));
 
 // Top-level `let` declarations in app.js that tests may need to set directly.
@@ -35,7 +35,8 @@ const LET_STATE = [
   'justDrawn', 'editingPoint', 'appShortcuts', 'actionShortcuts',
   'shortcutErrors', 'shortcutDefaults', 'userShortcutNames', 'shortcutEditMode',
   'shortcutDraft', 'shortcutResets', 'hookErrors', 'filterErrors', 'appActions',
-  'backendActions', 'hookEvents', 'extensionApiVersion', 'placeholders',
+  'backendActions', 'hookEvents', 'extensionApiVersion', 'pluginApiVersion',
+  'placeholders',
   'actionDefs', 'hookDefs', 'filterDefs', 'widgetDefs', 'widgetErrors',
   'extensionPackages', 'customWidgetNames', 'yamlEditor', 'undoStack', 'redoStack',
   'moved', 'dragUndoPushed', 'imgW', 'imgH', 'dirty', 'readonly',
@@ -54,7 +55,7 @@ const LET_STATE = [
 const CONST_NAMES = [
   'ESCAPE_CLOSERS', 'WIDGETS', 'APP_SHORTCUT_ORDER', 'APP_SHORTCUT_HANDLERS',
   'APP_SHORTCUT_ORDER', 'EXT_TYPE_LABELS', 'SHORTCUT_MODIFIERS',
-  'DOCK_LOCATIONS', 'TOAST_MAX', 'NOTIF_LOG_MAX', 'FILTER_CHAIN_MAX',
+  'DOCK_LOCATIONS', 'TOAST_MAX', 'NOTIF_LOG_MAX', 'FILTER_CHAIN_MAX', 'PANELS',
   'LAST_IMAGE_KEY', 'VIEW_KEY', 'SHOW_BOXES_KEY', 'CLIENT_ID',
   'SHOW_BOX_DETAILS_KEY', 'ISOLATE_BOX_KEY',
 ];

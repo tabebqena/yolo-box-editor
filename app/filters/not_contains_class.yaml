@@ -2,7 +2,7 @@
 #
 # Same `{DATASET_CLASS_NAMES}` dropdown as `contains_class.yaml`; the helper runs
 # with `--invert`.
-api_version: 3
+api_version: 4
 name: Does not contain class
 description: Keep only images whose label does not contain the chosen class.
 arguments:

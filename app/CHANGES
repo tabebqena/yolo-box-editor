@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 9.0.0
+- Extension packages can now add their own **UI panel** — custom HTML/CSS/JS shown docked or floating like a widget. A panel runs sandboxed in its own opaque-origin iframe with no network and cannot touch the app's page; it talks to the app only through the async `YBE` object (read editor state, edit tags/boxes, run actions, subscribe to events). Declare it with a `ui:` block in `extension.yaml`. This is code, not data: only install panels you trust.
+
 ## 8.2.0
 - New built-in actions for refreshing the current image without a page reload: `app_refresh_image_labels` (re-read labels), `app_refresh_image_tags` (re-read tags) and `app_refresh_image_all` (pixels, labels and tags). `app_refresh_image` still re-fetches just the pixels. Handy in an action/hook `after_success` or a widget button after an external tool edits the image.
 

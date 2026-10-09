@@ -22,7 +22,7 @@ Widgets are loaded fresh from disk, so after saving a file just reload the page.
 ## Format
 
 ```yaml
-api_version: 3
+api_version: 4
 name: My tools              # optional; the file name is used otherwise
 title: My tools             # optional; shown in the frame header
 controls:

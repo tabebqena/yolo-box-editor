@@ -117,6 +117,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
   notifyUpdateDaily();
   notifyChangelog(cfg0);
   maybeShowTip(cfg0.tips);
+  emitUiEvent('dataset_loaded', { dataYaml: cfg.data_yaml || '' });
   runHook('on_images_list_loaded');
 }
 
@@ -208,6 +209,7 @@ function applyImageTags(tagList) {
   dirty = false;
   updateHistoryButtons();
   renderTagBar();
+  emitUiEvent('tags_changed', { tags: imageTags.slice() });
 }
 
 /**
@@ -299,6 +301,7 @@ function loadImage(i) {
       updateHistoryButtons();
       dbg('loadImage resolved', { index: currentIndex, boxes: boxes.length,
         tags: imageTags.length, src: imageUrl });
+      emitUiEvent('image_loaded', { split: entry.split, name: entry.name });
       runHook('on_image_loaded');
     }).catch((err) => {
       // e.g. the key is no longer in the server list (a stale tab): blank it
@@ -573,6 +576,7 @@ function addTag(name) {
   imageTags = [...imageTags, name];
   markDirty();
   renderTagBar();
+  emitUiEvent('tags_changed', { tags: imageTags.slice() });
   setTagStatus(`Tag "${name}" added`);
 }
 
@@ -587,6 +591,7 @@ function removeTag(name) {
   imageTags = imageTags.filter((t) => t !== name);
   markDirty();
   renderTagBar();
+  emitUiEvent('tags_changed', { tags: imageTags.slice() });
   setTagStatus(`Tag "${name}" removed`);
 }
 

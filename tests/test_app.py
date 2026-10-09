@@ -3590,7 +3590,7 @@ def write_widget(root, fname, body, subdir="widgets"):
 
 
 WIDGET_YAML = """\
-api_version: 3
+api_version: 4
 name: Tools
 title: Tools
 controls:
@@ -3703,7 +3703,7 @@ def write_package(root, pid, manifest, parts=None):
 
 
 PKG_MANIFEST = """\
-api_version: 3
+api_version: 4
 name: My Pack
 description: demo
 version: 1.0.0
@@ -3787,3 +3787,81 @@ def test_extensions_run_package_settings(clean_state):
     assert data["ok"] is True
     assert data["client_action"] == "app_refresh_images_list"
     assert ybe.state.EXECUTIONS[data["uid"]]["values"]["WIDGET_VERBOSE"] == "1"
+
+
+# --------------------------------------------------------------------------- #
+# sandboxed UI panels (plugin API)
+# --------------------------------------------------------------------------- #
+PANEL_JS = "window.YBE.state.getTags().then(function (t) { document.title = t.join(); });\n"
+
+UI_MANIFEST = """\
+api_version: 4
+name: My Pack
+description: demo
+version: 1.0.0
+active: true
+ui:
+  api_version: 1
+  title: My Panel
+  script: panel.js
+  location: right
+  height: 200
+"""
+
+
+def test_plugin_api_status():
+    assert ybe.plugin_api_status(1) == "current"
+    assert ybe.plugin_api_status(2) == "newer"
+    assert ybe.plugin_api_status(0) == "outdated"
+    assert ybe.plugin_api_status(None) == "outdated"
+
+
+def test_load_packages_parses_ui(clean_state):
+    write_package(clean_state, "mypack", UI_MANIFEST, [("", "panel.js", PANEL_JS)])
+    pkgs, errors = ybe.load_packages()
+    assert errors == []
+    ui = pkgs[0]["ui"]
+    assert ui["api_version"] == 1
+    assert ui["title"] == "My Panel"
+    assert ui["script"] == "panel.js"
+    assert ui["location"] == "right"
+    assert ui["height"] == 200
+
+
+def test_package_script_path_rejects_traversal(clean_state):
+    manifest = UI_MANIFEST.replace("script: panel.js", "script: ../evil.js")
+    write_package(clean_state, "mypack", manifest, [("", "panel.js", PANEL_JS)])
+    pkgs, _ = ybe.load_packages()
+    assert ybe.package_script_path(pkgs[0]) is None
+
+
+def test_package_script_path_resolves(clean_state):
+    write_package(clean_state, "mypack", UI_MANIFEST, [("", "panel.js", PANEL_JS)])
+    pkgs, _ = ybe.load_packages()
+    path = ybe.package_script_path(pkgs[0])
+    assert path and path.endswith("panel.js") and os.path.isfile(path)
+
+
+def test_api_config_includes_panel_ui(clean_state):
+    write_package(clean_state, "mypack", UI_MANIFEST, [("", "panel.js", PANEL_JS)])
+    cfg = ybe.app.test_client().get("/api/config").get_json()
+    ui = cfg["extension_packages"][0]["ui"]
+    assert ui["script"] == "panel.js" and ui["status"] == "current"
+    assert cfg["plugin_api_version"] == 1
+
+
+def test_extension_script_route_serves_text(clean_state):
+    write_package(clean_state, "mypack", UI_MANIFEST, [("", "panel.js", PANEL_JS)])
+    resp = ybe.app.test_client().get("/api/extensions/script?package=mypack")
+    assert resp.status_code == 200
+    assert b"YBE" in resp.data
+    assert resp.headers["Content-Type"].startswith("text/javascript")
+
+
+def test_extension_script_route_rejects_inactive_and_unknown(clean_state):
+    write_package(clean_state, "mypack",
+                  UI_MANIFEST.replace("active: true", "active: false"),
+                  [("", "panel.js", PANEL_JS)])
+    client = ybe.app.test_client()
+    assert client.get("/api/extensions/script?package=mypack").status_code == 404
+    assert client.get("/api/extensions/script?package=nope").status_code == 404

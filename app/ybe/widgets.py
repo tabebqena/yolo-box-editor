@@ -68,7 +68,7 @@ def _parse_widget_file(text):
     """Parse one widget YAML file into a dict of its keys.
 
     Format (2-space indentation, whole-line # comments):
-        api_version: 3
+        api_version: 4
         name: My Tools            # optional; the file name is used otherwise
         title: My Tools           # optional; shown in the frame header
         controls:

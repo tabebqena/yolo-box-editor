@@ -111,6 +111,7 @@ function toggleFixSelected() {
 function markDirty() {
   dirty = true;
   scheduleAutoSave();
+  emitUiEvent('boxes_changed', {});
 }
 
 /**
@@ -163,6 +164,7 @@ async function save(opts = {}) {
       if (!opts.silent) toast(`Saved ${data.count} box(es)`, { type: 'success' });
       renderTagBar();
       updateHistoryButtons();
+      emitUiEvent('saved', { count: data.count });
       runHook('on_after_save');
     } else {
       dbgWarn('save failed', { status: res.status, error: data.error });

@@ -29,7 +29,7 @@ The user folder is read after the shipped one and wins on an id clash.
 ## The manifest
 
 ```yaml
-api_version: 3
+api_version: 4
 id: my-tools              # optional; the folder name is used otherwise
 name: My Tools
 description: A short summary shown in the Extensions tab.
@@ -81,6 +81,14 @@ manifest info (source, version, format status) and its parts. Each part has a
 
 The existing **Actions**, **Hooks** and **Filters** tabs are unchanged; they are
 still where you edit loose (flat) extensions.
+
+## UI panels
+
+A package may also add a **sandboxed UI panel** — your own HTML/CSS/JS shown
+like a widget. Panels are code and run isolated (opaque-origin iframe, no
+network) and talk to the app only through the async `YBE` object. Declare one
+with a `ui:` block in the manifest; see
+[extension UI panels](extensions-ui.md).
 
 ## Events
 

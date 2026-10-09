@@ -80,7 +80,7 @@ def _parse_manifest(text):
     data = {
         "id": None, "name": None, "description": None, "version": None,
         "author": None, "active": True, "api_version": None,
-        "settings": None, "events": [],
+        "settings": None, "events": [], "ui": None,
     }
     lines = text.splitlines(keepends=True)
     for raw in lines:
@@ -121,7 +121,81 @@ def _parse_manifest(text):
                 name = _yaml_scalar(line[2:].strip())
                 if name and name not in data["events"]:
                     data["events"].append(name)
+
+    ui_block = _indented_block(text, "ui")
+    if ui_block:
+        ui = _parse_ui(ui_block)
+        if ui is not None:
+            data["ui"] = ui
     return data
+
+
+def _parse_ui(block):
+    """Parse a `ui:` block into its fields, or None when there is no script.
+
+    Format (dedented by `_indented_block`):
+        api_version: 1
+        title: My Panel
+        script: panel.js
+        location: float     # float | left | right | bottom
+        height: 220         # optional initial body height, px
+    """
+    ui = {"api_version": None, "title": None, "script": None,
+          "location": "float", "height": None}
+    for raw in block.splitlines():
+        if len(raw) - len(raw.lstrip(" ")) != 0:
+            continue
+        s = raw.strip()
+        if not s or s.startswith("#") or ":" not in s:
+            continue
+        key, _, value = s.partition(":")
+        key, value = key.strip(), _strip_comment(value)
+        if key == "api_version":
+            ui["api_version"] = _parse_api_version(value)
+        elif key in ("title", "script", "location"):
+            ui[key] = _yaml_scalar(value)
+        elif key == "height":
+            try:
+                ui["height"] = int(float(value))
+            except (TypeError, ValueError):
+                ui["height"] = None
+    if ui["location"] not in ("float", "left", "right", "bottom"):
+        ui["location"] = "float"
+    if not ui["script"]:
+        return None
+    return ui
+
+
+def plugin_api_status(version):
+    """Classify a panel's `ui.api_version` against `config.PLUGIN_API_VERSION`."""
+    if not isinstance(version, int):
+        return "outdated"
+    if version < config.PLUGIN_API_VERSION:
+        return "outdated"
+    if version > config.PLUGIN_API_VERSION:
+        return "newer"
+    return "current"
+
+
+def package_script_path(pkg):
+    """Absolute path of a package's `ui.script`, or None when missing/unsafe.
+
+    Resolves the real path and requires it to stay inside the package folder, so
+    a `..` or absolute path can never escape it.
+    """
+    script = (pkg.get("ui") or {}).get("script")
+    if not script:
+        return None
+    base = os.path.realpath(pkg["path"])
+    target = os.path.realpath(os.path.join(base, script))
+    try:
+        if os.path.commonpath([base, target]) != base:
+            return None
+    except ValueError:
+        return None  # e.g. different drives on Windows
+    if not os.path.isfile(target):
+        return None
+    return target
 
 
 def _discover_parts(path):
@@ -171,6 +245,7 @@ def load_packages():
                 "api_version": data["api_version"],
                 "settings": data["settings"],
                 "events": data["events"],
+                "ui": data["ui"],
                 "parts": _discover_parts(path),
                 "source": source,
                 "path": path,

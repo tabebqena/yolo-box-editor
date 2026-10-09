@@ -24,7 +24,7 @@ sub-tabs, **Create** and **Existing**:
   disabled action also cannot be run as an `action_<Name>` reference). The
   choice is remembered per dataset and can be reverted at any time.
 
-Every extension file carries an `api_version` (currently `3`). A file whose
+Every extension file carries an `api_version` (currently `4`). A file whose
 version is missing or older than the app is shown as **outdated**: use its
 **YAML** button to open it in the raw editor, adjust it and save — the version
 is bumped for you and comments are kept. A file **newer** than the app is

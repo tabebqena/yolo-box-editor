@@ -17,6 +17,8 @@ const PACKAGE_PART_LABELS = {
   filter: 'Filters',
   widget: 'Widgets',
 };
+// Panel loads in flight, so a config refresh does not fetch the same script twice.
+const panelLoading = {};
 
 /**
  * Build the parts list (one row per extension file) for a package subtab.
@@ -85,6 +87,12 @@ function buildPackagePanel(pkg) {
   if (pkg.author) panel.appendChild(mk('p', 'hint', 'by ' + pkg.author));
 
   panel.appendChild(buildPackageParts(pkg));
+  if (pkg.ui) {
+    const note = pkg.ui.status === 'newer'
+      ? ' (newer than the app — not loaded)'
+      : (pkg.active ? '' : ' (package disabled)');
+    panel.appendChild(mk('p', 'hint', 'UI panel: ' + (pkg.ui.title || pkg.id) + note));
+  }
   if (pkg.settings && (pkg.settings.controls || []).length) {
     panel.appendChild(buildPackageSettings(pkg));
   }
@@ -122,4 +130,54 @@ function renderExtensionsTab() {
     bodies.appendChild(panel);
   });
   root.append(tabs, bodies);
+}
+
+// ------------------------------------------------------------------------- //
+// sandboxed UI panels (see js/plugin_api.js)
+//
+// The host fetches each active package's panel script and mounts it in an
+// opaque-origin iframe. Mounted panels are kept across config refreshes; only a
+// package that disappeared, went inactive, or lost its `ui:` is torn down.
+// ------------------------------------------------------------------------- //
+/**
+ * Reconcile the mounted sandboxed panels with the current packages.
+ * @returns {void}
+ */
+function renderExtensionPanels() {
+  const wanted = {};
+  (extensionPackages || []).forEach((pkg) => {
+    if (!pkg.active || !pkg.ui || pkg.ui.status === 'newer') return;
+    wanted['panel.' + pkg.id] = pkg;
+  });
+  Object.keys(PANELS).forEach((name) => {
+    if (!wanted[name]) {
+      unmountExtensionPanel(name);
+      delete panelLoading[name];
+    }
+  });
+  Object.keys(wanted).forEach((name) => {
+    if (PANELS[name] || panelLoading[name]) return;
+    loadExtensionPanel(wanted[name]);
+  });
+}
+
+/**
+ * Fetch one package's panel script and mount it.
+ * @param {object} pkg - The package definition.
+ * @returns {Promise<void>}
+ */
+async function loadExtensionPanel(pkg) {
+  const name = 'panel.' + pkg.id;
+  panelLoading[name] = true;
+  try {
+    const res = await fetch('/api/extensions/script?package=' + encodeURIComponent(pkg.id));
+    const text = await res.text();
+    if (!res.ok) throw new Error(text || ('HTTP ' + res.status));
+    mountExtensionPanel(pkg, text);
+  } catch (e) {
+    dbgWarn('panel load failed', e);
+    toast('Panel "' + (pkg.name || pkg.id) + '" failed to load', { type: 'error' });
+  } finally {
+    delete panelLoading[name];
+  }
 }

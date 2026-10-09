@@ -411,6 +411,8 @@ function createWidgetFrame(name, title) {
 function registerWidget(name, def) {
   const key = 'ybe_widget_' + name + '_dock';
   const visibleKey = 'ybe_widget_' + name + '_visible';
+  const defaultDock = DOCK_LOCATIONS.includes(def.defaultDock) && def.defaultDock !== 'default'
+    ? def.defaultDock : 'float';
   WIDGETS[name] = {
     frame: def.frame.id,
     body: def.body.id,
@@ -420,11 +422,11 @@ function registerWidget(name, def) {
     select: def.select,
     visibleKey,
     visibleSw: def.visibleSw,
-    defaultDock: 'float',
+    defaultDock,
     noDefault: true,
   };
   const saved = settingsGet(key);
-  dockState[name] = DOCK_LOCATIONS.includes(saved) && saved !== 'default' ? saved : 'float';
+  dockState[name] = DOCK_LOCATIONS.includes(saved) && saved !== 'default' ? saved : defaultDock;
   visibleState[name] = settingsGet(visibleKey) !== '0';
   initFloatWindow(def.frame);
   applyWidget(name);

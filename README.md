@@ -102,8 +102,9 @@ Full details: [install, update and run](docs/install.md).
   checkboxes and text inputs in a `widgets/*.yaml` file. See
   [widgets](docs/widgets.md).
 - **Extension packages**: group actions, hooks, filters and widgets into an
-  `extensions/<name>/` folder, with its own Settings subtab. See
-  [extension packages](docs/extensions.md).
+  `extensions/<name>/` folder, with its own Settings subtab and optional
+  sandboxed **UI panel**. See [extension packages](docs/extensions.md) and
+  [extension UI panels](docs/extensions-ui.md).
 - **Configurable shortcuts** in `shortcuts.txt`.
 - **Built-in help** — a 3-level tutorial (Beginner / Intermediate / Expert) and
   task-focused **How to?** recipes, reachable with **F1** or the **?** button in
@@ -159,6 +160,7 @@ missing, see [Why can't I see my tag?](docs/tags.md#why-cant-i-see-my-tag).
 - [actions and hooks](docs/actions-and-hooks.md) — custom commands and events.
 - [widgets](docs/widgets.md) — custom dockable control panels.
 - [extension packages](docs/extensions.md) — group extensions with a Settings subtab.
+- [extension UI panels](docs/extensions-ui.md) — sandboxed custom panels and the `YBE` API.
 - [filters](docs/filters.md) — narrow the image list with scripts.
 - [tags](docs/tags.md) — the tagging scheme and troubleshooting.
 - [CHANGELOG.md](CHANGELOG.md) — what changed in each version.

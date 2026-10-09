@@ -761,6 +761,7 @@ function applyReadonly() {
   updateHistoryButtons();
   renderTagBar();
   draw();
+  emitReadonlyChange();
 }
 
 el('readonlySw').addEventListener('change', (e) => {

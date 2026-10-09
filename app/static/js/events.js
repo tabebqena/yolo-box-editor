@@ -485,6 +485,7 @@ function applyImagesPayload(data, anchor, label) {
     return;
   }
   loadImage(resolveImageAnchor(anchor));
+  emitUiEvent('images_list_loaded', { count: images.length });
   runHook('on_images_list_loaded');
 }
 

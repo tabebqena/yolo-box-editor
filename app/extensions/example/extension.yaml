@@ -7,7 +7,7 @@
 # widgets, and may add a Settings > Extensions subtab. It builds on top of the
 # existing actions/hooks/filters/widgets — those flat folders and their tabs are
 # unchanged, and a flat file always wins over a package file of the same name.
-api_version: 3
+api_version: 4
 name: Example package
 description: Demonstrates an extension package (actions, a hook, a widget, settings).
 version: 1.0.0
@@ -28,6 +28,16 @@ settings:
       label: Refresh image list
       steps:
         - app_refresh_images_list
+
+# A sandboxed UI panel. The script runs in an opaque-origin iframe with no
+# network and can only reach the app through the async `YBE` object. This
+# package is shipped `active: false`, so the panel is listed but not mounted.
+ui:
+  api_version: 1
+  title: Example panel
+  script: panel.js
+  location: float
+  height: 180
 
 # Extra event names this package may emit (phase 2). Existing hooks fire on the
 # built-in events regardless.

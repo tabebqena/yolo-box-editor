@@ -357,11 +357,13 @@ function applyExtensionConfig(cfg) {
   widgetDefs = cfg.widget_defs || [];
   widgetErrors = cfg.widget_errors || [];
   extensionPackages = cfg.extension_packages || [];
+  pluginApiVersion = cfg.plugin_api_version || 1;
   renderActionBuilder();
   renderHookBuilder();
   renderFilterBuilder();
   renderCustomWidgets();
   renderExtensionsTab();
+  renderExtensionPanels();
 }
 
 /**

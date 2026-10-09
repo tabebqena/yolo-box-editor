@@ -4,7 +4,7 @@
 # app expands into the loaded dataset's available tags (from tags.yaml), so the UI
 # shows a dropdown and only valid tags can be picked. `{TAGS_DIR}` is the active
 # split's tags folder, so a custom tags folder is honoured.
-api_version: 3
+api_version: 4
 name: Has tag
 description: Keep only images that have the chosen tag.
 arguments:

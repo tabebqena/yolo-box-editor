@@ -4,6 +4,29 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [9.0.0] - 2026-10-09
+
+### Added
+
+- **Sandboxed UI panels for extension packages.** A package can declare a `ui:`
+  panel (`api_version`, `title`, `script`, `location`, `height`) and ship a
+  `panel.js`. The host runs it in an **opaque-origin iframe**
+  (`sandbox="allow-scripts"`, strict CSP with `connect-src 'none'`) that has no
+  access to the app's page and no network; it talks to the app only through the
+  async **`YBE`** bridge, whose whitelisted methods read editor state and edit
+  tags/boxes/selection, run actions, refresh the image and subscribe to events.
+  The host answers with copies; `--readonly` is enforced in the callbacks and on
+  the server. Mounted panels appear in Settings → Layout like widgets. See
+  `docs/extensions-ui.md`.
+
+### Changed
+
+- The extension YAML format version is now `4` (was `3`); the UI-panel plugin
+  API is versioned separately as `PLUGIN_API_VERSION = 1`.
+- A new server route `GET /api/extensions/script?package=<id>` serves a
+  package's panel script (active packages only, path-guarded), and `/api/config`
+  reports `plugin_api_version` plus each package's `ui` descriptor.
+
 ## [8.2.0] - 2026-10-09
 
 ### Added

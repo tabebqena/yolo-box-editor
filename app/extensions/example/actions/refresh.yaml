@@ -1,4 +1,4 @@
-api_version: 3
+api_version: 4
 name: Example: refresh list
 description: Re-scan the image folders (example package action).
 steps:
