@@ -1,0 +1,6 @@
+# Extension format v1: the original action shape (single-line steps).
+api_version: 1
+name: Greet1
+steps: echo hello
+after_success:
+  - app_refresh_images_list

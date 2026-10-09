@@ -2734,13 +2734,27 @@ def test_api_version_status():
     assert ybe.api_version_status(ybe.config.EXTENSION_API_VERSION + 1) == "newer"
 
 
-def test_older_extension_files_still_load(clean_state):
-    # A file with no/lower api_version is read (backward compatible).
+def test_unversioned_files_still_load(clean_state):
+    # No api_version = the original format: read best-effort.
     write_action(clean_state, "Old.yaml", "steps:\n  - echo hi\n")
     assert "Old" in [a["name"] for a in ybe.load_actions()]
-    write_action(clean_state, "Older.yaml",
-                 "api_version: 1\nname: Older\nsteps:\n  - echo hi\n")
-    assert "Older" in [a["name"] for a in ybe.load_actions()]
+    assert ybe.load_actions_report()[1] == []
+
+
+def test_too_old_versions_are_skipped_unless_forced(clean_state, monkeypatch):
+    window = ybe.config.EXTENSION_API_SUPPORT_WINDOW
+    too_old = max(1, ybe.config.EXTENSION_API_VERSION - window)
+    write_action(clean_state, "Ancient.yaml",
+                 f"api_version: {too_old}\nname: Ancient\nsteps:\n  - echo hi\n")
+    actions, errors = ybe.load_actions_report()
+    assert "Ancient" not in [a["name"] for a in actions]
+    assert any("--allow-old-extensions" in e for e in errors)
+
+    # forcing reads it
+    monkeypatch.setattr(ybe.config, "ALLOW_OLD_EXTENSIONS", True)
+    actions, errors = ybe.load_actions_report()
+    assert "Ancient" in [a["name"] for a in actions]
+    assert errors == []
 
 
 def test_newer_extension_files_are_skipped_with_an_error(clean_state):
@@ -2775,6 +2789,47 @@ def test_newer_extension_files_are_skipped_with_an_error(clean_state):
     found = ybe.extension_file_for("action", "Future")
     assert found is not None and found["api_version"] == nxt
     assert ybe.api_version_status(found["api_version"]) == "newer"
+
+
+def test_old_tag_references_are_reported(clean_state):
+    write_action(clean_state, "OldTag.yaml",
+                 "name: OldTag\nsteps:\n  - echo hi\n"
+                 "after_success:\n  - app_refresh_image_tags\n")
+    _, action_errors = ybe.load_actions_report()
+    assert any("app_refresh_image_tags" in e and "ext.tags.refresh_image_tags" in e
+               for e in action_errors)
+
+    write_hook(clean_state, "on_after_save.yaml", "steps:\n  - app_clear_tags\n")
+    _, hook_errors = ybe.load_hooks()
+    assert any("app_clear_tags" in e for e in hook_errors)
+
+    write_filter(clean_state, "OldTagF.yaml",
+                 "name: OldTagF\narguments:\n  - name: tag_name\n"
+                 "    options: {DATASET_TAG_NAMES}\nsteps:\n  - echo {TAGS_DIR}\n")
+    _, filter_errors = ybe.load_filters()
+    assert any("{TAGS_DIR}" in e for e in filter_errors)
+    assert any("{DATASET_TAG_NAMES}" in e for e in filter_errors)
+
+
+def test_unknown_app_action_is_reported_at_load(clean_state):
+    write_action(clean_state, "Typo.yaml",
+                 "name: Typo\nsteps:\n  - echo hi\nafter_success:\n  - app_nope\n")
+    _, errors = ybe.load_actions_report()
+    assert any("app_nope" in e for e in errors)
+
+
+def test_shipped_extensions_have_no_compat_errors(clean_state, monkeypatch):
+    # The shipped files must not trip the removed-reference checks.
+    base = Path(ybe.config.BASE_DIR)
+    monkeypatch.setattr(ybe.config, "ACTIONS_DIR", str(base / "actions"))
+    monkeypatch.setattr(ybe.config, "USER_ACTIONS_DIR", str(base / "nope-actions"))
+    monkeypatch.setattr(ybe.config, "FILTERS_DIR", str(base / "filters"))
+    monkeypatch.setattr(ybe.config, "USER_FILTERS_DIR", str(base / "nope-filters"))
+    monkeypatch.setattr(ybe.config, "HOOKS_DIR", str(base / "hooks"))
+    monkeypatch.setattr(ybe.config, "USER_HOOKS_DIR", str(base / "nope-hooks"))
+    assert ybe.load_actions_report()[1] == []
+    assert ybe.load_filters()[1] == []
+    assert ybe.load_hooks()[1] == []
 
 
 def test_newer_package_is_skipped_with_an_error(clean_state):

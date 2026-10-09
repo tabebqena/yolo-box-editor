@@ -21,7 +21,7 @@ from flask import (
     send_from_directory,
     session,
 )
-from ybe import config, extension_flags, permissions, state
+from ybe import compat, config, extension_flags, permissions, state
 from ybe.auth import auth_enabled, set_user, verify_user
 from ybe.commands import (
     _advance_execution,
@@ -388,6 +388,7 @@ def api_config():
             "hook_events": list(config.HOOK_EVENTS),
             "extension_api_version": config.EXTENSION_API_VERSION,
             "plugin_api_version": config.PLUGIN_API_VERSION,
+            "api_support": compat.support_table(),
             "plugin_permissions": permissions.YBE_PERMISSIONS,
             "plugin_permission_map": permissions.YBE_METHOD_PERMISSIONS,
             "placeholders": {

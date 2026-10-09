@@ -243,6 +243,24 @@ HOOK_EVENTS = (
 # panels (`ui:` in an extension manifest); v5 added backend plugins
 # (`backend:`) and extension-defined app actions (`app_actions:`).
 EXTENSION_API_VERSION = 5
+# What each extension format version added. This is the declared semantics list
+# the app keeps so a future release can support or drop a version on purpose
+# (see `ybe/compat.py`).
+EXTENSION_API_HISTORY = (
+    (1, "original actions/hooks/filters"),
+    (2, "custom widgets"),
+    (3, "extension packages"),
+    (4, "sandboxed UI panels (ui:)"),
+    (5, "backend plugins (backend:) and app_actions"),
+)
+# Versions the app no longer parses at all. Empty now; a future release adds one
+# here to drop support explicitly (files are then always skipped).
+EXTENSION_API_DROPPED = ()
+# The app is only responsible for the newest N extension format versions. Older
+# files (or files with no `api_version`) are skipped with an explaining error
+# unless the user forces parsing (`--allow-old-extensions`).
+EXTENSION_API_SUPPORT_WINDOW = 3
+ALLOW_OLD_EXTENSIONS = False  # set by --allow-old-extensions
 
 # The UI-panel plugin API version. Separate from EXTENSION_API_VERSION because a
 # panel's JavaScript talks to the app through `YBE`, whose shape evolves on its
@@ -251,6 +269,14 @@ EXTENSION_API_VERSION = 5
 # (package backend capabilities) and the `before_/after_app_action` event bus;
 # v3 added `YBE.state.getConfig()` and the `YBE.api` request proxy.
 PLUGIN_API_VERSION = 3
+# What each plugin (YBE) API version added, and any versions dropped. A panel
+# declaring `ui.api_version:` newer than PLUGIN_API_VERSION is not loaded.
+PLUGIN_API_HISTORY = (
+    (1, "initial YBE bridge (state reads, box edits, events)"),
+    (2, "YBE.call (backend capabilities) and the app-action event bus"),
+    (3, "YBE.state.getConfig and the YBE.api request proxy"),
+)
+PLUGIN_API_DROPPED = ()
 
 # Placeholder catalogs offered by the UI's click-to-insert palette. Keep them in
 # sync with the values built in `api_action_run` and `_filter_placeholder_values`

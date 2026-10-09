@@ -253,6 +253,12 @@ def main():
         help="do not check GitHub for a newer version",
     )
     parser.add_argument(
+        "--allow-old-extensions",
+        action="store_true",
+        help="force parsing extension files older than the supported window "
+        "(normally skipped with an error)",
+    )
+    parser.add_argument(
         "--log-file",
         help="write logs to this file instead of stderr (used by daemon mode)",
     )
@@ -304,6 +310,8 @@ def main():
     state.STATE["keep_pipe"] = args.keep_pipe
     state.STATE["keep_filter_pipes"] = args.keep_filter_pipes
     state.STATE["no_update_check"] = args.no_update_check
+    # Force parsing of extension files older than the supported window.
+    config.ALLOW_OLD_EXTENSIONS = args.allow_old_extensions
 
     # Load the login store. An empty store means no login (the local default);
     # register an account with `ybe users --create NAME` to turn the login gate

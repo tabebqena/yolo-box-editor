@@ -1,0 +1,5 @@
+# Extension format v4: sandboxed UI panels (ui:) were added.
+api_version: 4
+name: Greet4
+steps:
+  - echo hello

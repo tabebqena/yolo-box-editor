@@ -30,20 +30,32 @@ The user folder is read after the shipped one and wins on an id clash.
 
 ## Versioning (`api_version`)
 
-Every extension file may declare `api_version:`. It is compared with the app's
-`EXTENSION_API_VERSION` and handled honestly:
+Every extension file may declare `api_version:`. The app keeps a **declared
+support registry** (`app/ybe/compat.py`) — the history of what each format
+version added, which versions were dropped, and the support window — so a format
+change is an explicit decision, not a guess.
 
-- **older / missing** — the file is **read** (backward compatible); it is flagged
-  `outdated` in the UI.
-- **newer** — the file is **skipped** and an explaining error is shown (in the
-  actions/hooks/filters/widgets error banner and, for packages, in the Extensions
-  tab): *"written for extension format vN, but this app supports vM — update
-  yolo-box-editor to use it"*. A newer UI panel is likewise not mounted, and a
-  newer file cannot be saved over. The raw editor can still open it so you can
-  read it.
+- **Within the window** — the app supports the newest
+  `EXTENSION_API_SUPPORT_WINDOW` (3) format versions (currently `v3..v5`); they
+  load normally.
+- **Older than the window** — an explicitly-versioned file below the window is
+  **skipped** with an explaining error: *"written for extension format vN, but
+  this app supports the last 3 versions (v3..v5) — update the file, or start the
+  app with `--allow-old-extensions` to force it"*. The user can **force** parsing
+  with `--allow-old-extensions`.
+- **Unversioned** — a file with no `api_version` is the original format and is
+  read best-effort (the app has always parsed it).
+- **Newer** — a file above `EXTENSION_API_VERSION` is never read: *"written for
+  extension format vN, but this app supports vM — update yolo-box-editor to use
+  it"*. A newer UI panel (`ui.api_version` above `PLUGIN_API_VERSION`, currently
+  `3`) is likewise not mounted.
 
-When you save an edited file from the UI its `api_version` is bumped to the
-current value.
+Errors appear in the actions/hooks/filters/widgets banner and, for packages, in
+Settings → Extensions. The raw editor can still open a skipped file to read it,
+and saving an edited file bumps its `api_version` to the current value.
+
+The registry is exposed as `api_support` in `/api/config`; the older-version
+fixtures under `tests/fixtures/ext_api/` are re-tested on every API update.
 
 ## Permissions and installing
 

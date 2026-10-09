@@ -1,0 +1,8 @@
+api_version: 4
+id: panelpack
+name: Panel Pack
+version: 1.0.0
+ui:
+  api_version: 1
+  title: Panel
+  script: panel.js

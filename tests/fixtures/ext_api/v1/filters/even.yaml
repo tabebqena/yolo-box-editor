@@ -1,0 +1,5 @@
+api_version: 1
+name: Even1
+description: keep even-numbered images
+steps:
+  - echo {INPUT_PIPE} > {OUTPUT_PIPE}

@@ -4,6 +4,22 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.7.0] - 2026-10-09
+
+### Added
+
+- **Declared support window for extension formats.** The app keeps a support
+  registry (`app/ybe/compat.py`): the history of each format version, the versions
+  dropped, and the support window (`EXTENSION_API_SUPPORT_WINDOW`, default 3).
+  Explicitly-versioned files older than the window are skipped with an explaining
+  error unless forced with `--allow-old-extensions`; unversioned files are read
+  best-effort; newer files are never read. The registry is exposed as
+  `api_support` in `/api/config`.
+- **Backward-compatibility fixtures.** `tests/fixtures/ext_api/v<N>/` keeps real
+  files for each format version; `tests/test_compat.py` re-runs them on every API
+  update (loads the versions in the window, checks older ones are gated and can be
+  forced) and fails if a history version has no fixture.
+
 ## [10.6.0] - 2026-10-09
 
 ### Changed

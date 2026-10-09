@@ -13,7 +13,7 @@ list of extra event names the package emits. No function here executes anything.
 
 import os
 
-from ybe import config, extension_flags, permissions
+from ybe import compat, config, extension_flags, permissions
 from ybe.parsing import (
     _parse_api_version,
     _read_text,
@@ -334,11 +334,11 @@ def load_packages():
             pid = (data["id"] or entry).strip()
             if not pid:
                 continue
-            if isinstance(data["api_version"], int) and data["api_version"] > config.EXTENSION_API_VERSION:
-                errors.append(
-                    "'extensions/%s/extension.yaml': written for extension format "
-                    "v%s, but this app supports v%s — update yolo-box-editor to "
-                    "use it" % (entry, data["api_version"], config.EXTENSION_API_VERSION))
+            gate = compat.version_error(
+                "extensions", manifest_path, data["api_version"],
+                label="%s/extension.yaml" % entry)
+            if gate:
+                errors.append(gate)
                 continue
             merged[pid] = {
                 "id": pid,

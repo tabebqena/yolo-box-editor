@@ -1,0 +1,5 @@
+# Extension format v2: custom widgets were added.
+api_version: 2
+name: Greet2
+steps:
+  - echo hello

@@ -1,0 +1,5 @@
+# Extension format v3: extension packages were added.
+api_version: 3
+name: Greet3
+steps:
+  - echo hello

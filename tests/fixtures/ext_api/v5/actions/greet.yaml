@@ -1,0 +1,5 @@
+# Extension format v5: backend plugins and app_actions were added.
+api_version: 5
+name: Greet5
+steps:
+  - echo hello

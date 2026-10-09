@@ -14,7 +14,7 @@ anything — loading only builds plain dicts.
 import os
 import re
 
-from ybe import config
+from ybe import compat, config
 from ybe.packages import extension_sources
 from ybe.parsing import (
     _parse_api_version,
@@ -244,10 +244,6 @@ def _widget_files(dirpath):
     return paths
 
 
-def _is_newer(version):
-    return isinstance(version, int) and version > config.EXTENSION_API_VERSION
-
-
 def load_widgets(include_newer=False):
     """Parse the widgets/ folders into (widgets, errors) (read fresh).
 
@@ -262,12 +258,11 @@ def load_widgets(include_newer=False):
         for path in _widget_files(dirpath):
             fname = os.path.basename(path)
             data = _parse_widget_file(_read_text(path))
-            if not include_newer and _is_newer(data.get("api_version")):
-                errors.append(
-                    "'widgets/%s': written for extension format v%s, but this app "
-                    "supports v%s — update yolo-box-editor to use it" % (
-                        fname, data.get("api_version"), config.EXTENSION_API_VERSION))
-                continue
+            if not include_newer:
+                gate = compat.version_error("widgets", path, data.get("api_version"))
+                if gate:
+                    errors.append(gate)
+                    continue
             if not data["active"] or not data["controls"]:
                 continue  # inactive, or a comments-only template
             widget, widget_errors = _validate_widget(fname, data)

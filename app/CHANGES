@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.7.0
+- The app now declares which extension format versions it supports: the last 3 (`v3..v5`). Files with an older explicit `api_version` are skipped with a clear message; start the app with `--allow-old-extensions` to force them. Unversioned files still load, and files newer than the app are never read.
+
 ## 10.6.0
 - Extension `api_version` is now handled honestly: files written for an **older** format still load (and show an "outdated" badge), while files written for a **newer** format are skipped with a clear message ("written for extension format vN, but this app supports vM — update yolo-box-editor to use it") shown in the extension error banner and Settings > Extensions. You can still open a newer file in the raw editor to read it.
 

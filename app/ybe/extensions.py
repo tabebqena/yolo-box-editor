@@ -19,7 +19,7 @@ No function here executes a command — loading only builds plain dicts.
 import os
 import re
 
-from ybe import config, state
+from ybe import compat, config, state
 from ybe.packages import extension_sources
 from ybe.parsing import (
     _parse_api_version,
@@ -53,17 +53,68 @@ def api_version_status(version):
     return "current"
 
 
-def _newer_error(kind, path, version):
-    """A clear message for a file written for a newer extension format.
+# Features that moved/removed in this version. Older files may still reference
+# them; we load the file but report an explaining error instead of failing at
+# run time.
+REMOVED_ACTIONS = {
+    "app_refresh_image_tags": "moved to the Tags extension — use ext.tags.refresh_image_tags (enable Tags)",
+    "app_clear_tags": "moved to the Tags extension — use ext.tags.clear_tags (enable Tags)",
+}
+REMOVED_PLACEHOLDERS = {
+    "TAGS_DIR": "removed — the Tags extension resolves its own tags folder",
+}
+REMOVED_FILTER_TOKENS = {
+    "DATASET_TAG_NAMES": "removed — the Tags extension's filters declare their own tag argument",
+}
+_PLACEHOLDER_RE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
-    Such files are not loaded (the app cannot be sure it understands them); the
-    message tells the user to update the app rather than silently misbehaving.
+
+def _version_gate(kind, path, version, include_newer):
+    """A skip message for a version the app will not parse, else None.
+
+    `include_newer` (used only to resolve a file for the raw editor) disables the
+    gate so the user can open and read the file.
     """
-    return (
-        "'%s/%s': written for extension format v%s, but this app supports v%s — "
-        "update yolo-box-editor to use it" % (
-            kind, os.path.basename(path), version, config.EXTENSION_API_VERSION)
-    )
+    if include_newer:
+        return None
+    return compat.version_error(kind, path, version)
+
+
+def _reference_errors(kind, fname, entries):
+    """Compatibility errors for `steps`/`after_success` entries.
+
+    Only a bare `app_*`/`backend_*` token is an action reference (a shell command
+    contains spaces), so this never flags a normal command.
+    """
+    errors = []
+    for entry in entries:
+        token = str(entry).strip()
+        if not token or " " in token:
+            continue
+        if token in REMOVED_ACTIONS:
+            errors.append("'%s/%s': %s — %s" % (kind, fname, token, REMOVED_ACTIONS[token]))
+        elif token.startswith("app_") and token not in config.APP_ACTIONS:
+            errors.append("'%s/%s': unknown app action %r (check for a typo or a "
+                          "renamed action)" % (kind, fname, token))
+        elif token.startswith("backend_") and token not in config.BACKEND_ACTION_NAMES:
+            errors.append("'%s/%s': unknown backend action %r" % (kind, fname, token))
+    return errors
+
+
+def _filter_compat_errors(fname, data):
+    """Compatibility errors for a filter's steps and option tokens."""
+    errors = []
+    for step in data["steps"]:
+        for name in _PLACEHOLDER_RE.findall(str(step)):
+            if name in REMOVED_PLACEHOLDERS:
+                errors.append("'filters/%s': {%s} — %s" % (fname, name, REMOVED_PLACEHOLDERS[name]))
+    for arg in data["arguments"]:
+        for opt in (arg.get("options") or []):
+            token = str(opt).strip().strip("{}")
+            if token in REMOVED_FILTER_TOKENS:
+                errors.append("'filters/%s': options token {%s} — %s" % (
+                    fname, token, REMOVED_FILTER_TOKENS[token]))
+    return errors
 
 
 def is_hook_name(name):
@@ -168,13 +219,17 @@ def load_actions_report(include_newer=False):
     for source, dirpath, pkg in extension_sources("action"):
         for path in _action_files(dirpath):
             data = _parse_action_file(_read_text(path))
-            if not include_newer and api_version_status(data["api_version"]) == "newer":
-                errors.append(_newer_error("actions", path, data["api_version"]))
+            gate = _version_gate("actions", path, data["api_version"], include_newer)
+            if gate:
+                errors.append(gate)
                 continue
             name = _action_name(path, data["name"])
             if not name:
                 continue
             if data["steps"] or data["after_success"]:
+                errors.extend(_reference_errors(
+                    "actions", os.path.basename(path),
+                    data["steps"] + data["after_success"]))
                 merged[name] = {
                     "name": name,
                     "steps": data["steps"],
@@ -227,8 +282,9 @@ def load_hooks(include_newer=False):
     for source, dirpath, pkg in extension_sources("hook"):
         for path in _action_files(dirpath):
             data = _parse_action_file(_read_text(path))
-            if not include_newer and api_version_status(data["api_version"]) == "newer":
-                errors.append(_newer_error("hooks", path, data["api_version"]))
+            gate = _version_gate("hooks", path, data["api_version"], include_newer)
+            if gate:
+                errors.append(gate)
                 continue
             event = _hook_event(path, data)
             has_body = bool(data["steps"] or data["after_success"])
@@ -242,6 +298,8 @@ def load_hooks(include_newer=False):
                 continue
             if not data["active"] or not has_body:
                 continue
+            errors.extend(_reference_errors(
+                "hooks", os.path.basename(path), data["steps"] + data["after_success"]))
             name = config.HOOK_PREFIX + event
             merged[name] = {
                 "name": name,
@@ -456,13 +514,15 @@ def load_filters(include_newer=False):
     for source, dirpath, pkg in extension_sources("filter"):
         for path in _filter_files(dirpath):
             data = _parse_filter_file(_read_text(path))
-            if not include_newer and api_version_status(data["api_version"]) == "newer":
-                errors.append(_newer_error("filters", path, data["api_version"]))
+            gate = _version_gate("filters", path, data["api_version"], include_newer)
+            if gate:
+                errors.append(gate)
                 continue
             fname = os.path.basename(path)
             name = (data["name"] or "").strip() or fname[: -len(".yaml")]
             if not name or not data["active"] or not data["steps"]:
                 continue
+            errors.extend(_filter_compat_errors(fname, data))
             arguments, arg_errors = _validate_filter_arguments(fname, name, data["arguments"])
             if arg_errors:
                 errors.extend(arg_errors)
