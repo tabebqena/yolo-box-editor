@@ -219,7 +219,9 @@ per-dataset folder override (`<home>/.tags_extension.json`) and read-only guard.
 
 > Backend plugins are trusted, in-process code and load **only from shipped
 > packages** (`app/extensions/`). A user-installed package can still ship
-> actions, filters and a panel, but not `backend.py`.
+> actions, hooks, filters, widgets, a panel and its own Python environment, but
+> its `backend.py` is **never loaded** — there is **no opt-in** today. If you
+> need server-side code, ship the package inside the app.
 
 ## 7. A sandboxed UI panel
 

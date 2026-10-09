@@ -27,6 +27,9 @@ table; HTTP routes are declared in a module-level `extension_routes` tuple:
 ```python
 from flask import jsonify, request
 
+def list_items():
+    return jsonify({"items": []})
+
 def do_it():
     return jsonify({"ok": True})
 
@@ -79,9 +82,14 @@ headlessly through `POST /api/extensions/call`
 (`{"package": "...", "method": "...", "args": [...]}`). Read-only is enforced
 inside the capability (and each mutating route).
 
-**Trust:** capabilities and route handlers run in the server process, so by
-default only **shipped** packages' backends are loaded. A user package can ship
-a `backend:` too, but it is ignored unless/until you decide to trust it.
+**Trust — backend code is shipped-only.** Capabilities and route handlers run
+inside the server process with full app access, so a backend is loaded **only**
+for a **shipped** package (`app/extensions/<id>/`). A user package
+(`<home>/extensions/<id>/`) may declare `backend:`, but it is **never loaded** —
+there is **no opt-in today**, no setting or flag that trusts it. To run
+server-side Python, ship the package inside the app. Everything else a user
+package provides (actions, hooks, filters, widgets, its panel and its Python
+environment) works normally.
 
 ## Extension app actions
 

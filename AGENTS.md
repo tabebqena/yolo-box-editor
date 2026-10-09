@@ -292,7 +292,8 @@ by the thin `ybx.sh` bootstrap) copies `app/` wholesale, so `app/ybe/`,
   method/event's meaning changes or a method is added — the shipped panels'
   `ui.api_version:` must then be bumped to match.
 - Backend plugins (`backend.py`) are **trusted, shipped-only** code: `plugins.py`
-  loads one only for a `source == "shipped"` package. Routes are declared in an
+  loads one only for a `source == "shipped"` package (a user package's backend is
+  never loaded — there is no opt-in). Routes are declared in an
   `extension_routes` tuple (never `@app.route`) and dispatched by the startup
   catch-all, so enabling/disabling is live. Panel overlays
   (`YBE.callbacks.drawBox`/`setDrawnBoxes`/`clearDrawnBoxes`/`setDrawnBoxesVisible`)

@@ -19,7 +19,7 @@ before. A package only changes *where* files may live — never *what* they do.
 ```
 extensions/my-tools/
   extension.yaml          # the manifest (see below)
-  backend.py              # optional backend plugin (routes + capabilities)
+  backend.py              # optional backend plugin — shipped packages only
   panel.js                # optional sandboxed UI panel (see extensions-ui.md)
   actions/*.yaml          # same format as a flat action
   hooks/on_<event>.yaml   # same format as a flat hook
@@ -125,7 +125,7 @@ version: 1.0.0
 author: you
 active: true               # false keeps the package listed but loads nothing from it
 prefix: mytool             # optional URL prefix for this package's routes (default: id)
-backend: backend.py        # optional backend plugin (see extension-actions.md)
+backend: backend.py        # optional backend plugin — shipped packages only (see extension-actions.md)
 
 # Optional Python environment for this package's steps (see below). A package
 # that needs packages the app does not ship declares them here.

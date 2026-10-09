@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.14.1
+- Docs: clarified that a **`backend.py`** (server-side Python) is loaded **only** for a **shipped** package (`app/extensions/`). A user-installed package's backend is never loaded, and there is no opt-in — everything else a user package provides still works.
+
 ## 10.14.0
 - A new **Annotate (example)** extension ships (disabled by default) as a complete worked example: it runs a small YOLO model over a dataset into a separate labels folder and overlays the results on the canvas. Read it together with the Tags extension in the new guide [Building an extension from scratch to production](docs/building-extensions.md).
 - Panels can now append a single box to the real labels with `YBE.callbacks.addBox(box)` (instead of replacing the whole list with `setBoxes`).

@@ -4,6 +4,16 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.14.1] - 2026-10-10
+
+### Fixed
+
+- **Clarified that a backend plugin (`backend.py`) is shipped-only.** The docs
+  previously implied a user package's backend could be trusted; it cannot — it
+  is **never** loaded and there is **no opt-in**. The wording now says so in
+  `docs/extension-actions.md`, `docs/extensions.md` and
+  `docs/building-extensions.md` (and an example's missing function was fixed).
+
 ## [10.14.0] - 2026-10-10
 
 ### Added
