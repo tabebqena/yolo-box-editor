@@ -12,6 +12,21 @@ Version **7.18.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT wi
 non-commercial-use condition, no warranty) · new to labelling? Press **F1** in the
 app (or start with [TUTORIAL.md](TUTORIAL.md)).
 
+## WARNING — single-user tool, not for the cloud
+
+> **This app is designed for one person on their own computer.** Run it locally
+> and it is fine. You can also create multiple accounts (`ybe users`) and share
+> one instance with a **trusted** team on your own machine or LAN — but it is
+> **not** built for the cloud, and **never** for users you don't trust.
+>
+> The user of the app executes its scripts **with your authority**. They can
+> define custom actions, filters and scripts and run them on the machine — which
+> means any account you hand out is effectively **shell access to the host**.
+> Only add people you would let run commands as you.
+>
+> The optional login is a convenience gate, **not** a security boundary. Do **not**
+> expose this app to the internet or an untrusted network.
+
 ## Quick start
 
 Install sets up an isolated `.venv`, adds the **`ybe`** command and starts the
