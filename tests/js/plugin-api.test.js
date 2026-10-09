@@ -165,6 +165,15 @@ test('buildPanelSrcdoc forwards a color-scheme so panels match the app', () => {
   assert.match(html, /color-scheme:dark/);
 });
 
+test('panelSourceAccepted trusts the live iframe window across a reload', () => {
+  const oldWin = {};
+  const newWin = {};
+  const panel = { iframe: { contentWindow: newWin }, target: oldWin };
+  assert.equal(app.api.panelSourceAccepted(panel, newWin), true);
+  assert.equal(app.api.panelSourceAccepted(panel, oldWin), false);
+  assert.equal(app.api.panelSourceAccepted({ iframe: null }, oldWin), true);
+});
+
 test('mountExtensionPanel mounts a sandboxed iframe and unmounts', () => {
   app.api.mountExtensionPanel(
     { id: 'p1', name: 'P1', ui: { title: 'P1', script: 'p.js', status: 'current', location: 'right' } },

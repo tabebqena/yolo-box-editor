@@ -435,6 +435,20 @@ function panelPost(name, msg) {
 }
 
 /**
+ * Whether a panel message may be handled. A panel's iframe is reloaded whenever
+ * its dock frame is moved (the browser gives it a fresh `contentWindow`), so the
+ * live window is authoritative; the cached `target` goes stale across a move.
+ * @param {Object} panel - The panel entry.
+ * @param {*} source - `MessageEvent.source`.
+ * @returns {boolean} True when the message is from the panel's live window.
+ */
+function panelSourceAccepted(panel, source) {
+  const current = panel && panel.iframe ? panel.iframe.contentWindow : null;
+  if (!current) return true;
+  return source === current;
+}
+
+/**
  * Handle one message coming out of a panel sandbox.
  * @param {string} name - Panel widget name.
  * @param {*} data - The message data.
@@ -510,7 +524,9 @@ function mountExtensionPanel(pkg, scriptText) {
   const panel = { packageId: pkg.id, name, iframe, target: null, listener: null };
   PANELS[name] = panel;
   panel.listener = (ev) => {
-    if (panel.target && ev.source !== panel.target) return;
+    if (!panelSourceAccepted(panel, ev.source)) return;
+    const current = panel.iframe && panel.iframe.contentWindow;
+    if (current) panel.target = current;
     handlePanelMessage(name, ev.data);
   };
   window.addEventListener('message', panel.listener);

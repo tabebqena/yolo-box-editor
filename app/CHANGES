@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.10.1
+- Fixed: an extension panel no longer goes blank when you move it to a different location (floating, left, right or bottom). The panel now reloads itself in its new spot instead of needing a full browser refresh.
+
 ## 10.10.0
 - Extension panels now match the app's style by default instead of showing a white background. A panel that wants a custom look can still set its own background or `color-scheme`.
 

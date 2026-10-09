@@ -4,6 +4,17 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.10.1] - 2026-10-09
+
+### Fixed
+
+- **Moving an extension panel no longer blanks it.** Moving the frame that
+  holds a sandboxed panel reloads its iframe, giving it a fresh
+  `contentWindow`. The host's message guard compared against the cached window
+  and dropped the panel's first requests, so it rendered nothing until a full
+  page refresh. The guard now trusts the panel's live window, so a relocated
+  panel re-renders in place.
+
 ## [10.10.0] - 2026-10-09
 
 ### Fixed
