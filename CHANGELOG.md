@@ -1550,4 +1550,11 @@ Original labelled pipeline (before the UI rework; renamed from
 
 [Unreleased]: https://github.com/tabebqena/yolo-box-editor/compare/0.5.0...HEAD
 [0.5.0]: https://github.com/tabebqena/yolo-box-editor/releases/tag/0.5.0
-[0.4.0]: https://github.com/tabebqena/yolo-box-editor/releases/tag/0.4.0
+[0.4.0]: https://github.com/tabebqena/yolo-box-editor/releases/tag/0.4.0## [10.15.1] - 2026-10-10
+
+### Fixed
+
+- Collapsing the side panel no longer hides the canvas toolbar: the floating
+  Panel/bell/help header now sits just below the toolbar strip instead of on
+  top of it (the strip was added in 10.11.0).
+

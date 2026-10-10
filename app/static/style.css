@@ -72,6 +72,9 @@
   --radius-lg: 10px;
   --pill: 999px;
   --shadow-modal: 0 10px 40px rgba(0, 0, 0, 0.6);
+
+  /* layout metrics */
+  --canvas-toolbar-h: 31px;
 }
 
 /* 2. reset & base -------------------------------------------------------- */
@@ -218,7 +221,7 @@ kbd,
 .sidebar.collapsed #settingsBtn { display: none; }
 .sidebar.collapsed .sidebar-head {
   position: fixed;
-  top: 8px;
+  top: calc(var(--canvas-toolbar-h) + 8px);
   right: 8px;
   z-index: 55;
   width: auto;
@@ -483,6 +486,7 @@ kbd {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-height: var(--canvas-toolbar-h);
   padding: 3px 8px;
   background: var(--bg-bar);
   border-bottom: 1px solid var(--border);

@@ -255,3 +255,6 @@
 - Settings now uses tabs (View / Dataset / Shortcuts / Updates); the dataset dropdown, path input and Load button sit on one row.
 - Replaced the breaking-change warnings with a "What's new" changelog, shown once after the app updates to a new version.
 - `ybe check-update` no longer prints the `breaking_changes:` and `breaking_notes:` lines.
+## 10.15.1
+- Fixed: collapsing the **side panel** no longer covers the canvas toolbar row — the floating Panel / bell / help header now sits just below the strip.
+
