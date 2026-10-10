@@ -4,25 +4,40 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.15.1] - 2026-10-10
+
+### Fixed
+
+- Collapsing the side panel no longer hides the canvas toolbar: the floating
+  Panel/bell/help header now sits just below the toolbar strip instead of on
+  top of it (the strip was added in 10.11.0).
+
 ## [10.15.0] - 2026-10-10
 
 ### Changed
 
 - **The `annotate` example extension now runs its model in the background.** Its
-  sandboxed panel is the single place the model path, output folder and
-  confidence live — the manifest's Settings form is gone, so there is nothing to
-  keep in sync — and the panel remembers those values. A run is started once and
-  then polled, so a multi-minute model run no longer times out the panel's
-  request; the button is disabled while a run is in progress and the panel shows
-  progress (images done / total, with a bar). The run moved into the package
-  backend (`annotate.start` / `annotate.progress`) and the now-unused
-  `actions/annotate.yaml` was removed.
+  sandboxed panel is the single place the model path, output folder, confidence
+  and model class names live — the manifest's Settings form is gone, so there is
+  nothing to keep in sync — and the panel remembers those values. A run is
+  started once and then polled, so a multi-minute model run no longer times out
+  the panel's request; the button is disabled while a run is in progress, the
+  panel shows progress (images done / total, with a bar), and the overlay boxes
+  keep refreshing as labels are written, so you can browse the dataset while it
+  runs. The run moved into the package backend (`annotate.start` /
+  `annotate.progress`) and the now-unused `actions/annotate.yaml` was removed.
 
 ### Fixed
 
 - The `annotate` panel could not see the model/output/confidence typed into the
   Settings form (those controls were never persisted). That form is removed and
   the panel now stores and reloads its own values.
+- The `annotate` panel no longer stops drawing overlays while a run is active:
+  existing boxes show and new ones appear as the model writes them.
+- The `annotate` overlay labels no longer show the wrong class name when the
+  model's classes differ from the dataset's. The panel has a **Model classes**
+  field (filled automatically from the model after a run, and overridable); with
+  it empty the editor falls back to the dataset's own class names.
 
 ## [10.14.2] - 2026-10-10
 
@@ -1550,11 +1565,4 @@ Original labelled pipeline (before the UI rework; renamed from
 
 [Unreleased]: https://github.com/tabebqena/yolo-box-editor/compare/0.5.0...HEAD
 [0.5.0]: https://github.com/tabebqena/yolo-box-editor/releases/tag/0.5.0
-[0.4.0]: https://github.com/tabebqena/yolo-box-editor/releases/tag/0.4.0## [10.15.1] - 2026-10-10
-
-### Fixed
-
-- Collapsing the side panel no longer hides the canvas toolbar: the floating
-  Panel/bell/help header now sits just below the toolbar strip instead of on
-  top of it (the strip was added in 10.11.0).
-
+[0.4.0]: https://github.com/tabebqena/yolo-box-editor/releases/tag/0.4.0
