@@ -187,10 +187,11 @@ with the model path, output folder and confidence.
 ## 6. A backend plugin
 
 A shipped package may add `backend.py` for server-side Python. It provides
-**capabilities** (called from the panel as `YBE.call`) and **HTTP routes**
-(mounted under `/api/extension/<prefix>`). Never use `@app.route`; declare routes
-as a module-level `extension_routes` tuple so the package can be enabled/disabled
-without a restart:
+**capabilities** (called from the panel as `YBE.call`) and **HTTP routes** — its
+own Flask endpoints, mounted under `/api/extension/<prefix>`. Never use
+`@app.route`: Flask cannot add routes after startup, and packages are
+enabled/disabled live. Declare routes as a module-level `extension_routes` tuple
+instead, which the app dispatches itself:
 
 ```python
 # backend.py

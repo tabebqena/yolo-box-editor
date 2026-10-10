@@ -4,6 +4,17 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.14.2] - 2026-10-10
+
+### Changed
+
+- Documented what a backend plugin is **for** — adding your own **Flask HTTP
+  routes** (and capabilities) — and **why** routes are declared as an
+  `extension_routes` tuple dispatched by a catch-all rather than with plain
+  `@app.route`: Flask's URL map is fixed at startup, packages are enabled and
+  disabled live, and a disabled/broken backend must not affect startup. See
+  `docs/extension-actions.md` and `docs/building-extensions.md`.
+
 ## [10.14.1] - 2026-10-10
 
 ### Fixed

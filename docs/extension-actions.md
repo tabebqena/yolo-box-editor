@@ -1,8 +1,10 @@
 # Extension actions and backend plugins
 
 An extension package can go beyond data files: it can ship **backend code** and
-declare its own **app actions**. This page covers both, plus the app-action
-**lifecycle bus** that lets extensions cooperate.
+declare its own **app actions**. The backend is where an extension adds
+**server-side Python** — chiefly **Flask HTTP routes** (its own API endpoints)
+and **capabilities** (functions the sandboxed panel can call). This page covers
+both, plus the app-action **lifecycle bus** that lets extensions cooperate.
 
 > The format is versioned by `EXTENSION_API_VERSION` (`6` as of this release);
 > the sandboxed `YBE` API by `PLUGIN_API_VERSION` (`5`). A package must also ship
@@ -11,7 +13,8 @@ declare its own **app actions**. This page covers both, plus the app-action
 
 ## Backend plugins
 
-Add a `backend:` file to `extension.yaml`:
+A backend plugin is how an extension serves **its own Flask HTTP routes** and
+exposes **capabilities**. Add a `backend:` file to `extension.yaml`:
 
 ```yaml
 api_version: 6
@@ -75,6 +78,30 @@ the host to match the request against the *currently enabled* packages. So:
 - `rule` is relative to the mount (an empty rule is the mount point itself);
   handlers receive any URL parameters as keyword arguments;
 - enabling/disabling a package swaps its routes in and out **with no restart**.
+
+### Why not a plain `@app.route`?
+
+The obvious way to add an endpoint would be for `backend.py` to call
+`@app.route` (or `app.add_url_rule`) at import time. That does **not** work
+here, for three reasons:
+
+- **Flask freezes its URL map.** Routes are registered while the app starts up;
+  calling `add_url_rule` after the app has handled its first request raises, and
+  there is no supported way to add or remove a route later.
+- **Packages are enabled and disabled at runtime.** The Settings → Extensions
+  toggle applies immediately, with no restart. A route baked into the app's URL
+  map could not be added or removed at that moment, so the toggle could not work.
+- **A disabled (or broken) package must not affect startup.** Importing every
+  backend eagerly would run arbitrary code for packages you never enable, and one
+  bad backend could stop the app from booting.
+
+So the app installs **one** catch-all rule (`/api/<path:subpath>`) whose view
+asks the host to match the request against the **currently enabled** packages'
+`extension_routes`. Enabling a package adds its routes to the live registry and
+disabling removes them — both without touching Flask's URL map. A disabled
+package simply returns 404. The `/api/extension/<prefix>` namespace plus the
+unique-prefix check keep these routes from colliding with core routes or with
+each other.
 
 Capabilities are reached from the package's panel as
 `YBE.call('mytool.do', [arg])` (only the caller's own package is reachable) and
