@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.15.0
+- The **Annotate** example extension now runs its model in the **background**. The panel is the only place its model, output folder and confidence live (the Settings form is gone), it remembers them, disables the button while a run is going, and shows progress (done / total) instead of failing on one long request.
+
 ## 10.14.2
 - Docs: a `backend.py` adds your own **Flask routes** (plus panel capabilities). It declares them in an `extension_routes` tuple instead of `@app.route`, because Flask's URL map is fixed at startup and packages are enabled/disabled live.
 

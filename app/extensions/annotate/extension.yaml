@@ -3,8 +3,8 @@
 # It is shipped `active: false`, so nothing is loaded until you enable it. It
 # is meant to be read as a reference: it uses every part of the extension
 # system at once — a manifest, per-extension Python environment, a backend
-# plugin with capabilities and HTTP routes, a shipped action + script, and a
-# sandboxed UI panel that draws its own boxes on the canvas.
+# plugin with capabilities and HTTP routes, a shipped script, and a sandboxed
+# UI panel that draws its own boxes on the canvas.
 #
 # What it does: runs a small Ultralytics YOLO model over every image of the
 # loaded dataset and writes the results as YOLO labels into a folder *separate*
@@ -15,46 +15,26 @@ api_version: 6
 id: annotate
 name: Annotate (example)
 description: Annotate a dataset with a small model into a separate folder, and overlay the results.
-version: 1.0.0
+version: 1.1.0
 author: yolo-box-editor
 active: false
 
-# Per-extension Python environment (docs/extensions.md). `{EXT_PYTHON}` in the
-# action's steps runs with this venv, so the app's own interpreter stays clean.
+# Per-extension Python environment (docs/extensions.md). The backend runs the
+# model script with this venv's interpreter, so the app's own stays clean.
 # Build it with `ybe extension-env annotate` or the Settings button.
 python: venv
 requirements:
   - ultralytics>=8.0
 
 # A shipped backend plugin: capabilities for the panel and HTTP routes.
+# It also owns the model run (started asynchronously) and the panel settings.
 backend: backend.py
 
-# The Settings > Extensions subtab. Its button runs the `annotate` action below;
-# the other controls become {WIDGET_MODEL}, {WIDGET_OUTPUT_DIR}, {WIDGET_CONF}.
-settings:
-  title: Annotate
-  controls:
-    - type: input
-      id: model
-      label: Model (.pt)
-      placeholder: /path/to/model.pt
-    - type: input
-      id: output_dir
-      label: Output folder
-      placeholder: /path/to/extension_labels
-    - type: input
-      id: conf
-      label: Confidence
-      default: "0.25"
-    - type: button
-      label: Annotate all images
-      action: annotate
-
-# The sandboxed UI panel: an Annotate button, a show/hide toggle and the canvas
-# overlays. See panel.js.
+# The sandboxed UI panel is the single place to set the model, output folder and
+# confidence and to start the run. See panel.js.
 ui:
   api_version: 5
   title: Annotate
   script: panel.js
   location: float
-  height: 240
+  height: 260

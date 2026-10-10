@@ -5,9 +5,7 @@ api_version: 1
 # YBE bridge capabilities its panel uses.
 ybe:
   - state.read        # YBE.state.getImage()
-  - config.read       # YBE.state.getConfig() — find the settings button
-  - api.request       # YBE.api.post('/api/extensions/run', ...)
-  - capabilities      # YBE.call('annotate.get' / 'annotate.setDir', ...)
+  - capabilities      # YBE.call('annotate.get' / 'annotate.start' / 'annotate.progress', ...)
   - write.draw        # YBE.callbacks.setDrawnBoxes / setDrawnBoxesVisible
 
 # Code it ships.
@@ -18,7 +16,6 @@ ui: true              # panel.js runs in a sandboxed iframe
 routes:
   - ""
   - /dir
-actions:
-  - annotate
+  - /progress
 scripts:
   - annotate_all.py

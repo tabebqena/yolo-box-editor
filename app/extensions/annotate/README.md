@@ -9,11 +9,10 @@ to be read as a worked example — it uses the whole extension system:
 
 | Part | File |
 | ---- | ---- |
-| Manifest, settings form, per-extension Python env | `extension.yaml` |
+| Manifest, per-extension Python env, panel | `extension.yaml` |
 | Declared permissions | `permissions.yaml` |
-| Shipped action (uses `{EXT_PYTHON}` / `{EXT_DIR}`) | `actions/annotate.yaml` |
 | The model run | `scripts/annotate_all.py` |
-| Backend capabilities + HTTP routes | `backend.py` |
+| Backend capabilities + HTTP routes + async run | `backend.py` |
 | Sandboxed panel + canvas overlays | `panel.js` |
 
 ## Use it
@@ -23,9 +22,15 @@ to be read as a worked example — it uses the whole extension system:
    This installs `ultralytics` into a dedicated venv under
    `<home>/extension_envs/annotate/`.
 3. In the Annotate panel, set the **Model** (`.pt`), an **Output** folder and a
-   **Confidence**, then click **Annotate all images**.
+   **Confidence**, then click **Annotate all images**. The panel is the single
+   place these options live; it remembers them for next time.
 4. The model writes `<output>/<split>/<stem>.txt`. The panel overlays those
    boxes in a different colour. Toggle **Show extension boxes** to hide them.
+
+The run happens in the background: the panel starts it and then polls the
+backend, showing **done / total** (and a progress bar) until it finishes. The
+button is disabled while a run is in progress. Run output is written to
+`<home>/.annotate_run.log`.
 
 Nothing here is ever written into the dataset's own `labels/`; the overlay boxes
 are render-only and are not saved. To turn them into real labels, copy the files

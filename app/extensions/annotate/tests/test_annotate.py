@@ -5,8 +5,8 @@ own. Run the whole suite with `python -m pytest -q` from the repo root, or just
 this package with `python -m pytest app/extensions/annotate -q`.
 
 They exercise the manifest/environment, the backend capabilities and routes, the
-action's `{EXT_*}` placeholders, and the standalone `data.yaml` reader — none of
-them needs `ultralytics` (the model run is only exercised by a real user).
+async run start, and the standalone `data.yaml` reader — none of them needs
+`ultralytics` (the model run is only exercised by a real user).
 """
 
 import importlib.util
@@ -77,15 +77,6 @@ def test_manifest_declares_a_venv_environment(clean_state):
     assert info["requirements"] == ["ultralytics>=8.0"]
 
 
-def test_action_uses_ext_placeholders(clean_state):
-    # The package is shipped inactive, so parse the action file directly.
-    text = (PKG / "actions" / "annotate.yaml").read_text(encoding="utf-8")
-    data = ybe._parse_action_file(text)
-    step = data["steps"][0]
-    assert "{EXT_PYTHON}" in step and "{EXT_DIR}" in step
-    assert "{WIDGET_MODEL}" in step and "{WIDGET_OUTPUT_DIR}" in step
-
-
 def test_backend_reads_separate_labels(clean_state, tmp_path):
     _module, caps = _backend()
     _dataset(tmp_path)
@@ -107,6 +98,69 @@ def test_set_dir_refuses_readonly(clean_state, tmp_path):
     ybe.state.STATE["readonly"] = True
     with pytest.raises(PermissionError):
         caps["annotate.setDir"](str(tmp_path))
+
+
+def test_status_reports_settings_and_running(clean_state, tmp_path):
+    _module, caps = _backend()
+    _dataset(tmp_path)
+    status = caps["annotate.status"]()
+    assert status["running"] is False
+    assert status["model"] == "" and status["conf"] == "0.25"
+
+
+def test_start_validates_and_saves_settings(clean_state, tmp_path, monkeypatch):
+    module, caps = _backend()
+    _dataset(tmp_path)
+    model = tmp_path / "model.pt"
+    model.write_bytes(b"x")
+    out = tmp_path / "ext_labels"
+
+    class FakeProc:
+        def poll(self):
+            return None  # pretend the run is still in flight
+
+    calls = {}
+
+    def fake_popen(command, **kwargs):
+        calls["command"] = command
+        calls["kwargs"] = kwargs
+        return FakeProc()
+
+    monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+    res = caps["annotate.start"](
+        {"model": str(model), "output_dir": str(out), "conf": "0.4"})
+    assert res["ok"] is True and res["running"] is True
+    assert "--progress" in calls["command"]
+    assert calls["kwargs"]["cwd"] == ybe.config.YBX_HOME
+    # the panel settings are persisted and reported back
+    status = caps["annotate.status"]()
+    assert status["model"] == str(model) and status["conf"] == "0.4"
+    assert status["running"] is True
+    # a second run is refused while one is live
+    again = caps["annotate.start"](
+        {"model": str(model), "output_dir": str(out)})
+    assert again["ok"] is False and again["running"] is True
+
+
+def test_start_needs_a_dataset_and_a_model(clean_state, tmp_path):
+    _module, caps = _backend()
+    with pytest.raises(ValueError):
+        caps["annotate.start"]({"model": "m.pt", "output_dir": "x"})
+    _dataset(tmp_path)
+    with pytest.raises(ValueError):
+        caps["annotate.start"]({"model": "", "output_dir": str(tmp_path)})
+
+
+def test_progress_reads_the_script_file(clean_state, tmp_path):
+    _module, caps = _backend()
+    _dataset(tmp_path)
+    (Path(ybe.config.YBX_HOME) / ".annotate_progress.json").write_text(
+        '{"done": 3, "total": 10, "current": "c.jpg", "phase": "running"}',
+        encoding="utf-8")
+    prog = caps["annotate.progress"]()
+    assert prog["running"] is False  # no process was started here
+    assert prog["done"] == 3 and prog["total"] == 10
+    assert prog["current"] == "c.jpg"
 
 
 def test_extension_routes_dispatch(clean_state, tmp_path):
@@ -145,3 +199,17 @@ def test_script_parses_data_yaml(tmp_path):
     assert base == str(root)
     assert splits == {"train": "images/train", "val": "images/val"}
     assert names == {0: "fire", 1: "smoke"}
+
+
+def test_script_writes_progress(tmp_path):
+    script = PKG / "scripts" / "annotate_all.py"
+    spec = importlib.util.spec_from_file_location("annotate_all", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    target = tmp_path / "progress.json"
+    module.write_progress(str(target), 2, 5, current="b.jpg")
+    assert json.loads(target.read_text(encoding="utf-8")) == {
+        "done": 2, "total": 5, "current": "b.jpg", "phase": "running"}
+    module.write_progress(str(target), 5, 5, phase="done")
+    assert json.loads(target.read_text(encoding="utf-8"))["phase"] == "done"

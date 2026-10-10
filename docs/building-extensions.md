@@ -181,8 +181,10 @@ settings:
       action: rename          # runs actions/rename.yaml with {WIDGET_SUFFIX}
 ```
 
-`app/extensions/annotate/extension.yaml` uses this to run its `annotate` action
-with the model path, output folder and confidence.
+`app/extensions/example/extension.yaml` uses this for a small settings subtab;
+the other controls are passed to the button's action as `{WIDGET_<ID>}`. (The
+`annotate` example deliberately has **no** settings form: its sandboxed panel is
+the single place its options live, so there is nothing to keep in sync.)
 
 ## 6. A backend plugin
 
@@ -311,9 +313,9 @@ requirements_file: requirements.txt   # optional, relative to the package
 ```
 
 ```yaml
-# actions/annotate.yaml
+# an action in your package
 steps:
-  - {EXT_PYTHON} {EXT_DIR}/scripts/annotate_all.py --data {DATA_YAML_PATH} --out {WIDGET_OUTPUT_DIR}
+  - {EXT_PYTHON} {EXT_DIR}/scripts/run_model.py --data {DATA_YAML_PATH}
 ```
 
 - `{EXT_PYTHON}` — the package's interpreter (falls back to `{PYTHON}` for loose
@@ -321,6 +323,10 @@ steps:
 - The venv lives in `<home>/extension_envs/<id>/` and survives updates.
 - Build it with `ybe extension-env <id>`, the Settings → Extensions button, or
   the install prompt; it is never built silently.
+- A backend plugin can also resolve the interpreter itself with
+  `envs.resolve_id(<id>)` and run the script itself — that is how `annotate`
+  starts a long model run in the background so the panel can poll progress
+  instead of waiting on one request.
 
 See [Python environments](extensions.md#python-environments) and
 `app/extensions/annotate/extension.yaml` + `scripts/annotate_all.py`.
@@ -398,14 +404,16 @@ Both live examples carry their tests: `app/extensions/annotate/tests/` and
 | Permissions | `…/tags/permissions.yaml` | `…/annotate/permissions.yaml` |
 | Backend | `…/tags/backend.py` (capabilities + routes) | `…/annotate/backend.py` (separate folder) |
 | Panel | `…/tags/panel.js` (read/write via `YBE.call`) | `…/annotate/panel.js` (overlays) |
-| Actions / scripts | `…/tags/filters/`, `scripts/` | `…/annotate/actions/`, `scripts/annotate_all.py` |
+| Actions / scripts | `…/tags/filters/`, `scripts/` | `…/annotate/scripts/annotate_all.py` |
 | Env | — | `python: venv` + `ultralytics` |
 | Tests | `…/tags/tests/test_tags.py` | `…/annotate/tests/test_annotate.py` |
 | Shipped | `active: false` (opt-in) | `active: false` (example) |
 
 Read them side by side: `tags` shows the focused, everyday shape of a package;
 `annotate` shows the advanced end — a per-extension environment, a backend that
-owns files the core never sees, and canvas overlays drawn from a sandboxed panel.
+owns files the core never sees, a long model run started in the background (the
+panel polls its progress instead of blocking on one request), and canvas
+overlays drawn from a sandboxed panel.
 
 ## Further reading
 
