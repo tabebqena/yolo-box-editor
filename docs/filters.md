@@ -52,10 +52,13 @@ steps:                      # one shell command per entry, run in order
 - `active: false` is an app-global off switch: the filter does not appear in the
   UI and cannot be selected (a saved chain that used it drops that step).
 - An argument with `options` is shown as a dropdown and the app rejects a value
-  that is not one of them. Besides literal lists, the token
-  `{DATASET_CLASS_NAMES}` expands to the loaded dataset's class names, so a
-  class filter can never be given a typo'd class. Other dynamic tokens may be
-  added later.
+  that is not one of them. Besides literal lists, two dynamic tokens are filled
+  from the loaded dataset: `{DATASET_CLASS_NAMES}` expands to its class names,
+  and `{DATASET_TAGS}` to the names in its `tags.yaml` (an extension package can
+  register further tokens through its backend's `register()`,
+  `filter_options:` — see [extension actions & backend](extension-actions.md)).
+  A token that nobody owns stays a literal option, and a dropdown with no values
+  falls back to a text field.
 - A filter with no `steps` (e.g. a comments-only template you copied) is
   ignored.
 - An argument name must be letters, digits and `_` (not starting with a digit)
@@ -138,7 +141,8 @@ image with no label file contains no class).
 
 The **Has tag** / **Does not have tag** filters ship with the tags extension
 package (`app/extensions/tags/filters/`); enable it under **Settings →
-Extensions** to use them. They use
+Extensions** to use them. Their argument is a dropdown of the dataset's
+`tags.yaml` names (`options: {DATASET_TAGS}`). They use
 `app/extensions/tags/scripts/tag_filter.py`, which checks each image's tag file
 (found by swapping the last `images` segment for `tags`, or the dataset's custom
 tags folder); an image with no tag file has no tags.

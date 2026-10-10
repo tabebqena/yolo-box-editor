@@ -84,6 +84,29 @@ def _activated(tmp_path, monkeypatch):
     return pkg
 
 
+def test_register_declares_dataset_tags_filter_option(clean_state, tmp_path):
+    module, _caps = _backend()
+    result = module.register(plugins.PluginContext(Flask("tags-test"), {"id": "tags"}))
+    provider = result["filter_options"]["{DATASET_TAGS}"]
+    assert callable(provider)
+    _dataset(tmp_path)
+    assert provider() == ["fire", "smoke"]
+
+
+def test_tag_filters_expose_tag_dropdown(clean_state, tmp_path, monkeypatch):
+    _activated(tmp_path, monkeypatch)
+    _dataset(tmp_path)
+    plugins.install(Flask("tags-test"))
+    try:
+        filters, errors = ybe.load_filters()
+        assert errors == []
+        args = {a["name"]: a for a in filters["Has tag"]["arguments"]}
+        assert args["tag_name"]["options"] == ["{DATASET_TAGS}"]
+        assert ybe.resolve_filter_options(args["tag_name"]["options"], []) == ["fire", "smoke"]
+    finally:
+        plugins.disable("tags")
+
+
 def test_declares_app_actions(clean_state):
     from ybe.packages import extension_app_action_defs
     defs = {d["id"]: d for d in extension_app_action_defs(only_active=False)}

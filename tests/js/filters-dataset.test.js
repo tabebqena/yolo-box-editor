@@ -37,6 +37,20 @@ test('populateFilterPanel renders one block per active filter', () => {
   assert.equal(app.$('filterAddBtn').disabled, false);
 });
 
+test('an argument with options renders a dropdown', () => {
+  const filters = [
+    { name: 'tag', description: '', arguments: [
+      { name: 'tag_name', required: true, options: ['fire', 'smoke'] },
+    ] },
+  ];
+  app.set({ filters, activeFilters: [{ name: 'tag', arguments: { tag_name: 'smoke' } }] });
+  app.api.populateFilterPanel();
+  const input = app.$('filterPanelBody').querySelector('.filter-arg-input');
+  assert.equal(input.tagName, 'SELECT');
+  assert.equal(input.value, 'smoke');
+  assert.deepEqual(plain([...input.options].map((o) => o.value)), ['fire', 'smoke']);
+});
+
 test('the chain caps at eight filters and never drops below one', () => {
   app.set({ filters: FILTERS, activeFilters: [] });
   app.api.populateFilterPanel();

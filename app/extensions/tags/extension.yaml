@@ -8,7 +8,7 @@ api_version: 6
 id: tags
 name: Tags
 description: Label whole images with tags from tags.yaml (tag bar, Alt+1..9).
-version: 1.0.0
+version: 1.1.0
 author: yolo-box-editor
 active: false
 

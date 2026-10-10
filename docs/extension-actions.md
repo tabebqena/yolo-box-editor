@@ -52,6 +52,26 @@ extension_routes = (
 `register` may also return the routes (`{"capabilities": {...}, "routes": [...]}`),
 and it is optional if the package only declares routes.
 
+### Filling a filter dropdown from live data
+
+A package can contribute the options of one of its filters' arguments. Return a
+`filter_options` map of `token -> callable()`, and use that token as the
+argument's `options:` in the filter YAML:
+
+```python
+def register(ctx):
+    return {
+        "capabilities": {"mytool.do": lambda: do_it()},
+        # the filter's `options: {MY_THINGS}` becomes this callable's list
+        "filter_options": {"{MY_THINGS}": lambda: ["a", "b"]},
+    }
+```
+
+The callable runs whenever the app builds the Filters dropdown (and again when it
+validates the chain), so it can read the loaded dataset. The tags package uses
+this to fill `{DATASET_TAGS}` from the dataset's `tags.yaml`; a filter with an
+empty dropdown falls back to a text field.
+
 ### Routes are namespaced, and run through a dispatcher
 
 Every route is mounted under a fixed host prefix plus the package's own prefix:

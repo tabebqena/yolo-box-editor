@@ -212,7 +212,11 @@ extension_routes = (
 )
 
 def register(ctx):
-    return {"capabilities": {"things.get": lambda key: _cap_get(key)}}
+    return {
+        "capabilities": {"things.get": lambda key: _cap_get(key)},
+        # fill a filter argument's `options: {MY_THINGS}` from live data
+        "filter_options": {"{MY_THINGS}": lambda: ["a", "b"]},
+    }
 ```
 
 `ctx` is a `PluginContext` with `.app`, `.state`, `.config`, `.package` and

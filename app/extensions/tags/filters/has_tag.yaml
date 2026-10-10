@@ -8,5 +8,6 @@ description: Keep only images that have the chosen tag.
 arguments:
   - name: tag_name
     required: true
+    options: {DATASET_TAGS}
 steps:
   - {PYTHON} {APP_DIR}/extensions/tags/scripts/tag_filter.py {INPUT_PIPE} {OUTPUT_PIPE} --tag {TAG_NAME} --split {SPLIT} --data-yaml {DATA_YAML_PATH}

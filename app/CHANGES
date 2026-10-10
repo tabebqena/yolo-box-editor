@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.16.0
+- The Tags extension's **Has tag** / **Does not have tag** filters now choose the tag from a **dropdown** of your dataset's tags, instead of a text box. Extension backend plugins can fill a filter's options from live data with a `filter_options` map returned from `register()`.
+
 ## 10.15.2
 - Fixed: the browser's **saved-password suggestion** no longer pops up on ordinary text fields (the `data.yaml` path, the image counter, filter and extension forms). The login and change-password fields still autofill normally.
 

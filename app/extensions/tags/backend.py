@@ -21,6 +21,10 @@ from ybe.parsing import _read_text
 
 OVERRIDE_FILE = ".tags_extension.json"
 
+# The dynamic filter-option token this package registers: expands to the
+# dataset's `tags.yaml` names (a filter argument's dropdown).
+DATASET_TAGS_TOKEN = "{DATASET_TAGS}"
+
 
 # --- tags.yaml (available tags) ------------------------------------------- #
 def _strip_comment(s):
@@ -345,6 +349,10 @@ extension_routes = (
 def register(ctx):
     """Return the capability table (routes are declared in `extension_routes`)."""
     return {
+        # A dynamic filter-option token: the Has tag / Does not have tag filters
+        # use `options: {DATASET_TAGS}` so their argument is a dropdown of the
+        # dataset's tags.yaml names instead of a free-text field.
+        "filter_options": {DATASET_TAGS_TOKEN: read_tags_yaml},
         "capabilities": {
             "tags.available": lambda *a: _cap_available(),
             "tags.get": lambda key: _cap_get(key),

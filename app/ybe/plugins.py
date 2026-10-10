@@ -26,7 +26,7 @@ import sys
 
 from flask import Response, abort, jsonify
 
-from ybe import config, extension_flags, state
+from ybe import config, extension_flags, extensions, state
 from ybe.packages import load_packages, package_backend_path, package_route_prefix
 
 
@@ -131,23 +131,35 @@ def _import_module(pkg):
 
 
 def _load_backend(app, pkg):
-    """Import + register one backend; returns (module, capabilities, routes)."""
+    """Import + register one backend.
+
+    Returns `(module, capabilities, routes, filter_options)`, where
+    `filter_options` maps a dynamic filter-option token (e.g. `{DATASET_TAGS}`)
+    to a `callable() -> list[str]` provider the package declared.
+    """
     module = _import_module(pkg)
     if module is None:
-        return None, {}, []
+        return None, {}, [], {}
     capabilities, routes = {}, list(getattr(module, "extension_routes", None) or [])
+    filter_options = {}
     register = getattr(module, "register", None)
     if callable(register):
         returned = register(PluginContext(app, pkg)) or {}
         if isinstance(returned, dict):
-            if "capabilities" in returned or "routes" in returned:
+            declared = {"capabilities", "routes", "filter_options"} & set(returned)
+            if declared:
                 capabilities = returned.get("capabilities") or {}
                 routes += list(returned.get("routes") or [])
+                filter_options = returned.get("filter_options") or {}
             else:
                 capabilities = returned
     if not isinstance(capabilities, dict):
         capabilities = {}
-    return module, capabilities, _normalize_routes(routes, package_route_prefix(pkg))
+    if not isinstance(filter_options, dict):
+        filter_options = {}
+    filter_options = {t: p for t, p in filter_options.items() if callable(p)}
+    return (module, capabilities,
+            _normalize_routes(routes, package_route_prefix(pkg)), filter_options)
 
 
 def enable(app, package_id):
@@ -172,7 +184,7 @@ def enable(app, package_id):
                   % (package_id, prefix, other["id"]), file=sys.stderr)
             return False
     try:
-        module, capabilities, routes = _load_backend(app, pkg)
+        module, capabilities, routes, filter_options = _load_backend(app, pkg)
     except Exception as exc:  # noqa: BLE001 - a bad plugin must not brick the app
         print("[ybe] plugin '%s' failed to load: %s" % (package_id, exc), file=sys.stderr)
         return False
@@ -181,8 +193,11 @@ def enable(app, package_id):
     PLUGIN_REGISTRY[package_id] = {
         "package": pkg, "module": module,
         "capabilities": capabilities, "routes": routes,
+        "filter_options": filter_options,
     }
     PLUGIN_CAPABILITIES[package_id] = capabilities
+    for token, provider in filter_options.items():
+        extensions.register_filter_option(token, provider)
     return True
 
 
@@ -192,6 +207,8 @@ def disable(package_id):
     PLUGIN_CAPABILITIES.pop(package_id, None)
     if entry is None:
         return False
+    for token in (entry.get("filter_options") or {}):
+        extensions.unregister_filter_option(token)
     teardown = getattr(entry["module"], "teardown", None)
     if callable(teardown):
         try:
@@ -221,6 +238,7 @@ def install(app):
         pass
     PLUGIN_REGISTRY.clear()
     PLUGIN_CAPABILITIES.clear()
+    extensions.clear_filter_options()
     for pkg in load_packages()[0]:
         if pkg["active"] and pkg.get("backend"):
             enable(app, pkg["id"])

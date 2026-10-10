@@ -4,6 +4,18 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.16.0] - 2026-10-10
+
+### Changed
+
+- The Tags extension's **Has tag** / **Does not have tag** filters now pick the
+  tag from a **dropdown** of the dataset's `tags.yaml` names instead of asking
+  you to type it.
+- A backend plugin can now fill a filter argument's `options` from live data: a
+  package's `register()` may return a `filter_options` map of
+  `token -> callable()`. The tags package registers the `{DATASET_TAGS}` token
+  this way; a dropdown with no values still falls back to a text field.
+
 ## [10.15.2] - 2026-10-10
 
 ### Fixed

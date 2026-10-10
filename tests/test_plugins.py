@@ -117,6 +117,32 @@ def test_route_prefix_collision_blocks_enable(clean_state, tmp_path, monkeypatch
     plugins.PLUGIN_CAPABILITIES.clear()
 
 
+def test_backend_registers_and_unregisters_filter_options(clean_state, tmp_path, monkeypatch):
+    ext = tmp_path / "app-extensions"
+    pkg = ext / "opts"
+    pkg.mkdir(parents=True)
+    (pkg / "backend.py").write_text(
+        "def register(ctx):\n"
+        "    return {'filter_options': {'{DATASET_THINGS}': lambda: ['a', 'b']}}\n",
+        encoding="utf-8")
+    (pkg / "extension.yaml").write_text(
+        "api_version: 6\nid: opts\nname: Opts\nactive: true\nbackend: backend.py\n",
+        encoding="utf-8")
+    monkeypatch.setattr(ybe.config, "EXTENSIONS_DIR", str(ext))
+    monkeypatch.setattr(ybe.config, "USER_EXTENSIONS_DIR", str(tmp_path / "none"))
+    from ybe import extensions
+    try:
+        assert plugins.enable(ybe.app, "opts") is True
+        assert extensions.resolve_filter_options(["{DATASET_THINGS}"], []) == ["a", "b"]
+        assert plugins.disable("opts") is True
+        # gone again: the token is a literal option when no provider owns it
+        assert extensions.resolve_filter_options(["{DATASET_THINGS}"], []) == ["{DATASET_THINGS}"]
+    finally:
+        plugins.PLUGIN_REGISTRY.clear()
+        plugins.PLUGIN_CAPABILITIES.clear()
+        extensions.clear_filter_options()
+
+
 def test_disabled_package_excludes_all_its_extensions(clean_state, tmp_path):
     base = tmp_path / "app-extensions" / "pkg"
     for kind, fname, body in (

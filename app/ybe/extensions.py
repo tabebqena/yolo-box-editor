@@ -335,18 +335,49 @@ _FILTER_ARG_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # Dynamic option tokens: expand to the loaded dataset's class names.
 FILTER_CLASS_NAMES_TOKEN = "{DATASET_CLASS_NAMES}"
 
+# Plugin-provided dynamic option tokens: `token` -> `callable() -> list[str]`.
+# A backend plugin declares them in its `register()` result (see `ybe.plugins`),
+# e.g. the tags package registers `{DATASET_TAGS}`. They expand just like
+# `{DATASET_CLASS_NAMES}`, so a filter's dropdown can be filled from live data.
+FILTER_OPTION_PROVIDERS = {}
+
+
+def register_filter_option(token, provider):
+    """Register a plugin-provided dynamic filter option token (idempotent)."""
+    FILTER_OPTION_PROVIDERS[token] = provider
+
+
+def unregister_filter_option(token):
+    """Drop a plugin-provided dynamic filter option token, if present."""
+    FILTER_OPTION_PROVIDERS.pop(token, None)
+
+
+def clear_filter_options():
+    """Forget every plugin-provided option token (startup/teardown)."""
+    FILTER_OPTION_PROVIDERS.clear()
+
 
 def resolve_filter_options(options, classes):
     """Expand dynamic option tokens (e.g. `{DATASET_CLASS_NAMES}`).
 
     Non-token options are kept as-is; a token expands in place (deduplicated).
+    A plugin-registered token calls its provider for the fresh values, and a
+    broken provider is treated as empty rather than failing the whole config.
     Used both to fill the UI dropdown and to validate a submitted value.
     """
     if not options:
         return options
     resolved = []
     for opt in options:
-        values = classes if opt == FILTER_CLASS_NAMES_TOKEN else [opt]
+        if opt == FILTER_CLASS_NAMES_TOKEN:
+            values = classes
+        elif opt in FILTER_OPTION_PROVIDERS:
+            try:
+                values = FILTER_OPTION_PROVIDERS[opt]() or []
+            except Exception:  # noqa: BLE001 - a bad provider must not break config
+                values = []
+        else:
+            values = [opt]
         for value in values:
             if value and value not in resolved:
                 resolved.append(value)
