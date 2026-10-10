@@ -4,6 +4,15 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.15.2] - 2026-10-10
+
+### Fixed
+
+- The browser's **saved-password suggestion** no longer appears on the app's
+  ordinary text fields (the `data.yaml` path, the image counter, and the filter
+  and extension form fields). Every non-credential input now opts out of
+  autofill, while the login and change-password fields still autofill as before.
+
 ## [10.15.1] - 2026-10-10
 
 ### Fixed

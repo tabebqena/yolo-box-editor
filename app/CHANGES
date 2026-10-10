@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.15.2
+- Fixed: the browser's **saved-password suggestion** no longer pops up on ordinary text fields (the `data.yaml` path, the image counter, filter and extension forms). The login and change-password fields still autofill normally.
+
 ## 10.15.1
 - Fixed: collapsing the **side panel** no longer covers the canvas toolbar row — the floating Panel / bell / help header now sits just below the strip.
 

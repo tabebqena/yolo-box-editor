@@ -39,6 +39,7 @@ const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 function mk(tag, cls, text) {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
+  if (tag === 'input' || tag === 'textarea') node.autocomplete = 'off';
   if (text !== undefined && text !== null) node.textContent = text;
   return node;
 }

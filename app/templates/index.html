@@ -101,6 +101,7 @@
         <div class="imagebar-nav">
           <button id="prevBtn" title="Previous (←)">&#9664; Prev</button>
           <input id="counter" class="counter" type="text" inputmode="numeric"
+                 autocomplete="off"
                  title="Current image — type a number and press Enter to jump" value="0 / 0">
           <button id="nextBtn" title="Next (→)">Next &#9654;</button>
         </div>
@@ -299,7 +300,8 @@
             <select id="recentSelect" class="hidden" title="Open a recently used data.yaml">
               <option value="">Recent…</option>
             </select>
-            <input id="dataYaml" type="text" placeholder="/path/to/data.yaml">
+            <input id="dataYaml" type="text" autocomplete="off"
+                   placeholder="/path/to/data.yaml">
             <button id="setDataBtn" class="primary">Load</button>
           </div>
           <p class="hint">Tags are provided by the <strong>Tags</strong> extension,
@@ -408,7 +410,8 @@
       <div class="load-data-body">
         <p class="load-data-hint">Paste the path to your <code>data.yaml</code> to get started.</p>
         <div class="dataset-row">
-          <input id="loadDataYaml" type="text" placeholder="/path/to/data.yaml">
+          <input id="loadDataYaml" type="text" autocomplete="off"
+                 placeholder="/path/to/data.yaml">
           <button id="loadDataBtn" class="primary">Load</button>
         </div>
       </div>
