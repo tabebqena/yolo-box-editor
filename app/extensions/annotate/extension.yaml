@@ -37,4 +37,4 @@ ui:
   title: Annotate
   script: panel.js
   location: float
-  height: 260
+  height: 300

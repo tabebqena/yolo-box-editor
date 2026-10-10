@@ -26,6 +26,7 @@ OVERRIDE_FILE = ".annotate_extension.json"
 SETTINGS_FILE = ".annotate_settings.json"
 PROGRESS_FILE = ".annotate_progress.json"
 LOG_FILE = ".annotate_run.log"
+CLASSES_FILE = ".annotate_model_classes.json"
 
 # The single in-flight (or last finished) run. The panel allows one at a time.
 _JOB = {"proc": None, "output_dir": None}
@@ -84,7 +85,7 @@ def set_output_dir(folder):
     return folder
 
 
-# --- panel settings (model + confidence), stored globally ----------------- #
+# --- panel settings (model + confidence + class names), stored globally --- #
 def get_settings():
     """The panel's persisted settings plus the current dataset's output folder."""
     data = _read_json(_home_path(SETTINGS_FILE))
@@ -93,19 +94,43 @@ def get_settings():
     return {
         "model": data.get("model") or "",
         "conf": data.get("conf") or "0.25",
+        "classes": data.get("classes") or "",
         "output_dir": get_output_dir() or "",
     }
 
 
-def save_settings(model, conf):
-    """Persist the panel's model path and confidence for next time."""
+def save_settings(model, conf, classes=None):
+    """Persist the panel's model path, confidence and model class names."""
     data = _read_json(_home_path(SETTINGS_FILE))
     if not isinstance(data, dict):
         data = {}
     data["model"] = (model or "").strip()
     data["conf"] = (conf or "0.25").strip() or "0.25"
+    data["classes"] = (classes or "").strip()
     _write_json(_home_path(SETTINGS_FILE), data)
     return get_settings()
+
+
+def auto_classes():
+    """The model's own class names, as written by the last run (or [])."""
+    data = _read_json(_home_path(CLASSES_FILE))
+    if isinstance(data, dict):
+        try:
+            return [str(data[key]) for key in sorted(data, key=lambda k: int(k))]
+        except (TypeError, ValueError):
+            return []
+    if isinstance(data, list):
+        return [str(name) for name in data]
+    return []
+
+
+def class_names():
+    """The class names to label overlays with: the panel setting, else the
+    names the model reported on its last run, else [] (the editor then falls
+    back to the dataset's own classes)."""
+    setting = get_settings().get("classes") or ""
+    names = [name.strip() for name in setting.split(",") if name.strip()]
+    return names or auto_classes()
 
 
 # --- reads ----------------------------------------------------------------- #
@@ -188,6 +213,7 @@ def _start(opts):
     model = (opts.get("model") or "").strip()
     out = (opts.get("output_dir") or "").strip()
     conf = (opts.get("conf") or "0.25").strip() or "0.25"
+    classes = (opts.get("classes") or "").strip()
     if not model:
         raise ValueError("set the model path first")
     model_path = os.path.abspath(os.path.expanduser(model))
@@ -213,6 +239,7 @@ def _start(opts):
         "--model", model_path,
         "--conf", str(conf),
         "--progress", progress_path,
+        "--classes", _home_path(CLASSES_FILE),
     ]
     log_path = _home_path(LOG_FILE)
     try:
@@ -230,13 +257,13 @@ def _start(opts):
     finally:
         handle.close()
 
-    save_settings(model, conf)
+    save_settings(model, conf, classes)
     set_output_dir(out_path)
     _JOB["proc"] = proc
     _JOB["output_dir"] = out_path
     return {
         "ok": True, "running": True, "output_dir": out_path,
-        "model": model, "conf": conf,
+        "model": model, "conf": conf, "classes": classes,
     }
 
 
@@ -268,7 +295,19 @@ def _progress():
 # --- capabilities (used by the panel and /api/extensions/call) ------------ #
 def _cap_get(key):
     entry = _entry_for_key(key)
-    return read_boxes(entry) if entry else []
+    if not entry:
+        return []
+    boxes = read_boxes(entry)
+    # Label each box with the model's own class name when we know it (the panel
+    # setting, or the names the model reported). With none, leave the label out
+    # so the editor falls back to the dataset's classes.
+    names = class_names()
+    if names:
+        for box in boxes:
+            index = box["class"]
+            if 0 <= index < len(names):
+                box["label"] = "%d: %s" % (index, names[index])
+    return boxes
 
 
 def _cap_set_dir(folder):
@@ -284,6 +323,9 @@ def _cap_set_dir(folder):
 def _cap_status():
     status = get_settings()
     status["running"] = _job_running()
+    # The model's own names are used for labels when the panel setting is empty;
+    # report them so the panel can show what will be used.
+    status["auto_classes"] = auto_classes()
     return status
 
 

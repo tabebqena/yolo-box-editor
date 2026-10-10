@@ -163,6 +163,32 @@ def test_progress_reads_the_script_file(clean_state, tmp_path):
     assert prog["current"] == "c.jpg"
 
 
+def test_boxes_are_labelled_from_the_panel_setting(clean_state, tmp_path):
+    module, caps = _backend()
+    _dataset(tmp_path)
+    out = tmp_path / "ext_labels"
+    (out / "train").mkdir(parents=True)
+    (out / "train" / "a.txt").write_text("0 0.5 0.5 0.2 0.2\n", encoding="utf-8")
+    caps["annotate.setDir"](str(out))
+    # no model classes: the editor falls back to the dataset's own classes
+    assert "label" not in caps["annotate.get"]("train/a.jpg")[0]
+    module.save_settings("m.pt", "0.25", "smoke")
+    assert caps["annotate.get"]("train/a.jpg")[0]["label"] == "0: smoke"
+
+
+def test_model_class_names_come_from_the_last_run(clean_state, tmp_path):
+    module, caps = _backend()
+    _dataset(tmp_path)
+    (Path(ybe.config.YBX_HOME) / ".annotate_model_classes.json").write_text(
+        '{"0": "smoke"}', encoding="utf-8")
+    # the auto-detected names are reported and used for labels
+    assert caps["annotate.status"]()["auto_classes"] == ["smoke"]
+    assert module.class_names() == ["smoke"]
+    # an explicit panel setting still wins over the auto-detected names
+    module.save_settings("m.pt", "0.25", "fire,smoke")
+    assert module.class_names() == ["fire", "smoke"]
+
+
 def test_extension_routes_dispatch(clean_state, tmp_path):
     _dataset(tmp_path)
     plugins.PLUGIN_REGISTRY.clear()
@@ -213,3 +239,17 @@ def test_script_writes_progress(tmp_path):
         "done": 2, "total": 5, "current": "b.jpg", "phase": "running"}
     module.write_progress(str(target), 5, 5, phase="done")
     assert json.loads(target.read_text(encoding="utf-8"))["phase"] == "done"
+
+
+def test_script_writes_model_classes(tmp_path):
+    script = PKG / "scripts" / "annotate_all.py"
+    spec = importlib.util.spec_from_file_location("annotate_all", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    target = tmp_path / "classes.json"
+    module.write_classes(str(target), {0: "smoke", 1: "fire"})
+    assert json.loads(target.read_text(encoding="utf-8")) == {
+        "0": "smoke", "1": "fire"}
+    module.write_classes(str(target), ["smoke"])
+    assert json.loads(target.read_text(encoding="utf-8")) == ["smoke"]

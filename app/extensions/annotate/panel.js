@@ -55,6 +55,13 @@
   var output = field('Output', '/path/to/extension_labels');
   var conf = field('Confidence', '0.25');
   conf.input.value = '0.25';
+  var classes = field('Model classes', 'smoke,fire (optional)');
+  classes.input.title =
+    'Comma-separated class names in the model\'s own order. Leave empty to use ' +
+    'the dataset classes.';
+  var classHint = el('div', 'hint',
+    'Model classes override the dataset class names (empty = dataset classes).');
+  classHint.style.marginBottom = '6px';
 
   var runBtn = el('button', null, 'Annotate all images');
   runBtn.type = 'button';
@@ -78,6 +85,8 @@
   document.body.appendChild(model.row);
   document.body.appendChild(output.row);
   document.body.appendChild(conf.row);
+  document.body.appendChild(classes.row);
+  document.body.appendChild(classHint);
   document.body.appendChild(runBtn);
   document.body.appendChild(showLabel);
   document.body.appendChild(status);
@@ -158,6 +167,9 @@
     }
     setStatus(progressText(p));
     setProgress((p && p.done) || 0, (p && p.total) || 0);
+    // Keep the current image's overlays fresh as the run writes labels, so the
+    // boxes appear while the model is still working (silent: status is progress).
+    await reload(true);
     if (p && p.running) {
       setBusy(true);
       schedulePoll();
@@ -165,7 +177,6 @@
     }
     stopPoll();
     setBusy(false);
-    await reload(true);
     if (p && p.error) setStatus('Failed: ' + p.error);
     else if (p && p.phase === 'done') setStatus(progressText(p));
   }
@@ -187,6 +198,7 @@
     try {
       res = await YBE.call('annotate.start', [{
         model: modelPath, output_dir: out, conf: confidence,
+        classes: classes.input.value.trim(),
       }]);
     } catch (e) {
       setBusy(false);
@@ -208,6 +220,12 @@
       if (!s) return;
       if (s.model) model.input.value = s.model;
       if (s.conf) conf.input.value = s.conf;
+      if (s.classes) classes.input.value = s.classes;
+      if (!s.classes && s.auto_classes && s.auto_classes.length) {
+        classes.input.placeholder = s.auto_classes.join(',');
+        classHint.textContent = 'Using the model\'s classes: ' +
+          s.auto_classes.join(', ') + ' (type to override).';
+      }
       if (s.output_dir) output.input.value = s.output_dir;
       if (s.running) {
         setBusy(true);
@@ -217,14 +235,16 @@
     } catch (e) { /* ignore */ }
   }
 
-  YBE.on('image_loaded', function () { if (!running) reload(); });
-  YBE.on('images_list_loaded', function () { if (!running) reload(); });
+  // Always refresh the overlays, even mid-run: existing labels should show and
+  // new ones appear as the model writes them. `silent` keeps the progress status.
+  YBE.on('image_loaded', function () { reload(running); });
+  YBE.on('images_list_loaded', function () { reload(running); });
   YBE.on('readonly_changed', function () {
     runBtn.disabled = running || !!YBE.readonly;
-    if (!running) reload();
+    reload(running);
   });
 
   runBtn.disabled = !!YBE.readonly;
   await loadState();
-  if (!running) await reload();
+  await reload(running);
 }());

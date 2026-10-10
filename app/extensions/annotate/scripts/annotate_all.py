@@ -9,7 +9,7 @@ installed in the app's environment.
 
 Usage:
     annotate_all.py --data data.yaml --out OUT_DIR --model model.pt [--conf 0.25]
-                    [--progress PROGRESS_JSON]
+                    [--progress PROGRESS_JSON] [--classes CLASSES_JSON]
 """
 
 import argparse
@@ -107,6 +107,27 @@ def write_progress(path, done, total, current=None, phase="running", error=None)
         pass
 
 
+def write_classes(path, names):
+    """Record the model's class names so the panel can label overlays with them.
+
+    The model's `names` is normally a `{index: name}` mapping; a list is also
+    accepted. Written atomically, and ignored on any error.
+    """
+    if not path or not names:
+        return
+    try:
+        if isinstance(names, dict):
+            data = {str(key): str(value) for key, value in names.items()}
+        else:
+            data = [str(value) for value in names]
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(data, handle)
+        os.replace(tmp, path)
+    except (OSError, TypeError, ValueError):
+        pass
+
+
 def boxes_to_lines(results):
     """Convert Ultralytics results into normalized YOLO `class cx cy w h` lines."""
     lines = []
@@ -130,6 +151,7 @@ def main(argv=None):
     parser.add_argument("--model", required=True, help="model weights (.pt)")
     parser.add_argument("--conf", type=float, default=0.25, help="confidence threshold")
     parser.add_argument("--progress", help="file to write progress JSON to")
+    parser.add_argument("--classes", help="file to write the model's class names to")
     args = parser.parse_args(argv)
 
     try:
@@ -156,6 +178,7 @@ def main(argv=None):
     write_progress(args.progress, 0, total, phase="loading")
 
     model = YOLO(args.model)
+    write_classes(args.classes, getattr(model, "names", None))
     done = 0
     try:
         for split, image_path in jobs:
