@@ -6,7 +6,7 @@
 - Fixed: collapsing the **side panel** no longer covers the canvas toolbar row — the floating Panel / bell / help header now sits just below the strip.
 
 ## 10.15.0
-- The **Annotate** example extension now runs its model in the **background**. The panel is the only place its model, output folder, confidence and model classes live (the Settings form is gone), it remembers them, disables the button while a run is going, shows progress (done / total), and keeps the overlay boxes refreshing as labels are written. Boxes are labelled with the model's own class names when known (falling back to the dataset classes).
+- The **Annotate** example extension now runs its model in the **background**. The panel is the only place its model, output folder, confidence and model classes live (the Settings form is gone), it remembers them, disables the button while a run is going, shows progress (done / total), and keeps the overlay boxes refreshing as labels are written. Boxes are labelled with the model's own class names when known (falling back to the dataset classes), and each box has a **Save** button that adds it as a real, editable box and hides the overlay.
 
 ## 10.14.2
 - Docs: a `backend.py` adds your own **Flask routes** (plus panel capabilities). It declares them in an `extension_routes` tuple instead of `@app.route`, because Flask's URL map is fixed at startup and packages are enabled/disabled live.

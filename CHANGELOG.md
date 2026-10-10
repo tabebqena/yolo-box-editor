@@ -26,6 +26,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   keep refreshing as labels are written, so you can browse the dataset while it
   runs. The run moved into the package backend (`annotate.start` /
   `annotate.progress`) and the now-unused `actions/annotate.yaml` was removed.
+  The panel also lists each model box with a **Save** button that adds it as a
+  real, editable box (class mapped by name to the dataset's) and hides that
+  overlay.
 
 ### Fixed
 

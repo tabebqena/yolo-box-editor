@@ -26,7 +26,13 @@ to be read as a worked example — it uses the whole extension system:
    in the model's own order), then click **Annotate all images**. The panel is
    the single place these options live; it remembers them for next time.
 4. The model writes `<output>/<split>/<stem>.txt`. The panel overlays those
-   boxes in a different colour. Toggle **Show extension boxes** to hide them.
+   boxes in a different colour and lists them, one row per box, with a **Save**
+   button. Toggle **Show extension boxes** to hide the overlays.
+
+Clicking a box's **Save** adds it to the image as a real, editable box (with the
+class mapped by name to the dataset's classes) and hides that overlay; press
+**Save** (Ctrl+S) in the editor to keep it. Reloading the image brings the
+overlay back (the model's label files are never changed).
 
 The model's class names are used to label the overlays. Leave **Model classes**
 empty to fall back to the dataset's own class names; after a run the field is
@@ -39,8 +45,9 @@ button is disabled while a run is in progress, and the overlays keep refreshing
 as labels are written, so you can browse the dataset while it runs. Run output
 is written to `<home>/.annotate_run.log`.
 
-Nothing here is ever written into the dataset's own `labels/`; the overlay boxes
-are render-only and are not saved. To turn them into real labels, copy the files
-over yourself or push them with `YBE.callbacks.setBoxes`/`addBox`.
+Nothing here is ever written into the dataset's own `labels/` until you press
+**Save** in the editor: the overlay boxes are render-only and the **Save**
+button just adds a real box to the image. The model's own label files are never
+modified.
 
 See `docs/building-extensions.md` for a step-by-step tour.

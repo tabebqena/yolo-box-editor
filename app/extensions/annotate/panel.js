@@ -14,6 +14,7 @@
   var key = null;
   var running = false;
   var pollTimer = null;
+  var modelBoxes = [];
 
   var style = document.createElement('style');
   style.textContent = [
@@ -31,6 +32,12 @@
     'border:1px solid var(--border,#555);margin-top:5px;overflow:hidden}',
     '.bar > i{display:block;height:100%;width:0;background:' + COLOR + ';',
     'transition:width .3s ease}',
+    '.box-list{max-height:170px;overflow:auto;margin-top:8px}',
+    '.box-row{display:flex;align-items:center;justify-content:space-between;',
+    'gap:8px;font-size:12px;padding:3px 0;border-top:1px solid var(--border,#333)}',
+    '.box-row:first-child{border-top:0}',
+    '.box-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;',
+    'white-space:nowrap}',
   ].join('');
   document.head.appendChild(style);
 
@@ -81,6 +88,7 @@
   var barFill = el('i');
   var bar = el('div', 'bar');
   bar.appendChild(barFill);
+  var boxList = el('div', 'box-list');
 
   document.body.appendChild(model.row);
   document.body.appendChild(output.row);
@@ -91,6 +99,7 @@
   document.body.appendChild(showLabel);
   document.body.appendChild(status);
   document.body.appendChild(bar);
+  document.body.appendChild(boxList);
 
   function setStatus(text) { status.textContent = text; }
 
@@ -112,19 +121,60 @@
   async function reload(silent) {
     key = await currentKey();
     if (!key) {
+      modelBoxes = [];
       YBE.callbacks.clearDrawnBoxes();
+      renderBoxes();
       if (!silent) setStatus('No image loaded.');
       return;
     }
-    var boxes = [];
-    try { boxes = await YBE.call('annotate.get', [key]); } catch (e) { boxes = []; }
-    await YBE.callbacks.setDrawnBoxes(boxes, { color: COLOR });
+    try { modelBoxes = await YBE.call('annotate.get', [key]); }
+    catch (e) { modelBoxes = []; }
+    await YBE.callbacks.setDrawnBoxes(modelBoxes, { color: COLOR });
     await YBE.callbacks.setDrawnBoxesVisible(show.checked);
-    if (!silent) {
-      setStatus(boxes.length
-        ? boxes.length + ' extension box(es) for this image'
-        : 'No extension boxes for this image');
+    renderBoxes();
+  }
+
+  // One row per model box, each with a Save button that turns it into a real,
+  // editable box and hides the overlay (until the image is reloaded).
+  function renderBoxes() {
+    boxList.innerHTML = '';
+    if (!modelBoxes.length) {
+      boxList.appendChild(el('div', 'hint', 'No extension boxes for this image.'));
+      return;
     }
+    modelBoxes.forEach(function (box, i) {
+      var row = el('div', 'box-row');
+      var name = box.label || (box.class + ': class ' + box.class);
+      row.appendChild(el('span', 'box-name', name));
+      var btn = el('button', 'box-save', 'Save');
+      btn.type = 'button';
+      btn.title = 'Add this box to the image (editable) and hide the overlay';
+      btn.disabled = !!YBE.readonly;
+      btn.addEventListener('click', function () { saveBox(i, btn); });
+      row.appendChild(btn);
+      boxList.appendChild(row);
+    });
+  }
+
+  async function saveBox(i, btn) {
+    if (YBE.readonly) return;
+    var box = modelBoxes[i];
+    if (!box) return;
+    if (btn) btn.disabled = true;
+    try {
+      await YBE.callbacks.addBox({
+        class: (box.target != null ? box.target : box.class),
+        cx: box.cx, cy: box.cy, w: box.w, h: box.h,
+      });
+    } catch (e) {
+      if (btn) btn.disabled = false;
+      setStatus('Could not add the box: ' + e.message);
+      return;
+    }
+    modelBoxes.splice(i, 1);
+    await YBE.callbacks.setDrawnBoxes(modelBoxes, { color: COLOR });
+    renderBoxes();
+    setStatus('Added a real box \u2014 press Save (Ctrl+S) to keep it.');
   }
 
   function progressText(p) {

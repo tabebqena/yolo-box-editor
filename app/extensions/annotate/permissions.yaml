@@ -7,6 +7,7 @@ ybe:
   - state.read        # YBE.state.getImage()
   - capabilities      # YBE.call('annotate.get' / 'annotate.start' / 'annotate.progress', ...)
   - write.draw        # YBE.callbacks.setDrawnBoxes / setDrawnBoxesVisible
+  - write.boxes       # YBE.callbacks.addBox (turn a model box into a real one)
 
 # Code it ships.
 backend: true         # backend.py runs server-side

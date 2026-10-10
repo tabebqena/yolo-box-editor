@@ -133,6 +133,21 @@ def class_names():
     return names or auto_classes()
 
 
+def _map_class(index, names):
+    """The dataset class index to use when saving a model box.
+
+    A model box's class index is mapped to the dataset's class with the same
+    *name* when the names are known; otherwise the index is kept as-is.
+    """
+    dataset = list(state.STATE.get("classes") or [])
+    if 0 <= index < len(names):
+        try:
+            return dataset.index(names[index])
+        except ValueError:
+            return index
+    return index
+
+
 # --- reads ----------------------------------------------------------------- #
 def label_path(entry):
     """The extension label file for an image (`<out>/<split>/<stem>.txt`)."""
@@ -298,15 +313,16 @@ def _cap_get(key):
     if not entry:
         return []
     boxes = read_boxes(entry)
-    # Label each box with the model's own class name when we know it (the panel
-    # setting, or the names the model reported). With none, leave the label out
-    # so the editor falls back to the dataset's classes.
+    # Label each box with the model's own class name and the dataset class it
+    # maps to when we know the names (the panel setting, or the names the model
+    # reported). With none, the editor falls back to the dataset's classes.
     names = class_names()
     if names:
         for box in boxes:
             index = box["class"]
             if 0 <= index < len(names):
                 box["label"] = "%d: %s" % (index, names[index])
+            box["target"] = _map_class(index, names)
     return boxes
 
 

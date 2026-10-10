@@ -173,7 +173,24 @@ def test_boxes_are_labelled_from_the_panel_setting(clean_state, tmp_path):
     # no model classes: the editor falls back to the dataset's own classes
     assert "label" not in caps["annotate.get"]("train/a.jpg")[0]
     module.save_settings("m.pt", "0.25", "smoke")
-    assert caps["annotate.get"]("train/a.jpg")[0]["label"] == "0: smoke"
+    box = caps["annotate.get"]("train/a.jpg")[0]
+    assert box["label"] == "0: smoke"
+
+
+def test_model_box_maps_to_the_dataset_class_by_name(clean_state, tmp_path):
+    module, caps = _backend()
+    _dataset(tmp_path)
+    ybe.state.STATE["classes"] = ["fire", "smoke"]
+    out = tmp_path / "ext_labels"
+    (out / "train").mkdir(parents=True)
+    (out / "train" / "a.txt").write_text("0 0.5 0.5 0.2 0.2\n", encoding="utf-8")
+    caps["annotate.setDir"](str(out))
+    module.save_settings("m.pt", "0.25", "smoke")
+    box = caps["annotate.get"]("train/a.jpg")[0]
+    assert box["label"] == "0: smoke"
+    # the model's class 0 ("smoke") is the dataset's class 1, so saving the box
+    # uses that index (the panel passes `target` to addBox)
+    assert box["target"] == 1
 
 
 def test_model_class_names_come_from_the_last_run(clean_state, tmp_path):
