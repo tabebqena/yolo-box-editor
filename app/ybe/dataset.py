@@ -35,22 +35,25 @@ def _labels_dir_for(images_dir):
     return _replace_images_segment(images_dir, "labels")
 
 
-def scan_splits():
-    """Parse data.yaml and build the list of {name, images_dir, labels_dir} splits."""
-    splits = []
-    if not state.STATE["data_yaml"] or not os.path.isfile(state.STATE["data_yaml"]):
-        return splits
+def parse_dataset(data_yaml):
+    """Pure parse of a data.yaml into `(dataset_path, classes, splits)`.
 
-    data = _parse_data_yaml(state.STATE["data_yaml"])
-    data_yaml_dir = os.path.dirname(os.path.abspath(state.STATE["data_yaml"]))
+    No state is touched, so this is usable outside a request (e.g. while
+    materialising an admin-designated dataset for a restricted user).
+    """
+    splits = []
+    if not data_yaml or not os.path.isfile(data_yaml):
+        return None, [], splits
+
+    data = _parse_data_yaml(data_yaml)
+    data_yaml_dir = os.path.dirname(os.path.abspath(data_yaml))
 
     # The dataset root comes from `path:` when present (resolved relative to the
     # data.yaml file), else the folder holding data.yaml.
     base = data.get("path") or data_yaml_dir
     if not os.path.isabs(base):
         base = os.path.normpath(os.path.join(data_yaml_dir, base))
-    state.STATE["dataset_path"] = os.path.abspath(base)
-    state.STATE["classes"] = data.get("names") or []
+    dataset_path = os.path.abspath(base)
 
     # Each split is `train`/`val`/`test` -> an images folder (absolute or
     # relative to the dataset root). A split whose folder does not exist is
@@ -59,7 +62,7 @@ def scan_splits():
         rel = data.get(key)
         if not rel:
             continue
-        images_dir = rel if os.path.isabs(rel) else os.path.join(state.STATE["dataset_path"], rel)
+        images_dir = rel if os.path.isabs(rel) else os.path.join(dataset_path, rel)
         images_dir = os.path.normpath(images_dir)
         if not os.path.isdir(images_dir):
             continue
@@ -70,6 +73,16 @@ def scan_splits():
                 "labels_dir": _labels_dir_for(images_dir),
             }
         )
+    return dataset_path, (data.get("names") or []), splits
+
+
+def scan_splits():
+    """Parse data.yaml and build the list of {name, images_dir, labels_dir} splits."""
+    if not state.STATE["data_yaml"] or not os.path.isfile(state.STATE["data_yaml"]):
+        return []
+    dataset_path, classes, splits = parse_dataset(state.STATE["data_yaml"])
+    state.STATE["dataset_path"] = dataset_path
+    state.STATE["classes"] = classes
     return splits
 
 

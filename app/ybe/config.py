@@ -62,15 +62,30 @@ UPDATE_CHECK_FILE = os.path.join(YBX_HOME, ".update_check.json")
 RECENT_FILE = os.path.join(YBX_HOME, ".recent_data_yamls.json")
 VIEW_FILE = os.path.join(YBX_HOME, ".view_state.json")  # active split/filter per dataset
 SETTINGS_FILE = os.path.join(YBX_HOME, ".settings.json")  # cross-browser UI prefs
-# Login accounts: {"version": 1, "users": {"name": "<password_hash>"}}. Login is
-# opt-in: an empty/absent store means no login, and any entry turns it on. The
-# file is owner-only (0600) because it holds password hashes. Managed with the
-# `ybe users` command (there is no default account).
+# Login accounts: {"version": 2, "users": {"name": {"id", "role", "hash"}}}.
+# Login is opt-in: an empty/absent store means no login, and any entry turns it
+# on. The file is owner-only (0600) because it holds password hashes. Managed
+# with the `ybe users` command or the web admin Users tab.
 USERS_FILE = os.path.join(YBX_HOME, "users.json")
 # The Flask session-signing key, generated once and reused across restarts (and
 # app updates) so a signed-in browser stays signed in. Owner-only (0600) because
 # anyone who reads it can forge a session. Lives in YBX_HOME, outside `app/`.
 SECRET_KEY_FILE = os.path.join(YBX_HOME, ".secret_key")
+
+
+def users_dir():
+    """The folder holding one subfolder per account id (per-user homes)."""
+    return os.path.join(YBX_HOME, "users")
+
+
+def user_home(uid):
+    """One account's home folder; None (`uid` falsy) means the admin home."""
+    return YBX_HOME if not uid else os.path.join(users_dir(), str(uid))
+
+
+def policy_file():
+    """The admin policy file (allowed datasets, size cap, per-user allowlists)."""
+    return os.path.join(YBX_HOME, "policy.json")
 
 # Update check: compare the shipped VERSION with the newest GitHub one. A check
 # is skipped while the cache is fresh (< UPDATE_CHECK_INTERVAL) and the running

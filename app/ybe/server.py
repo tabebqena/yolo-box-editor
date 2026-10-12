@@ -22,7 +22,7 @@ from flask import (
     send_from_directory,
     session,
 )
-from ybe import compat, config, envs, extension_flags, permissions, state, userstate
+from ybe import compat, config, envs, extension_flags, permissions, policy, state, userdata, userstate
 from ybe.auth import (
     _valid_username,
     auth_enabled,
@@ -201,6 +201,23 @@ def _admin_count():
                if record.get("role") == "admin")
 
 
+def _visible_datasets():
+    """Designated datasets the request may pick from (all for an admin)."""
+    if _is_admin():
+        return policy.datasets()
+    uid = state.current_uid()
+    return policy.user_datasets(uid) if uid else []
+
+
+def _quota_payload():
+    """The request user's label-byte cap and current usage."""
+    uid = state.current_uid()
+    return {
+        "limit": policy.size_limit(),
+        "used": userdata.user_bytes(uid) if uid else 0,
+    }
+
+
 @app.before_request
 def _require_login():
     """Block API calls (and the SPA load) until the user has signed in.
@@ -366,6 +383,86 @@ def api_admin_users():
     except OSError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
     return jsonify({"ok": True, "users": _users_payload()})
+
+
+@app.route("/api/datasets/select", methods=["POST"])
+def api_dataset_select():
+    """Materialise an allowed dataset for the signed-in user and load it.
+
+    The restricted-user path: the admin designates datasets, the user picks one,
+    and a skeleton (symlinked images, local labels) is created under their home.
+    """
+    if state.STATE["readonly"]:
+        return jsonify({"ok": False, "error": "read-only mode"}), 403
+    uid = state.current_uid()
+    if not uid:
+        return jsonify({"ok": False, "error": "sign in required"}), 403
+    data = request.get_json(silent=True) or {}
+    dsid = str(data.get("id") or "").strip()
+    try:
+        path = userdata.select(uid, dsid)
+    except KeyError:
+        return jsonify({"ok": False, "error": "unknown dataset"}), 404
+    except PermissionError:
+        return jsonify({"ok": False, "error": "dataset not allowed"}), 403
+    except OSError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+    _load_dataset(path)
+    _clear_filter()  # a filter belongs to the dataset that was active
+    if state.STATE["active_split"] not in {s["name"] for s in state.STATE["splits"]}:
+        state.STATE["active_split"] = None
+    userstate.save_current()
+    cfg = api_config().get_json()
+    cfg["ok"] = True
+    return jsonify(cfg)
+
+
+def _policy_payload():
+    """The admin policy view (designated datasets, cap, per-account access)."""
+    policy_data = policy.load()
+    accounts = [
+        {
+            "name": name,
+            "id": record.get("id"),
+            "datasets": policy.user_dataset_ids(record.get("id")),
+        }
+        for name, record in sorted(state.USERS.items())
+    ]
+    return {
+        "size_limit": policy_data["size_limit"],
+        "datasets": policy_data["datasets"],
+        "users": accounts,
+    }
+
+
+@app.route("/api/admin/policy", methods=["GET", "POST"])
+@admin_only
+def api_admin_policy():
+    """Read or edit the admin policy (datasets, size cap, per-account access)."""
+    if request.method == "GET":
+        return jsonify({"ok": True, "policy": _policy_payload()})
+
+    data = request.get_json(silent=True) or {}
+    try:
+        if "size_limit" in data:
+            policy.set_size_limit(data["size_limit"])
+        if "add_dataset" in data:
+            spec = data.get("add_dataset") or {}
+            policy.add_dataset(spec.get("name"), spec.get("data_yaml"))
+        if "remove_dataset" in data:
+            policy.remove_dataset(str(data.get("remove_dataset")))
+        if "user_datasets" in data:
+            spec = data.get("user_datasets") or {}
+            uid = user_id(str(spec.get("name") or ""))
+            if not uid:
+                return jsonify({"ok": False, "error": "no such user"}), 404
+            policy.set_user_datasets(uid, spec.get("datasets"))
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except OSError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+    return jsonify({"ok": True, "policy": _policy_payload()})
 
 
 # --- app config, settings, shortcuts, presence ----------------------------- #
@@ -540,6 +637,10 @@ def api_config():
                 "role": _current_role(),
                 "is_admin": _is_admin(),
             },
+            "datasets": [
+                {"id": d["id"], "name": d["name"]} for d in _visible_datasets()
+            ],
+            "quota": _quota_payload(),
             "version": read_version(),
             "changelog": changelog_for(read_version()),
             "update": update_status(),
@@ -1413,11 +1514,14 @@ def api_annotations():
 
     path = label_path(entry)
     assert path is not None
+    content = "\n".join(lines) + ("\n" if lines else "")
+    if not userdata.within_quota(state.current_uid(), path, len(content)):
+        return jsonify(
+            {"ok": False, "error": "storage limit reached; ask an admin"}
+        ), 413
     os.makedirs(split["labels_dir"], exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
-        if lines:
-            f.write("\n")
+        f.write(content)
 
     payload = {"ok": True, "count": len(lines)}
     return jsonify(payload)

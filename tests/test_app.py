@@ -3581,6 +3581,144 @@ def test_cannot_demote_the_last_admin(clean_state):
     assert ybe.role_of("admin") == ybe.ROLE_ADMIN
 
 
+def test_policy_roundtrip_and_slug(clean_state, tmp_path):
+    ds = make_dataset(tmp_path / "cats")
+    _policy, first = ybe.policy.add_dataset("My Cats", str(ds / "data.yaml"))
+    assert first["id"] == "my-cats"
+    assert ybe.policy.dataset_by_id("my-cats")["name"] == "My Cats"
+    _policy, second = ybe.policy.add_dataset("My Cats", str(ds / "data.yaml"))
+    assert second["id"] == "my-cats-2"
+    ybe.policy.remove_dataset("my-cats")
+    assert ybe.policy.dataset_by_id("my-cats") is None
+
+
+def test_add_dataset_rejects_bad_input(clean_state, tmp_path):
+    with pytest.raises(ValueError):
+        ybe.policy.add_dataset("X", str(tmp_path / "nope.yaml"))
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    (empty / "data.yaml").write_text("path: %s\n" % empty, encoding="utf-8")
+    with pytest.raises(ValueError):
+        ybe.policy.add_dataset("X", str(empty / "data.yaml"))
+
+
+def test_materialize_symlinks_images_and_keeps_local_labels(clean_state, tmp_path):
+    admin_ds = make_dataset(tmp_path / "admin")
+    uid = "u1"
+    ds = {"id": "cats", "name": "Cats", "data_yaml": str(admin_ds / "data.yaml")}
+    path = ybe.userdata.materialize(uid, ds)
+    base = tmp_path / "users" / uid / "datasets" / "cats"
+    assert Path(path) == base / "data.yaml"
+    assert (base / "images" / "train").is_symlink()
+    assert (base / "labels" / "train").is_dir()
+    assert not (base / "labels" / "train").is_symlink()
+
+    _p, classes, splits = ybe.parse_dataset(str(path))
+    train = next(s for s in splits if s["name"] == "train")
+    assert train["images_dir"] == str(base / "images" / "train")
+    assert train["labels_dir"] == str(base / "labels" / "train")
+    assert classes == ["fire", "smoke"]
+
+
+def test_user_bytes_counts_only_labels(clean_state, tmp_path):
+    admin_ds = make_dataset(tmp_path / "admin")
+    uid = "u1"
+    ybe.userdata.materialize(
+        uid, {"id": "cats", "name": "Cats", "data_yaml": str(admin_ds / "data.yaml")})
+    assert ybe.userdata.user_bytes(uid) == 0
+    label = tmp_path / "users" / uid / "datasets" / "cats" / "labels" / "train" / "a.txt"
+    label.write_text("x" * 40, encoding="utf-8")
+    assert ybe.userdata.user_bytes(uid) == 40
+
+
+def test_restricted_dataset_flow(clean_state, tmp_path):
+    ybe.create_user("admin", "pw")
+    ybe.create_user("bob", "pw")
+    admin_ds = make_dataset(tmp_path / "admin")
+
+    admin = ybe.app.test_client()
+    admin.post("/api/login", json={"username": "admin", "password": "pw"})
+    resp = admin.post("/api/admin/policy", json={
+        "add_dataset": {"name": "Cats", "data_yaml": str(admin_ds / "data.yaml")}})
+    assert resp.status_code == 200
+
+    bob = ybe.app.test_client()
+    bob.post("/api/login", json={"username": "bob", "password": "pw"})
+    cfg = bob.get("/api/config").get_json()
+    assert [d["name"] for d in cfg["datasets"]] == ["Cats"]
+
+    assert bob.post("/api/datasets/select", json={"id": "cats"}).status_code == 200
+    key = "train/a.jpg"
+    assert bob.get("/api/annotations?key=" + key).status_code == 200
+    resp = bob.post("/api/annotations?key=" + key, json={
+        "boxes": [{"class": 0, "cx": 0.5, "cy": 0.5, "w": 0.2, "h": 0.2}]})
+    assert resp.status_code == 200 and resp.get_json()["count"] == 1
+
+    bob_label = (tmp_path / "users" / ybe.user_id("bob") / "datasets" / "cats"
+                 / "labels" / "train" / "a.txt")
+    assert bob_label.is_file()
+    # The admin's own labels folder was never touched.
+    assert not (admin_ds / "labels" / "train" / "a.txt").exists()
+
+
+def test_dataset_select_enforces_access(clean_state, tmp_path):
+    ybe.create_user("admin", "pw")
+    ybe.create_user("bob", "pw")
+    admin_ds = make_dataset(tmp_path / "admin")
+    admin = ybe.app.test_client()
+    admin.post("/api/login", json={"username": "admin", "password": "pw"})
+    admin.post("/api/admin/policy", json={
+        "add_dataset": {"name": "Cats", "data_yaml": str(admin_ds / "data.yaml")}})
+
+    bob = ybe.app.test_client()
+    bob.post("/api/login", json={"username": "bob", "password": "pw"})
+    # Explicitly withhold every dataset from bob.
+    ybe.policy.set_user_datasets(ybe.user_id("bob"), [])
+    assert bob.post("/api/datasets/select", json={"id": "cats"}).status_code == 403
+    assert bob.post("/api/datasets/select", json={"id": "nope"}).status_code == 404
+
+
+def test_quota_blocks_label_writes(clean_state, tmp_path):
+    ybe.create_user("admin", "pw")
+    ybe.create_user("bob", "pw")
+    admin_ds = make_dataset(tmp_path / "admin")
+    admin = ybe.app.test_client()
+    admin.post("/api/login", json={"username": "admin", "password": "pw"})
+    admin.post("/api/admin/policy", json={
+        "add_dataset": {"name": "Cats", "data_yaml": str(admin_ds / "data.yaml")},
+        "size_limit": 5,
+    })
+
+    bob = ybe.app.test_client()
+    bob.post("/api/login", json={"username": "bob", "password": "pw"})
+    bob.post("/api/datasets/select", json={"id": "cats"})
+    resp = bob.post("/api/annotations?key=train/a.jpg", json={
+        "boxes": [{"class": 0, "cx": 0.5, "cy": 0.5, "w": 0.2, "h": 0.2}]})
+    assert resp.status_code == 413
+
+
+def test_admin_policy_requires_admin(clean_state, tmp_path):
+    ybe.create_user("admin", "pw")
+    ybe.create_user("bob", "pw")
+    bob = ybe.app.test_client()
+    bob.post("/api/login", json={"username": "bob", "password": "pw"})
+    assert bob.get("/api/admin/policy").status_code == 403
+    assert bob.post(
+        "/api/admin/policy", json={"size_limit": 10}).status_code == 403
+
+
+def test_admin_also_sees_designated_datasets(clean_state, tmp_path):
+    ybe.create_user("admin", "pw")
+    admin_ds = make_dataset(tmp_path / "admin")
+    admin = ybe.app.test_client()
+    admin.post("/api/login", json={"username": "admin", "password": "pw"})
+    admin.post("/api/admin/policy", json={
+        "add_dataset": {"name": "Cats", "data_yaml": str(admin_ds / "data.yaml")}})
+    cfg = admin.get("/api/config").get_json()
+    assert [d["name"] for d in cfg["datasets"]] == ["Cats"]
+    assert cfg["quota"] == {"limit": 0, "used": 0}
+
+
 def test_datasets_are_isolated_per_user(clean_state, tmp_path):
     ybe.create_user("admin", "pw")
     ybe.create_user("bob", "pw")
