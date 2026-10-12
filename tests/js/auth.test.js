@@ -201,3 +201,56 @@ test('removeAdminUser confirms then deletes', async () => {
   await app.api.removeAdminUser('bob');
   assert.equal(deleted.name, 'bob');
 });
+
+test('applyRoleControls toggles the Datasets admin tab', () => {
+  app.api.applyRoleControls({ is_admin: false });
+  assert.equal(app.api.isHidden('datasetsTabBtn'), true);
+  app.api.applyRoleControls({ is_admin: true });
+  assert.equal(app.api.isHidden('datasetsTabBtn'), false);
+});
+
+test('recents are admin-only', () => {
+  app.api.applyRoleControls({ is_admin: false });
+  app.api.populateRecent(['/a/data.yaml']);
+  assert.equal(app.api.isHidden('recentSelect'), true);
+  assert.equal(app.api.isHidden('dataYaml'), true);
+  app.api.applyRoleControls({ is_admin: true });
+  app.api.populateRecent(['/a/data.yaml']);
+  assert.equal(app.api.isHidden('recentSelect'), false);
+});
+
+test('renderDatasetPicker fills the select and the quota hint', () => {
+  app.api.renderDatasetPicker([{ id: 'cats', name: 'Cats' }], { limit: 2048, used: 1024 });
+  assert.equal(app.api.isHidden('datasetPicker'), false);
+  assert.equal(app.$('datasetPickSelect').options.length, 1);
+  assert.match(app.$('quotaHint').textContent, /of 2 KB/);
+  app.api.renderDatasetPicker([], { limit: 0, used: 0 });
+  assert.equal(app.api.isHidden('datasetPicker'), true);
+});
+
+test('loadPickedDataset posts the chosen dataset id', async () => {
+  let posted = null;
+  mockStartup();
+  app.fetchMock.on('/api/datasets/select', (url, method, entry) => {
+    posted = JSON.parse(entry.body);
+    return { body: { ok: true } };
+  });
+  app.api.renderDatasetPicker([{ id: 'cats', name: 'Cats' }]);
+  app.$('datasetPickSelect').value = 'cats';
+  await app.api.loadPickedDataset();
+  assert.equal(posted.id, 'cats');
+});
+
+test('adminAddDataset posts the designation and renders it', async () => {
+  let posted = null;
+  app.fetchMock.on('/api/admin/policy', (url, method, entry) => {
+    posted = JSON.parse(entry.body);
+    return { body: { ok: true, policy: {
+      datasets: [{ id: 'cats', name: 'Cats' }], size_limit: 0, users: [] } } };
+  });
+  app.$('adminDatasetName').value = 'Cats';
+  app.$('adminDatasetPath').value = '/d/data.yaml';
+  await app.api.adminAddDataset();
+  assert.equal(posted.add_dataset.name, 'Cats');
+  assert.match(app.$('adminDatasetList').textContent, /Cats/);
+});

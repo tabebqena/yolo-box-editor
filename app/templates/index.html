@@ -190,6 +190,7 @@
         <button class="settings-tab" type="button" role="tab" data-tab="updates">Updates</button>
         <button id="accountTabBtn" class="settings-tab hidden" type="button" role="tab" data-tab="account">Account</button>
         <button id="adminTabBtn" class="settings-tab hidden" type="button" role="tab" data-tab="admin">Users</button>
+        <button id="datasetsTabBtn" class="settings-tab hidden" type="button" role="tab" data-tab="datasets">Datasets</button>
       </div>
       <div class="settings-modal-body">
         <section class="settings-panel active" data-panel="general">
@@ -296,7 +297,15 @@
         </section>
 
         <section class="settings-panel" data-panel="dataset">
-          <label class="settings-group-title" for="dataYaml">data.yaml</label>
+          <div id="datasetPicker" class="dataset-picker hidden">
+            <label class="settings-group-title" for="datasetPickSelect">Allowed datasets</label>
+            <div class="dataset-row">
+              <select id="datasetPickSelect"></select>
+              <button id="datasetPickLoad" class="primary">Load</button>
+            </div>
+            <p id="quotaHint" class="hint hidden"></p>
+          </div>
+          <label id="dataYamlLabel" class="settings-group-title" for="dataYaml">data.yaml</label>
           <div class="dataset-row">
             <select id="recentSelect" class="hidden" title="Open a recently used data.yaml">
               <option value="">Recent…</option>
@@ -410,6 +419,20 @@
               <option value="admin">admin</option>
             </select>
             <button id="adminAddUser" type="button" class="primary">Add account</button>
+          </div>
+        </section>
+
+        <section class="settings-panel" data-panel="datasets">
+          <p class="hint">Designate the datasets users may open. Images are <strong>symlinked</strong> (never copied); labels are written in each user's own folder, capped by the limit below.</p>
+          <label class="settings-row" for="policySizeLimit" title="Maximum label bytes a restricted user may store (0 = unlimited)">
+            <span>Label size limit (MB, 0 = unlimited)</span>
+            <input id="policySizeLimit" type="number" min="0" step="1">
+          </label>
+          <div id="adminDatasetList" class="admin-user-list"></div>
+          <div class="settings-actions admin-add-row">
+            <input id="adminDatasetName" type="text" placeholder="name" autocomplete="off">
+            <input id="adminDatasetPath" type="text" placeholder="/path/to/data.yaml" autocomplete="off">
+            <button id="adminAddDataset" type="button" class="primary">Add dataset</button>
           </div>
         </section>
       </div>

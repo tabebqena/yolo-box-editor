@@ -9,7 +9,9 @@
 function populateRecent(paths) {
   const sel = el('recentSelect');
   sel.innerHTML = '';
-  const list = paths || [];
+  // Recents are server-global, so only an admin sees them; a restricted user
+  // picks a dataset from the allowed list instead.
+  const list = isAdmin ? (paths || []) : [];
   // Nothing to pick from: hide the dropdown entirely.
   setHidden(sel, list.length === 0);
   sel.appendChild(option('', 'Recent…'));

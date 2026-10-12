@@ -46,7 +46,15 @@ function applyRoleControls(auth) {
     setHidden(filtersPanel.querySelector('.sub-panel[data-sub="create"]'), !isAdmin);
   }
   setHidden('adminTabBtn', !isAdmin);
-  if (isAdmin) loadAdminUsers();
+  setHidden('datasetsTabBtn', !isAdmin);
+  // A restricted account never sees the raw path/recents; it uses the picker.
+  ['dataYaml', 'setDataBtn', 'recentSelect', 'dataYamlLabel'].forEach((id) => {
+    setHidden(id, !isAdmin);
+  });
+  if (isAdmin) {
+    loadAdminUsers();
+    loadAdminPolicy();
+  }
 }
 
 /**
@@ -142,6 +150,142 @@ async function removeAdminUser(name) {
     toast('Account removed');
   } else {
     toast((data && data.error) || 'Could not remove the account');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// admin Datasets tab and the restricted-user dataset picker
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch and render the admin policy (designated datasets + size cap).
+ * @returns {Promise<void>}
+ */
+async function loadAdminPolicy() {
+  const data = await apiGetOrNull('/api/admin/policy');
+  if (data && data.ok) renderAdminPolicy(data.policy);
+}
+
+/**
+ * Render the designated dataset list and the size cap (in MB).
+ * @param {{datasets: Array, size_limit: number}} policyData
+ * @returns {void}
+ */
+function renderAdminPolicy(policyData) {
+  const list = el('adminDatasetList');
+  if (list) {
+    list.textContent = '';
+    (policyData.datasets || []).forEach((ds) => {
+      const row = mk('div', 'admin-user-row');
+      row.appendChild(mk('span', 'admin-user-name', ds.name + ' (' + ds.id + ')'));
+      const remove = mk('button', 'danger', 'Remove');
+      remove.type = 'button';
+      remove.addEventListener('click', () => removeAdminDataset(ds.id));
+      row.appendChild(remove);
+      list.appendChild(row);
+    });
+  }
+  const cap = el('policySizeLimit');
+  if (cap) cap.value = Math.round((policyData.size_limit || 0) / (1024 * 1024));
+}
+
+/**
+ * Designate a new dataset from the Datasets tab form.
+ * @returns {Promise<void>}
+ */
+async function adminAddDataset() {
+  const name = el('adminDatasetName').value.trim();
+  const dataYaml = el('adminDatasetPath').value.trim();
+  if (!name || !dataYaml) {
+    toast('Name and data.yaml path are required');
+    return;
+  }
+  const { res, data } = await apiPost(
+    '/api/admin/policy', { add_dataset: { name, data_yaml: dataYaml } });
+  if (res.ok) {
+    el('adminDatasetName').value = '';
+    el('adminDatasetPath').value = '';
+    renderAdminPolicy(data.policy);
+    toast('Dataset added');
+  } else {
+    toast((data && data.error) || 'Could not add the dataset');
+  }
+}
+
+/**
+ * Remove a designated dataset.
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+async function removeAdminDataset(id) {
+  if (!confirm('Remove dataset "' + id + '"?')) return;
+  const { res, data } = await apiPost('/api/admin/policy', { remove_dataset: id });
+  if (res.ok) {
+    renderAdminPolicy(data.policy);
+    toast('Dataset removed');
+  } else {
+    toast((data && data.error) || 'Could not remove the dataset');
+  }
+}
+
+/**
+ * Save the per-user label size cap (the field is in MB).
+ * @returns {Promise<void>}
+ */
+async function savePolicySizeLimit() {
+  const mb = parseInt(el('policySizeLimit').value, 10) || 0;
+  const { res, data } = await apiPost('/api/admin/policy', { size_limit: mb * 1024 * 1024 });
+  if (res.ok) {
+    renderAdminPolicy(data.policy);
+    toast('Size limit saved');
+  } else {
+    toast((data && data.error) || 'Could not save the size limit');
+  }
+}
+
+/**
+ * Populate the Dataset tab's allowed-dataset picker and quota hint.
+ * @param {Array<{id: string, name: string}>} datasets
+ * @param {{limit: number, used: number}} [quota]
+ * @returns {void}
+ */
+function renderDatasetPicker(datasets, quota) {
+  const picker = el('datasetPicker');
+  const select = el('datasetPickSelect');
+  if (!picker || !select) return;
+  const items = datasets || [];
+  setHidden(picker, items.length === 0);
+  select.textContent = '';
+  items.forEach((ds) => {
+    const opt = document.createElement('option');
+    opt.value = ds.id;
+    opt.textContent = ds.name;
+    select.appendChild(opt);
+  });
+  const hint = el('quotaHint');
+  if (hint) {
+    const limited = quota && quota.limit > 0;
+    setHidden(hint, !limited);
+    if (limited) {
+      hint.textContent = 'Label storage: ' + Math.round(quota.used / 1024)
+        + ' KB of ' + Math.round(quota.limit / 1024) + ' KB used';
+    }
+  }
+}
+
+/**
+ * Materialise and open the dataset chosen in the picker.
+ * @returns {Promise<void>}
+ */
+async function loadPickedDataset() {
+  const id = el('datasetPickSelect').value;
+  if (!id) return;
+  const { res, data } = await apiPost('/api/datasets/select', { id });
+  if (res.ok) {
+    await loadConfig(0, { explicit: true });
+    toast('Dataset loaded');
+  } else {
+    toast((data && data.error) || 'Could not load the dataset');
   }
 }
 
@@ -308,4 +452,7 @@ el('passwordModalClose').addEventListener('click', closePasswordModal);
 el('passwordCancel').addEventListener('click', closePasswordModal);
 el('passwordSave').addEventListener('click', savePassword);
 el('adminAddUser').addEventListener('click', adminAddUser);
+el('adminAddDataset').addEventListener('click', adminAddDataset);
+el('policySizeLimit').addEventListener('change', savePolicySizeLimit);
+el('datasetPickLoad').addEventListener('click', loadPickedDataset);
 boot();

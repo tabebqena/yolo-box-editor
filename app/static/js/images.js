@@ -44,6 +44,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
   serverSettings = cfg0.settings || {};
   initSettings();
   applyRoleControls(cfg0.auth);
+  renderDatasetPicker(cfg0.datasets, cfg0.quota);
   debugMode = !!cfg0.debug;
   if (cfg0.update) updateInfo = cfg0.update;
   if (debugMode) console.log('[ybe] debug mode on — verbose logging enabled (--debug)');
