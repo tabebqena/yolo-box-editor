@@ -133,6 +133,8 @@ def clean_state(tmp_path, monkeypatch):
     ybe.state.STATE.update(DEFAULT_STATE)
     ybe.state.EXECUTIONS.clear()
     ybe.state.CLIENTS.clear()
+    ybe.state.deactivate()
+    ybe.state.drop_all_users()
     return tmp_path
 
 
@@ -3470,6 +3472,42 @@ def test_set_role(clean_state):
 def test_anonymous_is_admin_when_no_accounts(clean_state):
     assert ybe.is_admin(None)
     assert ybe.is_admin("nobody")
+
+
+def test_state_proxy_defaults_to_anonymous(clean_state):
+    ybe.state.STATE["data_yaml"] = "/anon/data.yaml"
+    assert ybe.state.ANONYMOUS_STATE["data_yaml"] == "/anon/data.yaml"
+
+
+def test_state_proxy_isolates_users(clean_state):
+    ybe.state.activate("uid-a")
+    ybe.state.STATE["images"] = [{"split": "train", "name": "a.jpg"}]
+    ybe.state.activate("uid-b")
+    assert ybe.state.STATE["images"] == []
+    ybe.state.STATE["data_yaml"] = "/b/data.yaml"
+    ybe.state.activate("uid-a")
+    assert ybe.state.STATE["images"] == [{"split": "train", "name": "a.jpg"}]
+    assert ybe.state.STATE["data_yaml"] is None
+    ybe.state.activate("uid-b")
+    assert ybe.state.STATE["data_yaml"] == "/b/data.yaml"
+
+
+def test_process_flags_are_shared_across_users(clean_state):
+    ybe.state.STATE["readonly"] = True
+    ybe.state.activate("uid-a")
+    assert ybe.state.STATE["readonly"] is True
+    ybe.state.STATE["readonly"] = False
+    ybe.state.deactivate()
+    assert ybe.state.STATE["readonly"] is False
+    assert "readonly" not in ybe.state.current()
+
+
+def test_drop_user_leaves_anonymous(clean_state):
+    ybe.state.activate("uid-a")
+    ybe.state.STATE["images"] = ["x"]
+    ybe.state.activate(None)
+    ybe.state.drop_user("uid-a")
+    assert "uid-a" not in ybe.state.USER_STATES
 
 
 
