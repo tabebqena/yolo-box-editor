@@ -7,9 +7,11 @@ name directly.
 
 import threading
 
-# Persistent login accounts as a {username: password_hash} map, loaded from
-# USERS_FILE at startup. Empty (the default) means login is off; any entry turns
-# it on. Passwords are only ever stored hashed.
+# Persistent login accounts as a {username: {id, role, hash}} map, loaded from
+# USERS_FILE at startup. Empty (the default) means login is off and the local
+# operator is the admin; any entry turns the gate on. Passwords are only ever
+# stored hashed. `id` is a stable handle for per-user folders/state; `role` is
+# "admin" or "user". See ybe/auth.py.
 USERS = {}
 
 STATE = {

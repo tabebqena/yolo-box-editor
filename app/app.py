@@ -54,14 +54,20 @@ from ybe.parsing import (
 
 from ybe import auth, config, state, update
 from ybe.auth import (
+    ROLE_ADMIN,
+    ROLE_USER,
     _prompt_password,
     _valid_username,
     auth_enabled,
     create_user,
     delete_user,
+    is_admin,
     load_users,
+    role_of,
+    set_role,
     set_user,
     update_user,
+    user_id,
     verify_user,
 )
 from ybe.commands import (

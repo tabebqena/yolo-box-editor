@@ -3410,6 +3410,68 @@ def test_prompt_password_cancelled(monkeypatch):
     assert ybe._prompt_password() is None
 
 
+def test_first_account_is_admin(clean_state):
+    ybe.create_user("alice", "pw")
+    assert ybe.role_of("alice") == ybe.ROLE_ADMIN
+    assert ybe.is_admin("alice")
+
+
+def test_later_account_is_restricted(clean_state):
+    ybe.create_user("alice", "pw")
+    ybe.create_user("bob", "pw")
+    assert ybe.role_of("bob") == ybe.ROLE_USER
+    assert not ybe.is_admin("bob")
+    assert ybe.is_admin("alice")
+
+
+def test_lone_survivor_promoted_after_delete(clean_state):
+    ybe.create_user("alice", "pw")
+    ybe.create_user("bob", "pw")
+    ybe.delete_user("alice")
+    assert ybe.role_of("bob") == ybe.ROLE_ADMIN
+
+
+def test_account_id_survives_password_change(clean_state):
+    ybe.create_user("alice", "pw")
+    uid = ybe.user_id("alice")
+    assert uid
+    ybe.update_user("alice", "pw2")
+    assert ybe.user_id("alice") == uid
+    assert ybe.verify_user("alice", "pw2")
+
+
+def test_v1_users_file_is_migrated_to_v2(clean_state):
+    from werkzeug.security import generate_password_hash
+
+    Path(ybe.config.USERS_FILE).write_text(
+        json.dumps({"version": 1, "users": {"alice": generate_password_hash("pw")}}),
+        encoding="utf-8",
+    )
+    ybe.load_users()
+    assert ybe.user_id("alice")
+    assert ybe.role_of("alice") == ybe.ROLE_ADMIN  # lone account
+    assert ybe.verify_user("alice", "pw")
+    raw = json.loads(Path(ybe.config.USERS_FILE).read_text(encoding="utf-8"))
+    assert raw["version"] == 2
+    assert isinstance(raw["users"]["alice"], dict)
+
+
+def test_set_role(clean_state):
+    ybe.create_user("alice", "pw")
+    ybe.create_user("bob", "pw")
+    assert ybe.set_role("bob", ybe.ROLE_ADMIN) == ybe.ROLE_ADMIN
+    assert ybe.is_admin("bob")
+    with pytest.raises(ValueError):
+        ybe.set_role("bob", "root")
+    with pytest.raises(KeyError):
+        ybe.set_role("ghost", ybe.ROLE_USER)
+
+
+def test_anonymous_is_admin_when_no_accounts(clean_state):
+    assert ybe.is_admin(None)
+    assert ybe.is_admin("nobody")
+
+
 
 # --------------------------------------------------------------------------- #
 # custom widgets
