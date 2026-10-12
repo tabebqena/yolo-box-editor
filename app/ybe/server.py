@@ -21,8 +21,8 @@ from flask import (
     send_from_directory,
     session,
 )
-from ybe import compat, config, envs, extension_flags, permissions, state
-from ybe.auth import auth_enabled, set_user, verify_user
+from ybe import compat, config, envs, extension_flags, permissions, state, userstate
+from ybe.auth import auth_enabled, set_user, user_id, verify_user
 from ybe.commands import (
     _advance_execution,
     _rescan_images,
@@ -161,18 +161,32 @@ def _require_login():
     no-op. Otherwise the SPA shell, its static assets and the login/logout/
     session endpoints stay open (the browser must be able to render the sign-in
     form); everything else needs a valid session.
+
+    Also selects the request's dataset state: the signed-in account's state (and
+    a one-time hydrate from its `state.json`) or the anonymous state.
     """
+    state.activate(None)  # every request starts on the anonymous state
     if not auth_enabled():
         return None
     path = request.path
     if path == "/" or path.startswith("/static/") or path in _AUTH_PUBLIC_PATHS:
         return None
-    if _session_username():
+    username = _session_username()
+    if username:
+        uid = user_id(username)
+        state.activate(uid)
+        userstate.ensure(uid)
         return None
     # API callers get a JSON 401; a direct page load gets a plain 401.
     if path.startswith("/api/"):
         return jsonify({"ok": False, "error": "authentication required"}), 401
     abort(401)
+
+
+@app.teardown_request
+def _release_user_state(exc=None):
+    """Drop the request's user selection so it never leaks into the next one."""
+    state.deactivate()
 
 
 # --------------------------------------------------------------------------- #
@@ -540,6 +554,7 @@ def api_data():
         )
 
     _push_recent(state.STATE["data_yaml"])
+    userstate.save_current()
 
     cfg = api_config().get_json()
     cfg["ok"] = True
@@ -565,6 +580,7 @@ def api_split():
             return jsonify({"ok": False, "error": error}), 400
 
     _save_view(state.STATE["data_yaml"], state.STATE["active_split"], state.STATE["active_filters"])
+    userstate.save_current()
     cfg = api_config().get_json()
     cfg["ok"] = True
     return jsonify(cfg)
@@ -595,6 +611,7 @@ def api_filter():
         return jsonify({"ok": False, "error": error}), 400
 
     _save_view(state.STATE["data_yaml"], state.STATE["active_split"], state.STATE["active_filters"])
+    userstate.save_current()
     cfg = api_config().get_json()
     cfg["ok"] = True
     return jsonify(cfg)

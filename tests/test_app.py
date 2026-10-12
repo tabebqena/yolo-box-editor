@@ -135,6 +135,7 @@ def clean_state(tmp_path, monkeypatch):
     ybe.state.CLIENTS.clear()
     ybe.state.deactivate()
     ybe.state.drop_all_users()
+    ybe.userstate.reset()
     return tmp_path
 
 
@@ -3508,6 +3509,50 @@ def test_drop_user_leaves_anonymous(clean_state):
     ybe.state.activate(None)
     ybe.state.drop_user("uid-a")
     assert "uid-a" not in ybe.state.USER_STATES
+
+
+def test_datasets_are_isolated_per_user(clean_state, tmp_path):
+    ybe.create_user("admin", "pw")
+    ybe.create_user("bob", "pw")
+    ds1, ds2 = tmp_path / "ds1", tmp_path / "ds2"
+    make_dataset(ds1)
+    make_dataset(ds2)
+
+    c1 = ybe.app.test_client()
+    c1.post("/api/login", json={"username": "admin", "password": "pw"})
+    assert c1.post(
+        "/api/data", json={"data_yaml": str(ds1 / "data.yaml")}).status_code == 200
+
+    c2 = ybe.app.test_client()
+    c2.post("/api/login", json={"username": "bob", "password": "pw"})
+    assert c2.get("/api/config").get_json()["data_yaml"] is None
+    assert c2.post(
+        "/api/data", json={"data_yaml": str(ds2 / "data.yaml")}).status_code == 200
+
+    # Each session still sees its own dataset.
+    assert c1.get("/api/config").get_json()["data_yaml"] == str(ds1 / "data.yaml")
+    assert c2.get("/api/config").get_json()["data_yaml"] == str(ds2 / "data.yaml")
+
+
+def test_user_dataset_persists_across_reload(clean_state, tmp_path):
+    ybe.create_user("admin", "pw")
+    ybe.create_user("bob", "pw")
+    ds = tmp_path / "ds"
+    make_dataset(ds)
+
+    client = ybe.app.test_client()
+    client.post("/api/login", json={"username": "bob", "password": "pw"})
+    client.post("/api/data", json={"data_yaml": str(ds / "data.yaml")})
+
+    uid = ybe.user_id("bob")
+    assert (tmp_path / "users" / uid / "state.json").is_file()
+
+    # Simulate a fresh process: no live states, no hydration markers.
+    ybe.state.drop_all_users()
+    ybe.userstate.reset()
+    fresh = ybe.app.test_client()
+    fresh.post("/api/login", json={"username": "bob", "password": "pw"})
+    assert fresh.get("/api/config").get_json()["data_yaml"] == str(ds / "data.yaml")
 
 
 
