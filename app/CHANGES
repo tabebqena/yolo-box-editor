@@ -2,6 +2,12 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.17.0
+- **Multi-user mode.** Login accounts now have a **role**: an **admin** gets the full app, a **restricted** user gets a sandbox. A lone account (or no accounts) is an admin, so a single-user install is unchanged.
+- Admins get new Settings tabs: **Users** (add accounts, set roles) and **Datasets** (designate allowed datasets + a label size cap), plus **Access** (grant a restricted user specific actions, filters, hooks, widgets and extensions).
+- A restricted user picks from the admin's **allowed datasets**; the images are **symlinked** (not copied) and their labels live in their **own folder**, capped by the admin's limit (only an admin can author or install extensions, or run what was not granted).
+- **Windows note:** materialising a dataset needs symlink support (Developer Mode), else it errors with a clear message.
+
 ## 10.16.0
 - The Tags extension's **Has tag** / **Does not have tag** filters now choose the tag from a **dropdown** of your dataset's tags, instead of a text box. Extension backend plugins can fill a filter's options from live data with a `filter_options` map returned from `register()`.
 

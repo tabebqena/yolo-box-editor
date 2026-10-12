@@ -8,24 +8,25 @@ build step, no cloud account — point it at a `data.yaml` and start labelling.
 
 ![YOLO Box Editor](docs/screenshot.svg)
 
-Version **7.18.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
+Version **10.17.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
 non-commercial-use condition, no warranty) · new to labelling? Press **F1** in the
 app (or start with [TUTORIAL.md](TUTORIAL.md)).
 
-## WARNING — single-user tool, not for the cloud
+## WARNING — local / trusted-LAN tool, not for the cloud
 
 > **This app is designed for one person on their own computer.** Run it locally
-> and it is fine. You can also create multiple accounts (`ybe users`) and share
-> one instance with a **trusted** team on your own machine or LAN — but it is
-> **not** built for the cloud, and **never** for users you don't trust.
+> and it is fine. It also supports **multiple accounts with roles** (Settings →
+> Users): an **admin** gets the full app; a **restricted** user gets a sandbox
+> — an admin-designated dataset (images symlinked, labels in the user's own
+> capped folder) and only the actions/filters/hooks/extensions an admin grants.
+> Those restrictions are enforced **server-side**, so they are a real boundary
+> between accounts on one instance.
 >
-> The user of the app executes its scripts **with your authority**. They can
-> define custom actions, filters and scripts and run them on the machine — which
-> means any account you hand out is effectively **shell access to the host**.
-> Only add people you would let run commands as you.
->
-> The optional login is a convenience gate, **not** a security boundary. Do **not**
-> expose this app to the internet or an untrusted network.
+> It is still **not built for the cloud**, and **never** for users you don't
+> trust: an **admin** account runs scripts **with your authority** (an admin can
+> define and run actions that are shell commands), so only make people admins if
+> you would let them run commands as you. Keep the app on `127.0.0.1` (the
+> default) or a trusted LAN, and do **not** expose it to the internet.
 
 ## Quick start
 
@@ -179,6 +180,7 @@ missing, see [Why can't I see my tag?](docs/tags.md#why-cant-i-see-my-tag).
 - [TUTORIAL.md](TUTORIAL.md) — the 3-level tutorial (beginner → expert).
 - [How to?](docs/howto.md) — task-focused recipes (also built into the app, `F1`).
 - [install, update and run](docs/install.md) — installer, `ybe` commands, flags.
+- [users and roles](docs/multi-user.md) — admins, restricted accounts, per-user datasets and allowlists.
 - [dataset, files and formats](docs/dataset.md) — `data.yaml`, label format, where files live.
 - [actions and hooks](docs/actions-and-hooks.md) — custom commands and events.
 - [widgets](docs/widgets.md) — custom dockable control panels.

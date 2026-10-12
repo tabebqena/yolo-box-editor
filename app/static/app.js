@@ -47,6 +47,7 @@ function applyRoleControls(auth) {
   }
   setHidden('adminTabBtn', !isAdmin);
   setHidden('datasetsTabBtn', !isAdmin);
+  setHidden('accessTabBtn', !isAdmin);
   // A restricted account never sees the raw path/recents; it uses the picker.
   ['dataYaml', 'setDataBtn', 'recentSelect', 'dataYamlLabel'].forEach((id) => {
     setHidden(id, !isAdmin);
@@ -163,7 +164,11 @@ async function removeAdminUser(name) {
  */
 async function loadAdminPolicy() {
   const data = await apiGetOrNull('/api/admin/policy');
-  if (data && data.ok) renderAdminPolicy(data.policy);
+  if (data && data.ok) {
+    adminPolicy = data.policy;
+    renderAdminPolicy(data.policy);
+    renderAccessTab();
+  }
 }
 
 /**
@@ -286,6 +291,102 @@ async function loadPickedDataset() {
     toast('Dataset loaded');
   } else {
     toast((data && data.error) || 'Could not load the dataset');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// admin Access tab: per-account run allowlists
+// ---------------------------------------------------------------------------
+// The last admin policy payload (from /api/admin/policy).
+let adminPolicy = null;
+
+/**
+ * Fill a multi-select with `values`, selecting those in `selected`.
+ * @param {HTMLSelectElement} select
+ * @param {string[]} values
+ * @param {string[]} [selected]
+ * @returns {void}
+ */
+function fillMultiSelect(select, values, selected) {
+  if (!select) return;
+  const chosen = new Set(selected || []);
+  select.textContent = '';
+  (values || []).forEach((value) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = value;
+    opt.selected = chosen.has(value);
+    select.appendChild(opt);
+  });
+}
+
+/**
+ * The values currently selected in a multi-select.
+ * @param {HTMLSelectElement} select
+ * @returns {string[]}
+ */
+function multiSelected(select) {
+  if (!select) return [];
+  return Array.from(select.selectedOptions || []).map((o) => o.value);
+}
+
+/**
+ * Rebuild the Access tab: the account dropdown and the option lists.
+ * @returns {void}
+ */
+function renderAccessTab() {
+  const userSel = el('accessUser');
+  if (!userSel) return;
+  const users = (adminPolicy && adminPolicy.users) || [];
+  const previous = userSel.value;
+  userSel.textContent = '';
+  users.forEach((user) => {
+    const opt = document.createElement('option');
+    opt.value = user.name;
+    opt.textContent = user.name + (user.role ? ' (' + user.role + ')' : '');
+    userSel.appendChild(opt);
+  });
+  if (users.some((u) => u.name === previous)) userSel.value = previous;
+  applyAccessLists();
+}
+
+/**
+ * Load the selected account's allowlists into the multi-selects.
+ * @returns {void}
+ */
+function applyAccessLists() {
+  const name = el('accessUser') ? el('accessUser').value : '';
+  const entry = ((adminPolicy && adminPolicy.users) || [])
+    .find((u) => u.name === name) || {};
+  const cfg = serverConfig || {};
+  fillMultiSelect(el('accessActions'), (cfg.action_defs || []).map((d) => d.name), entry.actions);
+  fillMultiSelect(el('accessFilters'), (cfg.filter_defs || []).map((d) => d.name), entry.filters);
+  fillMultiSelect(el('accessHooks'), (cfg.hook_defs || []).map((d) => d.name), entry.hooks);
+  fillMultiSelect(el('accessWidgets'), (cfg.widget_defs || []).map((d) => d.name), entry.widgets);
+  fillMultiSelect(el('accessExtensions'), (cfg.extension_packages || []).map((p) => p.id), entry.extensions);
+}
+
+/**
+ * Save the selected account's allowlists.
+ * @returns {Promise<void>}
+ */
+async function saveUserAccess() {
+  const name = el('accessUser') ? el('accessUser').value : '';
+  if (!name) return;
+  const { res, data } = await apiPost('/api/admin/policy', { user_access: {
+    name,
+    actions: multiSelected(el('accessActions')),
+    filters: multiSelected(el('accessFilters')),
+    hooks: multiSelected(el('accessHooks')),
+    widgets: multiSelected(el('accessWidgets')),
+    extensions: multiSelected(el('accessExtensions')),
+  } });
+  if (res.ok) {
+    adminPolicy = data.policy;
+    renderAccessTab();
+    toast('Access saved');
+  } else {
+    toast((data && data.error) || 'Could not save access');
   }
 }
 
@@ -455,4 +556,6 @@ el('adminAddUser').addEventListener('click', adminAddUser);
 el('adminAddDataset').addEventListener('click', adminAddDataset);
 el('policySizeLimit').addEventListener('change', savePolicySizeLimit);
 el('datasetPickLoad').addEventListener('click', loadPickedDataset);
+el('accessUser').addEventListener('change', applyAccessLists);
+el('accessSave').addEventListener('click', saveUserAccess);
 boot();

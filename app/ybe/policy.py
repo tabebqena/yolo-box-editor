@@ -15,8 +15,10 @@ from `users.json` so editing policy never rewrites password hashes. Shape:
     }
 
 A user with no `users` entry may use **all** designated datasets; listing a
-subset (even empty) restricts them. Per-user action/filter/hook/extension lists
-live in the same entry and are added in a later phase.
+subset (even empty) restricts them. The run allowlists (`actions`, `filters`,
+`hooks`, `widgets`, `extensions`) default to **empty** for a restricted account
+(deny), so an admin hands out capabilities explicitly. An admin bypasses every
+check.
 """
 
 import json
@@ -28,6 +30,10 @@ from ybe import config
 
 _POLICY_LOCK = threading.RLock()
 DATASET_ID_RE = re.compile(r"[^a-z0-9_-]+")
+
+# The per-account allowlist keys. `datasets` defaults to all designated; the
+# rest default to empty for a restricted account.
+USER_KINDS = ("datasets", "actions", "filters", "hooks", "widgets", "extensions")
 
 
 def _default():
@@ -77,7 +83,8 @@ def _normalize(data):
             if not isinstance(entry, dict):
                 continue
             users[str(uid)] = {
-                "datasets": [str(x) for x in (entry.get("datasets") or []) if x],
+                kind: [str(x) for x in (entry.get(kind) or []) if x]
+                for kind in USER_KINDS
             }
     policy["users"] = users
     return policy
@@ -197,9 +204,31 @@ def user_datasets(uid):
 
 def set_user_datasets(uid, ids):
     """Explicitly set which datasets an account may use (overrides the default)."""
+    return set_user_allowed(uid, "datasets", ids)
+
+
+def user_allowed(uid, kind):
+    """The names an account may run for `kind`.
+
+    `datasets` defaults to every designated dataset; the run allowlists default
+    to empty, so a restricted account gets nothing until an admin grants it.
+    """
+    if kind == "datasets":
+        return user_dataset_ids(uid)
+    policy = load()
+    entry = policy["users"].get(str(uid))
+    if not isinstance(entry, dict):
+        return []
+    return list(entry.get(kind, []))
+
+
+def set_user_allowed(uid, kind, names):
+    """Replace an account's allowlist for one `kind`. Returns the new list."""
+    if kind not in USER_KINDS:
+        raise ValueError("unknown allowlist: %s" % kind)
     policy = load()
     entry = policy["users"].setdefault(str(uid), {})
-    entry["datasets"] = [str(x) for x in (ids or [])]
+    entry[kind] = [str(x) for x in (names or [])]
     if not save(policy):
         raise OSError("could not write %s" % config.policy_file())
-    return entry["datasets"]
+    return entry[kind]

@@ -9,7 +9,7 @@ Also holds the server-side built-in action registry.
 import subprocess
 import sys
 
-from ybe import config, envs, state
+from ybe import access, config, envs, state
 from ybe.dataset import scan_images
 from ybe.extensions import load_actions
 from ybe.filters import _clear_filter, apply_filters
@@ -80,6 +80,8 @@ def _resolve_entry(entry, actions_by_name, package=None):
         return ("bad", f"unknown backend action: {entry}", package)
     if entry.startswith(config.ACTION_REF_PREFIX):
         name = entry[len(config.ACTION_REF_PREFIX):]
+        if not access.action_ref_allowed(name):
+            return ("bad", f"action not allowed: {name}", package)
         if name in actions_by_name:
             return ("action", actions_by_name[name], package)
         return ("bad", f"unknown action: {name}", package)

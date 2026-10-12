@@ -213,6 +213,9 @@ let dirty = false;
 let readonly = false;
 // Whether a dataset has been loaded successfully.
 let datasetLoaded = false;
+// The most recent `/api/config` payload (used by the admin Access tab to list
+// known actions/filters/hooks/widgets/packages).
+let serverConfig = null;
 let boxesVisible = true;    // `app_show_hide`: draw the box overlay or not
 let boxDetailsVisible = true; // `app_box_details`: draw handles/labels/buttons or outlines only
 let isolateSelected = false; // `app_isolate_box`: draw only the selected box

@@ -254,3 +254,27 @@ test('adminAddDataset posts the designation and renders it', async () => {
   assert.equal(posted.add_dataset.name, 'Cats');
   assert.match(app.$('adminDatasetList').textContent, /Cats/);
 });
+
+const POLICY = {
+  datasets: [], size_limit: 0,
+  users: [{ name: 'bob', role: 'user', actions: ['Greet'], filters: [], hooks: [], widgets: [], extensions: [] }],
+};
+
+test('loadAdminPolicy renders the Access account list', async () => {
+  app.fetchMock.on('/api/admin/policy', () => ({ body: { ok: true, policy: POLICY } }));
+  await app.api.loadAdminPolicy();
+  assert.match(app.$('accessUser').textContent, /bob/);
+});
+
+test('saveUserAccess posts the selected lists', async () => {
+  let posted = null;
+  app.fetchMock.on('/api/admin/policy', (url, method, entry) => {
+    if (method === 'POST' && entry.body) posted = JSON.parse(entry.body);
+    return { body: { ok: true, policy: POLICY } };
+  });
+  await app.api.loadAdminPolicy();
+  app.$('accessUser').value = 'bob';
+  await app.api.saveUserAccess();
+  assert.equal(posted.user_access.name, 'bob');
+  assert.deepEqual(posted.user_access.actions, []);
+});

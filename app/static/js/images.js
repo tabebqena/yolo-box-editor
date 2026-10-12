@@ -40,6 +40,7 @@ function populateClasses() {
  */
 async function loadConfig(startIdx = 0, opts = {}) {
   const cfg0 = await apiGet('/api/config');
+  serverConfig = cfg0;
   console.log(`[ybe] yolo-box-editor v${cfg0.version || '?'}`);
   serverSettings = cfg0.settings || {};
   initSettings();

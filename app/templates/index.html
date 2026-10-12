@@ -191,6 +191,7 @@
         <button id="accountTabBtn" class="settings-tab hidden" type="button" role="tab" data-tab="account">Account</button>
         <button id="adminTabBtn" class="settings-tab hidden" type="button" role="tab" data-tab="admin">Users</button>
         <button id="datasetsTabBtn" class="settings-tab hidden" type="button" role="tab" data-tab="datasets">Datasets</button>
+        <button id="accessTabBtn" class="settings-tab hidden" type="button" role="tab" data-tab="access">Access</button>
       </div>
       <div class="settings-modal-body">
         <section class="settings-panel active" data-panel="general">
@@ -433,6 +434,24 @@
             <input id="adminDatasetName" type="text" placeholder="name" autocomplete="off">
             <input id="adminDatasetPath" type="text" placeholder="/path/to/data.yaml" autocomplete="off">
             <button id="adminAddDataset" type="button" class="primary">Add dataset</button>
+          </div>
+        </section>
+
+        <section class="settings-panel" data-panel="access">
+          <p class="hint">Grant a restricted account permission to run specific actions, filters, hooks, widgets and extensions. An admin always has everything.</p>
+          <label class="settings-row" for="accessUser" title="Which account to edit">
+            <span>Account</span>
+            <select id="accessUser"></select>
+          </label>
+          <div class="access-grid">
+            <label class="access-field">Actions<select id="accessActions" multiple size="6"></select></label>
+            <label class="access-field">Filters<select id="accessFilters" multiple size="6"></select></label>
+            <label class="access-field">Hooks<select id="accessHooks" multiple size="6"></select></label>
+            <label class="access-field">Widgets<select id="accessWidgets" multiple size="6"></select></label>
+            <label class="access-field">Extensions<select id="accessExtensions" multiple size="6"></select></label>
+          </div>
+          <div class="settings-actions">
+            <button id="accessSave" class="primary" type="button">Save access</button>
           </div>
         </section>
       </div>

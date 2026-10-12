@@ -22,7 +22,18 @@ from flask import (
     send_from_directory,
     session,
 )
-from ybe import compat, config, envs, extension_flags, permissions, policy, state, userdata, userstate
+from ybe import (
+    access,
+    compat,
+    config,
+    envs,
+    extension_flags,
+    permissions,
+    policy,
+    state,
+    userdata,
+    userstate,
+)
 from ybe.auth import (
     _valid_username,
     auth_enabled,
@@ -421,14 +432,13 @@ def api_dataset_select():
 def _policy_payload():
     """The admin policy view (designated datasets, cap, per-account access)."""
     policy_data = policy.load()
-    accounts = [
-        {
-            "name": name,
-            "id": record.get("id"),
-            "datasets": policy.user_dataset_ids(record.get("id")),
-        }
-        for name, record in sorted(state.USERS.items())
-    ]
+    accounts = []
+    for name, record in sorted(state.USERS.items()):
+        uid = record.get("id")
+        entry = {"name": name, "id": uid, "role": record.get("role")}
+        for kind in policy.USER_KINDS:
+            entry[kind] = policy.user_allowed(uid, kind)
+        accounts.append(entry)
     return {
         "size_limit": policy_data["size_limit"],
         "datasets": policy_data["datasets"],
@@ -458,6 +468,14 @@ def api_admin_policy():
             if not uid:
                 return jsonify({"ok": False, "error": "no such user"}), 404
             policy.set_user_datasets(uid, spec.get("datasets"))
+        if "user_access" in data:
+            spec = data.get("user_access") or {}
+            uid = user_id(str(spec.get("name") or ""))
+            if not uid:
+                return jsonify({"ok": False, "error": "no such user"}), 404
+            for kind in policy.USER_KINDS:
+                if kind in spec:
+                    policy.set_user_allowed(uid, kind, spec[kind])
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     except OSError as exc:
@@ -586,6 +604,23 @@ def api_config():
         for p in packages
     ]
     ext_app_actions = extension_app_action_defs()
+    if not _is_admin():
+        # A restricted account only sees (and may run) what its allowlists grant.
+        def _pkg_ok(package):
+            return bool(package) and access.package_allowed(package)
+
+        action_defs = [d for d in action_defs
+                       if access.allowed("actions", d["name"]) or _pkg_ok(d.get("package"))]
+        hook_defs = [h for h in hook_defs
+                     if access.allowed("hooks", h["name"]) or _pkg_ok(h.get("package"))]
+        filter_defs = [f for f in filter_defs
+                       if access.allowed("filters", f["name"]) or _pkg_ok(f.get("package"))]
+        widget_defs = [w for w in widget_defs
+                       if access.allowed("widgets", w["name"]) or _pkg_ok(w.get("package"))]
+        extension_packages = [p for p in extension_packages
+                              if access.package_allowed(p["id"])]
+        allowed_filters = {f["name"] for f in filter_defs}
+        filter_catalog = [f for f in filter_catalog if f["name"] in allowed_filters]
     return jsonify(
         {
             "data_yaml": state.STATE["data_yaml"],
@@ -601,10 +636,10 @@ def api_config():
             "recent_data_yamls": _load_recent(),
             "settings": _load_settings(),
             "tips": config.TIPS,
-            "actions": [a["name"] for a in actions if a["name"] not in disabled["action"]],
+            "actions": [d["name"] for d in action_defs if d["enabled"]],
             "action_defs": action_defs,
             "action_errors": action_errors,
-            "hooks": [h["name"] for h in hooks if h["name"] not in disabled["hook"]],
+            "hooks": [h["name"] for h in hook_defs if h["enabled"]],
             "hook_defs": hook_defs,
             "hook_errors": hook_errors,
             "widget_defs": widget_defs,
@@ -827,6 +862,10 @@ def api_filter():
     if not isinstance(items, list):
         return jsonify({"ok": False, "error": "filters must be a list"}), 400
 
+    names = [(i.get("name") if isinstance(i, dict) else i) for i in items]
+    if not _is_admin() and any(not access.filter_allowed(n) for n in names):
+        return jsonify({"ok": False, "error": "filter not allowed"}), 403
+
     error = apply_filters(items)
     if error:
         return jsonify({"ok": False, "error": error}), 400
@@ -864,7 +903,6 @@ def api_images_rescan():
 
 # --- actions and extension authoring --------------------------------------- #
 @app.route("/api/actions/run", methods=["POST"])
-@admin_only
 def api_action_run():
     """Start (or resume) a user action execution for the current image.
 
@@ -882,6 +920,9 @@ def api_action_run():
 
     name = (data.get("action") or "").strip()
     target = (data.get("target") or "").strip()
+
+    if not access.action_allowed(name):
+        return jsonify({"ok": False, "error": "action not allowed"}), 403
 
     entry = _entry_by_key(target)
     if entry is None:
@@ -941,7 +982,6 @@ def _image_action_values(entry, split):
 
 
 @app.route("/api/widgets/run", methods=["POST"])
-@admin_only
 def api_widget_run():
     """Run one button of a custom widget on the current image.
 
@@ -957,6 +997,8 @@ def api_widget_run():
     widget = load_widgets()[0].get(widget_name)
     if widget is None:
         return jsonify({"ok": False, "error": f"unknown widget: {widget_name}"}), 400
+    if not access.widget_allowed(widget_name, widget.get("package")):
+        return jsonify({"ok": False, "error": "widget not allowed"}), 403
     control = _pick_control(widget["controls"], data.get("control"))
     if control is None:
         return jsonify({"ok": False, "error": "unknown widget button"}), 400
@@ -966,7 +1008,6 @@ def api_widget_run():
 
 
 @app.route("/api/extensions/run", methods=["POST"])
-@admin_only
 def api_extensions_run():
     """Run one button of an extension package's `settings:` block.
 
@@ -979,6 +1020,8 @@ def api_extensions_run():
     pkg = next((p for p in load_packages()[0] if p["id"] == pid), None)
     if pkg is None:
         return jsonify({"ok": False, "error": f"unknown package: {pid}"}), 400
+    if not access.package_allowed(pid):
+        return jsonify({"ok": False, "error": "extension not allowed"}), 403
     settings = pkg.get("settings") or {}
     control = _pick_control(settings.get("controls") or [], data.get("control"))
     if control is None:
@@ -1030,6 +1073,8 @@ def _execute_control(control, name, target, raw_values, package=None):
         named = next((a for a in load_actions() if a["name"] == control["action"]), None)
         if named is None:
             return jsonify({"ok": False, "error": f"unknown action: {control['action']}"}), 400
+        if not access.action_ref_allowed(control["action"]):
+            return jsonify({"ok": False, "error": "action not allowed"}), 403
         action["steps"] = list(named["steps"]) + action["steps"]
         action["after_success"] = list(named["after_success"]) + action["after_success"]
         # Prefer the named action's own package so {EXT_*} resolves correctly.
@@ -1048,6 +1093,8 @@ def _resume_execution(uid, data):
     run = state.EXECUTIONS.get(uid)
     if run is None:
         return jsonify({"ok": False, "error": "unknown or expired execution"}), 400
+    if run.get("owner") != state.current_uid() and not access.current_is_admin():
+        return jsonify({"ok": False, "error": "not your execution"}), 403
 
     result = data.get("result") or {}
     if not result.get("ok", True):
@@ -1069,6 +1116,7 @@ def _execution_response(run, status, detail):
     if status == "client":
         uid = uuid.uuid4().hex
         run["uid"] = uid
+        run["owner"] = state.current_uid()
         run["pending"] = detail
         state.EXECUTIONS[uid] = run
         payload = {"ok": True, "uid": uid, "client_action": detail}
@@ -1417,7 +1465,6 @@ def api_extension_env():
 
 
 @app.route("/api/extensions/call", methods=["POST"])
-@admin_only
 def api_extension_call():
     """Call one backend capability of an active package (headless fallback).
 
@@ -1429,6 +1476,8 @@ def api_extension_call():
     pid = (data.get("package") or "").strip()
     method = (data.get("method") or "").strip()
     args = data.get("args")
+    if not access.package_allowed(pid):
+        return jsonify({"ok": False, "error": "extension not allowed"}), 403
     if not is_loaded(pid):
         return jsonify({"ok": False, "error": "unknown or disabled package"}), 404
     try:
@@ -1442,13 +1491,24 @@ def api_extension_call():
 # serves extension HTTP endpoints, so packages can be enabled/disabled at
 # runtime without touching Flask's URL map. Static core rules always win
 # (Werkzeug ranks them above this converter rule).
+def _package_for_subpath(subpath):
+    """The id of the package whose route prefix owns `subpath`, or None."""
+    for pkg in load_packages()[0]:
+        prefix = package_route_prefix(pkg)
+        if subpath == prefix or subpath.startswith(prefix + "/"):
+            return pkg["id"]
+    return None
+
+
 @app.route(
     "/api/<path:subpath>",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     endpoint="api_extension_dispatch",
 )
-@admin_only
 def api_extension_dispatch(subpath):
+    pid = _package_for_subpath(subpath)
+    if pid is not None and not access.package_allowed(pid):
+        return jsonify({"ok": False, "error": "extension not allowed"}), 403
     return dispatch_extension_route(request.method, "/api/" + subpath)
 
 

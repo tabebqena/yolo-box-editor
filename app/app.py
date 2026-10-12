@@ -52,7 +52,7 @@ from ybe.parsing import (
     parse_shortcut_line,
 )
 
-from ybe import auth, config, policy, state, update, userdata, userstate
+from ybe import access, auth, config, policy, state, update, userdata, userstate
 from ybe.auth import (
     ROLE_ADMIN,
     ROLE_USER,

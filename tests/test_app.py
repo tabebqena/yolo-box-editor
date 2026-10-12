@@ -3523,13 +3523,18 @@ def test_restricted_user_is_denied_admin_routes(clean_state):
         ("/api/actions/save", {"name": "X", "steps": ["echo hi"]}),
         ("/api/hooks/save", {"event": "after_save", "steps": ["echo hi"]}),
         ("/api/filters/save", {"name": "X", "steps": ["echo hi"]}),
-        ("/api/actions/run", {}),
-        ("/api/widgets/run", {}),
-        ("/api/extensions/run", {}),
-        ("/api/extensions/call", {"package": "x", "capability": "y"}),
         ("/api/admin/users", {"name": "x", "password": "y"}),
     ):
         assert client.post(path, json=payload).status_code == 403, path
+    # Run routes are refused too: an unknown name is a 400, a known-but-forbidden
+    # one a 403. Either way a restricted account cannot run it.
+    for path, payload in (
+        ("/api/actions/run", {"action": "whatever", "target": "train/a.jpg"}),
+        ("/api/widgets/run", {}),
+        ("/api/extensions/run", {}),
+        ("/api/extensions/call", {"package": "x", "capability": "y"}),
+    ):
+        assert client.post(path, json=payload).status_code in (400, 403), path
     assert client.get("/api/extensions/file?kind=action&name=X").status_code == 403
     assert client.get("/api/admin/users").status_code == 403
 
@@ -3717,6 +3722,96 @@ def test_admin_also_sees_designated_datasets(clean_state, tmp_path):
     cfg = admin.get("/api/config").get_json()
     assert [d["name"] for d in cfg["datasets"]] == ["Cats"]
     assert cfg["quota"] == {"limit": 0, "used": 0}
+
+
+def _restricted_with_dataset(clean_state, tmp_path, admin_ds):
+    """Two accounts; the admin designates `admin_ds` and bob selects it."""
+    ybe.create_user("admin", "pw")
+    ybe.create_user("bob", "pw")
+    admin = ybe.app.test_client()
+    admin.post("/api/login", json={"username": "admin", "password": "pw"})
+    admin.post("/api/admin/policy", json={
+        "add_dataset": {"name": "Cats", "data_yaml": str(admin_ds / "data.yaml")}})
+    bob = ybe.app.test_client()
+    bob.post("/api/login", json={"username": "bob", "password": "pw"})
+    bob.post("/api/datasets/select", json={"id": "cats"})
+    return admin, bob
+
+
+def test_policy_allowlists_default_to_empty(clean_state, tmp_path):
+    ybe.create_user("admin", "pw")
+    ybe.create_user("bob", "pw")
+    uid = ybe.user_id("bob")
+    assert ybe.policy.user_allowed(uid, "actions") == []
+    ybe.policy.set_user_allowed(uid, "actions", ["Greet"])
+    assert ybe.policy.user_allowed(uid, "actions") == ["Greet"]
+    with pytest.raises(ValueError):
+        ybe.policy.set_user_allowed(uid, "nope", ["x"])
+
+
+def test_restricted_run_requires_allowlist(clean_state, tmp_path):
+    write_action(clean_state, "Greet.yaml",
+                 "api_version: 6\nname: Greet\nsteps:\n  - echo hi\n")
+    admin_ds = make_dataset(tmp_path / "ads")
+    _admin, bob = _restricted_with_dataset(clean_state, tmp_path, admin_ds)
+    key = "train/a.jpg"
+
+    assert bob.post(
+        "/api/actions/run", json={"action": "Greet", "target": key}).status_code == 403
+    ybe.policy.set_user_allowed(ybe.user_id("bob"), "actions", ["Greet"])
+    resp = bob.post("/api/actions/run", json={"action": "Greet", "target": key})
+    assert resp.status_code == 200 and resp.get_json()["ok"] is True
+
+
+def test_nested_action_refs_are_checked(clean_state, tmp_path):
+    write_action(clean_state, "Inner.yaml",
+                 "api_version: 6\nname: Inner\nsteps:\n  - echo inner\n")
+    write_action(clean_state, "Outer.yaml",
+                 "api_version: 6\nname: Outer\nsteps:\n  - action_Inner\n")
+    admin_ds = make_dataset(tmp_path / "ads")
+    _admin, bob = _restricted_with_dataset(clean_state, tmp_path, admin_ds)
+    ybe.policy.set_user_allowed(ybe.user_id("bob"), "actions", ["Outer"])
+    resp = bob.post(
+        "/api/actions/run", json={"action": "Outer", "target": "train/a.jpg"})
+    assert resp.status_code == 400
+    body = resp.get_json()
+    assert body["ok"] is False and "not allowed" in body["error"]
+
+
+def test_config_hides_unallowed_defs(clean_state, tmp_path):
+    write_action(clean_state, "Greet.yaml",
+                 "api_version: 6\nname: Greet\nsteps:\n  - echo hi\n")
+    ybe.create_user("admin", "pw")
+    ybe.create_user("bob", "pw")
+    bob = ybe.app.test_client()
+    bob.post("/api/login", json={"username": "bob", "password": "pw"})
+    assert "Greet" not in [d["name"] for d in bob.get("/api/config").get_json()["action_defs"]]
+    ybe.policy.set_user_allowed(ybe.user_id("bob"), "actions", ["Greet"])
+    assert "Greet" in [d["name"] for d in bob.get("/api/config").get_json()["action_defs"]]
+
+
+def test_extension_packages_need_allowlist(clean_state, tmp_path):
+    ybe.create_user("admin", "pw")
+    ybe.create_user("bob", "pw")
+    bob = ybe.app.test_client()
+    bob.post("/api/login", json={"username": "bob", "password": "pw"})
+    call = {"package": "tags", "method": "tags.list", "args": {}}
+    assert bob.post("/api/extensions/call", json=call).status_code == 403
+    ybe.policy.set_user_allowed(ybe.user_id("bob"), "extensions", ["tags"])
+    # Now allowed past the permission gate (whatever the capability then returns).
+    assert bob.post("/api/extensions/call", json=call).status_code != 403
+
+
+def test_core_actions_bypass_the_allowlist(clean_state):
+    ybe.create_user("admin", "pw")
+    ybe.create_user("bob", "pw")
+    ybe.state.activate(ybe.user_id("bob"))
+    try:
+        assert ybe.access.action_allowed("app_save") is True
+        assert ybe.access.action_allowed("backend_rescan_images") is True
+        assert ybe.access.action_allowed("SomeShellAction") is False
+    finally:
+        ybe.state.deactivate()
 
 
 def test_datasets_are_isolated_per_user(clean_state, tmp_path):

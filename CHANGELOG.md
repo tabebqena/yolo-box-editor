@@ -4,6 +4,36 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.17.0] - 2026-10-12
+
+### Added
+
+- **Multi-user mode with roles.** An account is now an **admin** (the full app)
+  or a **restricted** user (a sandbox). A lone account — or no accounts at all —
+  is an admin, so a single-user install behaves exactly as before.
+- **Settings → Users** (admin): add/remove accounts and change roles.
+- **Settings → Datasets** (admin): designate the `data.yaml` files users may
+  open and set a per-user **label size cap** (MB).
+- **Settings → Access** (admin): grant a restricted account specific actions,
+  filters, hooks, widgets and extensions.
+- Restricted users pick from the **allowed datasets**; each is materialised as a
+  skeleton in their home (`<home>/users/<id>/datasets/<id>/`) with the images
+  **symlinked** and the labels in a **real local** folder. Their dataset view and
+  open dataset persist per user, and several users can label at once.
+- Everything that runs code is enforced **server-side**: authoring/installing,
+  running an action/hook/widget/package, and applying a filter are refused
+  unless the role (or an allowlist entry) grants them.
+
+### Changed
+
+- `users.json` is v2 (`{name: {id, role, hash}}`); v1 files migrate automatically
+  and a lone account is promoted to admin. The loader is in `ybe/auth.py`.
+- `state.STATE` is now a per-user proxy (`ybe/state.py`), selected per request;
+  CLI flags stay process-wide.
+- New modules: `ybe/policy.py` (allowed datasets, caps, allowlists),
+  `ybe/userdata.py` (dataset materialisation + label accounting), `ybe/access.py`
+  (role/allowlist checks), `ybe/userstate.py` (per-user state persistence).
+
 ## [10.16.0] - 2026-10-10
 
 ### Changed
