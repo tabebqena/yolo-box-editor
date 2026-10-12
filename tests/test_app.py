@@ -3814,6 +3814,31 @@ def test_core_actions_bypass_the_allowlist(clean_state):
         ybe.state.deactivate()
 
 
+def test_granted_package_panel_is_served(clean_state, tmp_path):
+    manifest = (
+        "api_version: 6\nid: myext\nname: My Ext\ndescription: d\n"
+        "version: 1.0.0\nauthor: me\nactive: true\n"
+        "ui:\n  api_version: 5\n  title: My Ext\n  script: panel.js\n"
+        "  location: bottom\n  height: 96\n"
+    )
+    write_package(clean_state, "myext", manifest)
+    (tmp_path / "extensions" / "myext" / "panel.js").write_text(
+        "console.log('hi');\n", encoding="utf-8")
+
+    ybe.create_user("admin", "pw")
+    ybe.create_user("bob", "pw")
+    bob = ybe.app.test_client()
+    bob.post("/api/login", json={"username": "bob", "password": "pw"})
+
+    assert bob.get("/api/extensions/script?package=myext").status_code == 403
+    ybe.policy.set_user_allowed(ybe.user_id("bob"), "extensions", ["myext"])
+    resp = bob.get("/api/extensions/script?package=myext")
+    assert resp.status_code == 200
+    assert "console.log" in resp.get_data(as_text=True)
+    # The granted package is now listed for the user, so its panel can mount.
+    assert "myext" in [p["id"] for p in bob.get("/api/config").get_json()["extension_packages"]]
+
+
 def test_datasets_are_isolated_per_user(clean_state, tmp_path):
     ybe.create_user("admin", "pw")
     ybe.create_user("bob", "pw")

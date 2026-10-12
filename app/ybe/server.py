@@ -1388,15 +1388,18 @@ def _save_extension_file():
 
 
 @app.route("/api/extensions/script")
-@admin_only
 def api_extension_script():
     """Serve an extension package's sandboxed UI-panel script.
 
     The host app fetches this text (the sandboxed iframe has no network of its
     own) and inlines it into a generated wrapper. Only active packages are
-    served, and the resolved path must stay inside the package folder.
+    served, the resolved path must stay inside the package folder, and a
+    restricted account may only load a package an admin granted it — so granting
+    a package is all it takes for its panel to mount.
     """
     pid = (request.args.get("package") or "").strip()
+    if not access.package_allowed(pid):
+        return jsonify({"ok": False, "error": "extension not allowed"}), 403
     pkg = next((p for p in load_packages()[0] if p["id"] == pid and p["active"]), None)
     if pkg is None or not pkg.get("ui"):
         return jsonify({"ok": False, "error": "unknown or inactive package"}), 404

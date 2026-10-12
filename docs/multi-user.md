@@ -82,6 +82,32 @@ The check is transitive: if you allow an action whose `steps` call another
 action via `action_<Name>`, the nested action must also be allowed, or the run
 stops with "action not allowed".
 
+### Granting an extension (any package)
+
+Granting a **package** id is the whole story for that extension, not just its
+backend:
+
+- its **routes** (`/api/extension/<id>/…`) and **capabilities** become available,
+- its **settings buttons** (`Settings` controls) may run, and
+- its **UI panel** mounts: the panel script is served to a restricted user only
+  for packages they were granted (the panel iframe itself still has no network,
+  and every host call it makes goes through the same per-user checks).
+
+So an admin enables a shipped/installed package once (Settings → Extensions,
+admin-only) and then grants it per user in **Access**. A package a user was not
+granted is hidden from their config and its panel never mounts.
+
+The `tags` package is one example: granting `tags` gives a user the tag bar and
+the tag routes, and the tag data is written under **their** home (see below).
+
+### Extension data and the size cap
+
+An extension writes its own files wherever it chooses. The tags package, for
+instance, writes `tags.yaml` beside the user's generated `data.yaml` and its
+per-image tag files under `datasets/<id>/tags/<split>/` — all inside the user's
+home. The **size cap counts labels only**, so extension data is not capped
+today; only an admin grants that extension in the first place.
+
 ## Where things live
 
 - `<home>/users.json` — accounts (`{name: {id, role, hash}}`, owner-only). v1
