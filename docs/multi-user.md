@@ -1,5 +1,10 @@
 # Users and roles
 
+> **This feature lives on the `multiuser-inprocess-attempt` branch only; it is
+> not in `main`.** It is the second attempt at multi-user support and was
+> reverted — see [multiuser-attempts.md](multiuser-attempts.md) for the full
+> history and why one-instance-per-user (attempt #1) is the recommended path.
+
 By default the app is a **single-user local tool**: no account is needed and you
 have full access. You can turn on multi-user mode by creating accounts — then
 every sign-in gets a **role**, and the app enforces what each role may do
