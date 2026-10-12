@@ -84,6 +84,7 @@ from ybe.dataset import (
     _split_by_name,
     is_image,
     label_path,
+    parse_dataset,
     read_classes,
     scan_images,
     scan_splits,

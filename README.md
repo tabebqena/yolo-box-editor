@@ -8,7 +8,7 @@ build step, no cloud account — point it at a `data.yaml` and start labelling.
 
 ![YOLO Box Editor](docs/screenshot.svg)
 
-Version **7.18.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
+Version **10.16.0** · [CHANGELOG.md](CHANGELOG.md) · [LICENSE](LICENSE) (MIT with a
 non-commercial-use condition, no warranty) · new to labelling? Press **F1** in the
 app (or start with [TUTORIAL.md](TUTORIAL.md)).
 

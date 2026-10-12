@@ -913,6 +913,21 @@ def test_scan_splits_skips_missing_images_dir(clean_state, tmp_path):
     assert [s["name"] for s in splits] == ["train"]
 
 
+def test_parse_dataset_is_pure(clean_state, tmp_path):
+    root = make_dataset(tmp_path, names=("fire", "smoke"))
+    # No state is touched, so it works with no dataset loaded.
+    dataset_path, classes, splits = ybe.parse_dataset(str(root / "data.yaml"))
+    assert dataset_path == str(root)
+    assert classes == ["fire", "smoke"]
+    assert [s["name"] for s in splits] == ["train", "val", "test"]
+    assert ybe.state.STATE["data_yaml"] is None
+    assert ybe.state.STATE["classes"] == []
+
+
+def test_parse_dataset_missing_file(clean_state):
+    assert ybe.parse_dataset("/no/such/data.yaml") == (None, [], [])
+
+
 def test_scan_splits_empty_without_data_yaml(clean_state):
     assert ybe.scan_splits() == []
 
