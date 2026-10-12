@@ -7,12 +7,13 @@
  * through for requests that must survive a page unload.
  * @param {string} url
  * @param {Object} [body]
- * @param {Object} [opts] - `{ keepalive }` passed to fetch.
+ * @param {Object} [opts] - `{ keepalive, method }` (`keepalive` passed to fetch;
+ *   `method` overrides POST, e.g. DELETE).
  * @returns {Promise<{res: Response, data: *}>}
  */
 async function apiPost(url, body, opts = {}) {
   const init = {
-    method: 'POST',
+    method: opts.method || 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body === undefined ? {} : body),
   };

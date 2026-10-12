@@ -21,6 +21,130 @@ function setAccountControls(visible) {
   setHidden('changePwBtn', !visible);
 }
 
+// ---------------------------------------------------------------------------
+// roles: admins author/install/manage; restricted users may only label
+// ---------------------------------------------------------------------------
+// The server enforces every restriction; hiding controls here is only to keep
+// the UI honest for a restricted account.
+let isAdmin = true; // until /api/config says otherwise (an old payload has no auth)
+
+/**
+ * Apply the server's role info: hide the authoring/management surfaces from a
+ * restricted account and show the Users tab to an admin.
+ * @param {{is_admin?: boolean}} [auth] - The `auth` block of /api/config.
+ * @returns {void}
+ */
+function applyRoleControls(auth) {
+  isAdmin = !auth || auth.is_admin !== false;
+  ['actions', 'hooks', 'extensions'].forEach((name) => {
+    setHidden(document.querySelector('.settings-tab[data-tab="' + name + '"]'), !isAdmin);
+    setHidden(document.querySelector('.settings-panel[data-panel="' + name + '"]'), !isAdmin);
+  });
+  const filtersPanel = document.querySelector('.settings-panel[data-panel="filters"]');
+  if (filtersPanel) {
+    setHidden(filtersPanel.querySelector('.sub-tab[data-sub="create"]'), !isAdmin);
+    setHidden(filtersPanel.querySelector('.sub-panel[data-sub="create"]'), !isAdmin);
+  }
+  setHidden('adminTabBtn', !isAdmin);
+  if (isAdmin) loadAdminUsers();
+}
+
+/**
+ * Fetch and render the account list (admin Users tab).
+ * @returns {Promise<void>}
+ */
+async function loadAdminUsers() {
+  const data = await apiGetOrNull('/api/admin/users');
+  if (data && data.ok) renderAdminUsers(data.users);
+}
+
+/**
+ * Render the account rows: name, a role picker and a Remove button.
+ * @param {Array<{name: string, role: string}>} users
+ * @returns {void}
+ */
+function renderAdminUsers(users) {
+  const root = el('adminUserList');
+  if (!root) return;
+  root.textContent = '';
+  (users || []).forEach((user) => {
+    const row = mk('div', 'admin-user-row');
+    row.appendChild(mk('span', 'admin-user-name', user.name));
+    const role = document.createElement('select');
+    role.className = 'admin-user-role';
+    ['user', 'admin'].forEach((name) => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      if (user.role === name) opt.selected = true;
+      role.appendChild(opt);
+    });
+    role.addEventListener('change', () => setAdminRole(user.name, role.value));
+    row.appendChild(role);
+    const remove = mk('button', 'danger', 'Remove');
+    remove.type = 'button';
+    remove.addEventListener('click', () => removeAdminUser(user.name));
+    row.appendChild(remove);
+    root.appendChild(row);
+  });
+}
+
+/**
+ * Create an account from the Users tab form.
+ * @returns {Promise<void>}
+ */
+async function adminAddUser() {
+  const name = el('adminNewName').value.trim();
+  const password = el('adminNewPass').value;
+  const role = el('adminNewRole').value;
+  if (!name || !password) {
+    toast('Username and password are required');
+    return;
+  }
+  const { res, data } = await apiPost('/api/admin/users', { name, password, role });
+  if (res.ok) {
+    el('adminNewName').value = '';
+    el('adminNewPass').value = '';
+    renderAdminUsers(data.users);
+    toast('Account added');
+  } else {
+    toast((data && data.error) || 'Could not add the account');
+  }
+}
+
+/**
+ * Change an account's role.
+ * @param {string} name
+ * @param {string} role
+ * @returns {Promise<void>}
+ */
+async function setAdminRole(name, role) {
+  const { res, data } = await apiPost('/api/admin/users', { name, role });
+  if (res.ok) {
+    renderAdminUsers(data.users);
+  } else {
+    toast((data && data.error) || 'Could not change the role');
+    loadAdminUsers();
+  }
+}
+
+/**
+ * Remove an account after a confirmation.
+ * @param {string} name
+ * @returns {Promise<void>}
+ */
+async function removeAdminUser(name) {
+  if (!confirm('Remove account "' + name + '"?')) return;
+  const { res, data } = await apiPost(
+    '/api/admin/users', { name }, { method: 'DELETE' });
+  if (res.ok) {
+    renderAdminUsers(data.users);
+    toast('Account removed');
+  } else {
+    toast((data && data.error) || 'Could not remove the account');
+  }
+}
+
 /**
  * Show the sign-in overlay, optionally with an error message.
  * @param {string} [message]
@@ -183,4 +307,5 @@ el('changePwBtn').addEventListener('click', openPasswordModal);
 el('passwordModalClose').addEventListener('click', closePasswordModal);
 el('passwordCancel').addEventListener('click', closePasswordModal);
 el('passwordSave').addEventListener('click', savePassword);
+el('adminAddUser').addEventListener('click', adminAddUser);
 boot();

@@ -43,6 +43,7 @@ async function loadConfig(startIdx = 0, opts = {}) {
   console.log(`[ybe] yolo-box-editor v${cfg0.version || '?'}`);
   serverSettings = cfg0.settings || {};
   initSettings();
+  applyRoleControls(cfg0.auth);
   debugMode = !!cfg0.debug;
   if (cfg0.update) updateInfo = cfg0.update;
   if (debugMode) console.log('[ybe] debug mode on — verbose logging enabled (--debug)');

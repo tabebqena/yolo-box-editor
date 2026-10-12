@@ -1447,3 +1447,29 @@ button.is-loading::after {
   display: block;
   background: transparent;
 }
+
+/* 17. admin Users tab ----------------------------------------------------- */
+.admin-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.admin-user-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.admin-user-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.admin-add-row {
+  flex-wrap: wrap;
+}
+.admin-add-row input,
+.admin-add-row select {
+  flex: 1 1 8rem;
+  min-width: 0;
+}

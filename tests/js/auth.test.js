@@ -142,3 +142,62 @@ test('boot starts the app when no login is needed', async () => {
   assert.equal(app.state().appStarted, true);
   assert.equal(app.api.isHidden('loginOverlay'), true);
 });
+
+function tabHidden(name, cls) {
+  return app.document.querySelector(cls + '[data-tab="' + name + '"]').classList.contains('hidden');
+}
+
+test('applyRoleControls hides authoring surfaces from a restricted account', () => {
+  app.api.applyRoleControls({ is_admin: false });
+  assert.equal(app.api.isHidden('adminTabBtn'), true);
+  assert.equal(tabHidden('actions', '.settings-tab'), true);
+  assert.equal(tabHidden('hooks', '.settings-tab'), true);
+  assert.equal(tabHidden('extensions', '.settings-tab'), true);
+  const panel = app.document.querySelector('.settings-panel[data-panel="extensions"]');
+  assert.equal(panel.classList.contains('hidden'), true);
+  const create = app.document.querySelector(
+    '.settings-panel[data-panel="filters"] .sub-tab[data-sub="create"]');
+  assert.equal(create.classList.contains('hidden'), true);
+});
+
+test('applyRoleControls shows authoring and the Users tab to an admin', () => {
+  app.api.applyRoleControls({ is_admin: true });
+  assert.equal(app.api.isHidden('adminTabBtn'), false);
+  assert.equal(tabHidden('actions', '.settings-tab'), false);
+});
+
+test('a missing auth block is treated as admin', () => {
+  app.api.applyRoleControls(undefined);
+  assert.equal(app.api.isHidden('adminTabBtn'), false);
+});
+
+test('adminAddUser posts and renders the account list', async () => {
+  let posted = null;
+  app.fetchMock.on('/api/admin/users', (url, method, entry) => {
+    if (method === 'POST') {
+      posted = JSON.parse(entry.body);
+      return { body: { ok: true, users: [{ name: 'bob', role: 'user' }] } };
+    }
+    return { body: { ok: true, users: [] } };
+  });
+  app.$('adminNewName').value = 'bob';
+  app.$('adminNewPass').value = 'pw2';
+  app.$('adminNewRole').value = 'user';
+  await app.api.adminAddUser();
+  assert.equal(posted.name, 'bob');
+  assert.equal(posted.password, 'pw2');
+  assert.match(app.$('adminUserList').textContent, /bob/);
+});
+
+test('removeAdminUser confirms then deletes', async () => {
+  let deleted = null;
+  app.fetchMock.on('/api/admin/users', (url, method, entry) => {
+    if (method === 'DELETE') {
+      deleted = JSON.parse(entry.body);
+      return { body: { ok: true, users: [] } };
+    }
+    return { body: { ok: true, users: [{ name: 'bob', role: 'user' }] } };
+  });
+  await app.api.removeAdminUser('bob');
+  assert.equal(deleted.name, 'bob');
+});

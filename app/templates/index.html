@@ -189,6 +189,7 @@
         <button class="settings-tab" type="button" role="tab" data-tab="shortcuts">Shortcuts</button>
         <button class="settings-tab" type="button" role="tab" data-tab="updates">Updates</button>
         <button id="accountTabBtn" class="settings-tab hidden" type="button" role="tab" data-tab="account">Account</button>
+        <button id="adminTabBtn" class="settings-tab hidden" type="button" role="tab" data-tab="admin">Users</button>
       </div>
       <div class="settings-modal-body">
         <section class="settings-panel active" data-panel="general">
@@ -395,6 +396,20 @@
           <div class="settings-actions">
             <button id="changePwBtn" type="button" title="Change your password">Change password</button>
             <button id="logoutBtn" class="danger" type="button" title="Sign out">Sign out</button>
+          </div>
+        </section>
+
+        <section class="settings-panel" data-panel="admin">
+          <p class="hint">Who can sign in. The first account is an admin; later accounts are restricted until you promote them. Only admins can see this tab.</p>
+          <div id="adminUserList" class="admin-user-list"></div>
+          <div class="settings-actions admin-add-row">
+            <input id="adminNewName" type="text" placeholder="username" autocomplete="off">
+            <input id="adminNewPass" type="password" placeholder="password" autocomplete="new-password">
+            <select id="adminNewRole">
+              <option value="user">user</option>
+              <option value="admin">admin</option>
+            </select>
+            <button id="adminAddUser" type="button" class="primary">Add account</button>
           </div>
         </section>
       </div>
