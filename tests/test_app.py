@@ -3258,8 +3258,9 @@ def test_login_logout_roundtrip(clean_state):
     good = client.post(
         "/api/login", json={"username": "alice", "password": "s3cret"})
     assert good.status_code == 200 and good.get_json()["ok"] is True
-    assert client.get("/api/config").get_json()["auth"] == {
-        "required": True, "username": "alice"}
+    auth = client.get("/api/config").get_json()["auth"]
+    assert auth["required"] is True and auth["username"] == "alice"
+    assert auth["is_admin"] is True and auth["role"] == "admin"
 
     assert client.post("/api/logout").status_code == 200
     assert client.get("/api/config").status_code == 401
@@ -3511,9 +3512,79 @@ def test_drop_user_leaves_anonymous(clean_state):
     assert "uid-a" not in ybe.state.USER_STATES
 
 
+def test_restricted_user_is_denied_admin_routes(clean_state):
+    ybe.create_user("admin", "pw")
+    ybe.create_user("bob", "pw")
+    client = ybe.app.test_client()
+    client.post("/api/login", json={"username": "bob", "password": "pw"})
+
+    assert client.post("/api/data", json={"data_yaml": "/nope"}).status_code == 403
+    for path, payload in (
+        ("/api/actions/save", {"name": "X", "steps": ["echo hi"]}),
+        ("/api/hooks/save", {"event": "after_save", "steps": ["echo hi"]}),
+        ("/api/filters/save", {"name": "X", "steps": ["echo hi"]}),
+        ("/api/actions/run", {}),
+        ("/api/widgets/run", {}),
+        ("/api/extensions/run", {}),
+        ("/api/extensions/call", {"package": "x", "capability": "y"}),
+        ("/api/admin/users", {"name": "x", "password": "y"}),
+    ):
+        assert client.post(path, json=payload).status_code == 403, path
+    assert client.get("/api/extensions/file?kind=action&name=X").status_code == 403
+    assert client.get("/api/admin/users").status_code == 403
+
+
+def test_admin_passes_the_admin_gate(clean_state):
+    ybe.create_user("admin", "pw")
+    client = ybe.app.test_client()
+    client.post("/api/login", json={"username": "admin", "password": "pw"})
+    # Empty payload is a 400, but never the 403 the gate returns.
+    assert client.post("/api/actions/save", json={}).status_code != 403
+    assert client.get("/api/config").get_json()["auth"]["is_admin"] is True
+
+
+def test_admin_endpoint_creates_first_user_as_admin(clean_state):
+    # With no accounts the anonymous caller is the admin, so this can enable login.
+    client = ybe.app.test_client()
+    resp = client.post("/api/admin/users", json={"name": "alice", "password": "pw"})
+    assert resp.status_code == 200
+    assert ybe.role_of("alice") == ybe.ROLE_ADMIN
+
+
+def test_admin_users_crud(clean_state):
+    ybe.create_user("admin", "pw")
+    client = ybe.app.test_client()
+    client.post("/api/login", json={"username": "admin", "password": "pw"})
+
+    resp = client.post("/api/admin/users", json={"name": "bob", "password": "pw2"})
+    assert resp.status_code == 200
+    roles = {u["name"]: u["role"] for u in resp.get_json()["users"]}
+    assert roles["bob"] == "user"
+
+    resp = client.post("/api/admin/users", json={"name": "bob", "role": "admin"})
+    assert {u["name"]: u["role"] for u in resp.get_json()["users"]}["bob"] == "admin"
+
+    client.post("/api/admin/users", json={"name": "bob", "password": "new"})
+    assert ybe.verify_user("bob", "new")
+
+    resp = client.delete("/api/admin/users", json={"name": "bob"})
+    assert resp.status_code == 200
+    assert "bob" not in {u["name"] for u in resp.get_json()["users"]}
+
+
+def test_cannot_demote_the_last_admin(clean_state):
+    ybe.create_user("admin", "pw")
+    client = ybe.app.test_client()
+    client.post("/api/login", json={"username": "admin", "password": "pw"})
+    resp = client.post("/api/admin/users", json={"name": "admin", "role": "user"})
+    assert resp.status_code == 400
+    assert ybe.role_of("admin") == ybe.ROLE_ADMIN
+
+
 def test_datasets_are_isolated_per_user(clean_state, tmp_path):
     ybe.create_user("admin", "pw")
     ybe.create_user("bob", "pw")
+    ybe.set_role("bob", "admin")  # isolation, not permissions, is the point here
     ds1, ds2 = tmp_path / "ds1", tmp_path / "ds2"
     make_dataset(ds1)
     make_dataset(ds2)
@@ -3537,6 +3608,7 @@ def test_datasets_are_isolated_per_user(clean_state, tmp_path):
 def test_user_dataset_persists_across_reload(clean_state, tmp_path):
     ybe.create_user("admin", "pw")
     ybe.create_user("bob", "pw")
+    ybe.set_role("bob", "admin")
     ds = tmp_path / "ds"
     make_dataset(ds)
 

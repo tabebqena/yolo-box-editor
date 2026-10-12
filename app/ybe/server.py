@@ -5,6 +5,7 @@ server-side logic lives in the sibling `ybe` modules; `app.py` is the CLI entry
 point that configures the home, loads the secret key and calls `app.run`.
 """
 
+import functools
 import os
 import secrets
 import sys
@@ -22,7 +23,19 @@ from flask import (
     session,
 )
 from ybe import compat, config, envs, extension_flags, permissions, state, userstate
-from ybe.auth import auth_enabled, set_user, user_id, verify_user
+from ybe.auth import (
+    _valid_username,
+    auth_enabled,
+    create_user,
+    delete_user,
+    is_admin,
+    role_of,
+    set_role,
+    set_user,
+    update_user,
+    user_id,
+    verify_user,
+)
 from ybe.commands import (
     _advance_execution,
     _rescan_images,
@@ -153,6 +166,41 @@ def _is_authenticated():
     return not auth_enabled() or _session_username() is not None
 
 
+def _current_role():
+    """The request's effective role: "admin" when auth is off, else the account's."""
+    if not auth_enabled():
+        return "admin"
+    return role_of(_session_username())
+
+
+def _is_admin():
+    """True when the request may author/install/run (anonymous counts when auth off)."""
+    return is_admin(_session_username())
+
+
+def _deny_non_admin():
+    """The standard 403 for a restricted account touching an admin-only route."""
+    return jsonify({"ok": False, "error": "admin permission required"}), 403
+
+
+def admin_only(view):
+    """Wrap a route so only an admin may call it (403 otherwise)."""
+
+    @functools.wraps(view)
+    def wrapper(*args, **kwargs):
+        if not _is_admin():
+            return _deny_non_admin()
+        return view(*args, **kwargs)
+
+    return wrapper
+
+
+def _admin_count():
+    """How many accounts currently hold the admin role."""
+    return sum(1 for record in state.USERS.values()
+               if record.get("role") == "admin")
+
+
 @app.before_request
 def _require_login():
     """Block API calls (and the SPA load) until the user has signed in.
@@ -206,6 +254,8 @@ def api_session():
             "auth_required": auth_enabled(),
             "authenticated": _is_authenticated(),
             "username": username,
+            "role": _current_role(),
+            "is_admin": _is_admin(),
         }
     )
 
@@ -249,6 +299,73 @@ def api_password():
     except OSError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
     return jsonify({"ok": True})
+
+
+# --- admin: account management (web UI; CLI stays `ybe users`) ------------- #
+def _users_payload():
+    """The account list for the admin Users tab (never includes hashes)."""
+    return [
+        {"name": name, "id": record.get("id"), "role": record.get("role")}
+        for name, record in sorted(state.USERS.items())
+    ]
+
+
+@app.route("/api/admin/users", methods=["GET", "POST", "DELETE"])
+def api_admin_users():
+    """List, create/update, or delete accounts. Admin only.
+
+    POST body `{name, password?, role?}` creates a missing account (password
+    required) or edits an existing one (password and/or role optional). The last
+    admin cannot be demoted, so the store never loses its only administrator.
+    """
+    if not _is_admin():
+        return _deny_non_admin()
+    if request.method == "GET":
+        return jsonify({"ok": True, "users": _users_payload()})
+
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name") or data.get("username") or "").strip()
+
+    if request.method == "DELETE":
+        if not name:
+            return jsonify({"ok": False, "error": "name is required"}), 400
+        uid = user_id(name)
+        try:
+            delete_user(name)
+        except KeyError:
+            return jsonify({"ok": False, "error": "no such user"}), 404
+        except OSError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 500
+        state.drop_user(uid)
+        userstate.forget(uid)
+        return jsonify({"ok": True, "users": _users_payload()})
+
+    if not _valid_username(name):
+        return jsonify(
+            {"ok": False, "error": "invalid user name (no ':' or control chars)"}), 400
+    role = data.get("role")
+    if role is not None and role not in ("admin", "user"):
+        return jsonify({"ok": False, "error": "role must be 'admin' or 'user'"}), 400
+    password = data.get("password")
+    exists = name in state.USERS
+    if role == "user" and exists and role_of(name) == "admin" and _admin_count() <= 1:
+        return jsonify({"ok": False, "error": "cannot demote the last admin"}), 400
+    try:
+        if exists:
+            if password:
+                update_user(name, str(password))
+            if role is not None:
+                set_role(name, role)
+        else:
+            if not password:
+                return jsonify(
+                    {"ok": False, "error": "password is required for a new user"}), 400
+            create_user(name, str(password))
+            if role is not None:
+                set_role(name, role)
+    except OSError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+    return jsonify({"ok": True, "users": _users_payload()})
 
 
 # --- app config, settings, shortcuts, presence ----------------------------- #
@@ -420,6 +537,8 @@ def api_config():
             "auth": {
                 "required": auth_enabled(),
                 "username": _session_username() if auth_enabled() else None,
+                "role": _current_role(),
+                "is_admin": _is_admin(),
             },
             "version": read_version(),
             "changelog": changelog_for(read_version()),
@@ -527,6 +646,7 @@ def api_presence():
 
 # --- dataset, split and filter selection ----------------------------------- #
 @app.route("/api/data", methods=["POST"])
+@admin_only
 def api_data():
     data = request.get_json(silent=True) or {}
     path = (data.get("data_yaml") or "").strip()
@@ -643,6 +763,7 @@ def api_images_rescan():
 
 # --- actions and extension authoring --------------------------------------- #
 @app.route("/api/actions/run", methods=["POST"])
+@admin_only
 def api_action_run():
     """Start (or resume) a user action execution for the current image.
 
@@ -719,6 +840,7 @@ def _image_action_values(entry, split):
 
 
 @app.route("/api/widgets/run", methods=["POST"])
+@admin_only
 def api_widget_run():
     """Run one button of a custom widget on the current image.
 
@@ -743,6 +865,7 @@ def api_widget_run():
 
 
 @app.route("/api/extensions/run", methods=["POST"])
+@admin_only
 def api_extensions_run():
     """Run one button of an extension package's `settings:` block.
 
@@ -880,6 +1003,7 @@ def _execution_payload(run):
 
 
 @app.route("/api/actions/save", methods=["POST"])
+@admin_only
 def api_action_save():
     """Create (or replace) a user action from the Settings form.
 
@@ -918,6 +1042,7 @@ def api_action_save():
 
 
 @app.route("/api/hooks/save", methods=["POST"])
+@admin_only
 def api_hook_save():
     """Create (or replace) a user event hook from the Settings form.
 
@@ -955,6 +1080,7 @@ def api_hook_save():
 
 
 @app.route("/api/filters/save", methods=["POST"])
+@admin_only
 def api_filter_save():
     """Create (or replace) a user filter from the Settings form.
 
@@ -1020,6 +1146,7 @@ def api_extension_disabled():
 
 
 @app.route("/api/extensions/delete", methods=["POST"])
+@admin_only
 def api_extension_delete():
     """Delete one of the user's extension files (never a shipped one)."""
     if state.STATE["readonly"]:
@@ -1044,6 +1171,7 @@ def api_extension_delete():
 
 
 @app.route("/api/extensions/file", methods=["GET", "POST"])
+@admin_only
 def api_extension_file():
     """Read or raw-edit one extension file for the YAML editor.
 
@@ -1111,6 +1239,7 @@ def _save_extension_file():
 
 
 @app.route("/api/extensions/script")
+@admin_only
 def api_extension_script():
     """Serve an extension package's sandboxed UI-panel script.
 
@@ -1133,6 +1262,7 @@ def api_extension_script():
 
 
 @app.route("/api/extensions/active", methods=["POST"])
+@admin_only
 def api_extension_active():
     """Enable or disable a package, live and persisted.
 
@@ -1157,6 +1287,7 @@ def api_extension_active():
 
 
 @app.route("/api/extensions/env", methods=["POST"])
+@admin_only
 def api_extension_env():
     """Build (or refresh) a package's Python environment.
 
@@ -1185,6 +1316,7 @@ def api_extension_env():
 
 
 @app.route("/api/extensions/call", methods=["POST"])
+@admin_only
 def api_extension_call():
     """Call one backend capability of an active package (headless fallback).
 
@@ -1214,6 +1346,7 @@ def api_extension_call():
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     endpoint="api_extension_dispatch",
 )
+@admin_only
 def api_extension_dispatch(subpath):
     return dispatch_extension_route(request.method, "/api/" + subpath)
 
