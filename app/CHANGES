@@ -2,8 +2,8 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
-## 10.17.1
-- Fixed: the browser's **saved-password suggestion** no longer pops up on ordinary text fields. The login and change-password fields are now created only when a login is needed, so a browser with a saved password finds nothing to autofill on the normal pages (it still autofills the real login fields when login is enabled).
+## 10.18.0
+- The browser's **saved-password suggestion** no longer pops up on ordinary text fields. The login and change-password fields are now created only when a login is needed, so a browser with a saved password finds nothing to autofill on the normal pages (it still autofills the real login fields when login is enabled).
 
 ## 10.17.0
 - New built-in **Image size** filter: keeps the images whose pixel size matches the width and/or height you enter (e.g. `640` × `360`). Leave a field blank to ignore it, and set **invert** to keep the ones that do not match. Dimensions are read from the image header with no extra library.
