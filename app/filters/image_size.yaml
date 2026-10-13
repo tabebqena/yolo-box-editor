@@ -1,15 +1,18 @@
 # Keep only the images whose pixel size matches the requested width and height.
 #
-# A blank width or height matches any value, so the filter can also keep "every
-# image 640 wide" (leave height blank) or "every image 360 tall" (leave width
-# blank). At least one of the two must be filled in. Set `invert` to true to keep
-# the images that do NOT match instead.
+# A value may be prefixed with a comparison operator — `>=`, `>`, `=`, `<`, `<=`
+# or `!=` — to match a range instead of an exact size (e.g. `>=640` and `<480`);
+# a bare number means `=`. A blank width or height matches any value, so the
+# filter can also keep "every image 640 wide" (leave height blank) or "every
+# image at least 360 tall" (width blank, height `>=360`). At least one of the two
+# must be filled in. Set `invert` to true to keep the images that do NOT match
+# instead.
 #
 # The dimensions come from the shipped helper `app/scripts/image_size_filter.py`,
 # which reads common image headers with the standard library only.
 api_version: 6
 name: Image size
-description: Keep images matching a pixel size (width × height); leave a field blank to ignore it.
+description: Keep images matching a pixel size (width × height); prefix a value with >=, >, =, <, <= or !=, and leave a field blank to ignore it.
 arguments:
   - name: width
     required: false

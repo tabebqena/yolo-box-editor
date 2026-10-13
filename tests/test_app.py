@@ -2021,6 +2021,29 @@ def test_image_size_match_helpers():
     assert mod.matches(None, None, None) is False
 
 
+def test_image_size_dimension_parses_operators():
+    mod = _load_shipped_script("image_size_filter.py")
+    assert mod._dimension("") is None
+    assert mod._dimension("640") == ("=", 640)
+    assert mod._dimension("=640") == ("=", 640)
+    assert mod._dimension(">=640") == (">=", 640)
+    assert mod._dimension(">640") == (">", 640)
+    assert mod._dimension("<640") == ("<", 640)
+    assert mod._dimension("<=640") == ("<=", 640)
+    assert mod._dimension("!=640") == ("!=", 640)
+    assert mod._dimension(" >= 640 ") == (">=", 640)
+
+
+def test_image_size_match_operators():
+    mod = _load_shipped_script("image_size_filter.py")
+    assert mod.matches((640, 360), (">=", 640), None) is True
+    assert mod.matches((640, 360), (">", 640), None) is False
+    assert mod.matches((640, 360), ("<=", 640), ("<", 480)) is True
+    assert mod.matches((640, 360), ("!=", 640), None) is False
+    assert mod.matches((640, 360), (">=", 641), None) is False
+    assert mod.matches((640, 360), ("=", 640), (">", 359)) is True
+
+
 def test_shipped_image_size_filter_has_width_height(monkeypatch):
     monkeypatch.setattr(ybe.config, "FILTERS_DIR",
                         str(Path(ybe.config.BASE_DIR) / "filters"))
@@ -2067,6 +2090,11 @@ def test_image_size_filter_keeps_matching_images(clean_state, tmp_path, monkeypa
     # Invert keeps the images that do not match.
     assert run({"width": "640", "height": "360", "invert": "true"}) == \
         ["b.jpg", "c.jpg"]
+    # Comparison operators match a range: a is 640x360, c is 640x480, b is 16x16.
+    assert run({"width": ">=640", "height": ""}) == ["a.jpg", "c.jpg"]
+    assert run({"width": ">640", "height": ""}) == []
+    assert run({"width": "<=640", "height": ">=480"}) == ["c.jpg"]
+    assert run({"width": "", "height": "!=360"}) == ["b.jpg", "c.jpg"]
 
 
 def test_tag_image_swaps_only_the_images_segment(tmp_path):

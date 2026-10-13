@@ -136,9 +136,12 @@ backed by `app/scripts/example_filter.py`; copy it to a new `<Name>.yaml` in
   inverse.
 - **Image size** — `app/filters/image_size.yaml`; keeps the images whose pixel
   size matches the **width** and/or **height** you enter (e.g. `640` × `360`).
-  Leave a field blank to ignore it, so `640` with a blank height keeps every
-  image that is 640 px wide whatever its height. Set **invert** to keep the
-  images that do *not* match instead. At least one of width/height is required.
+  Prefix a value with a comparison operator — `>=`, `>`, `=`, `<`, `<=` or `!=`
+  — to match a range instead of an exact size (e.g. `>=640` × `<480`); a bare
+  number means `=`. Leave a field blank to ignore it, so `640` with a blank
+  height keeps every image that is 640 px wide whatever its height. Set
+  **invert** to keep the images that do *not* match instead. At least one of
+  width/height is required.
 
 Both class filters use `app/scripts/class_filter.py`, which maps the class name
 to its id via `data.yaml` and checks each image's `labels/.../*.txt` file (an

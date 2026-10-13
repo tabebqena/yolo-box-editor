@@ -4,6 +4,15 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.19.0] - 2026-10-13
+
+### Changed
+
+- The built-in **Image size** filter now accepts a comparison operator on the
+  **width** and **height** values: prefix one with `>=`, `>`, `=`, `<`, `<=` or
+  `!=` to keep a range instead of an exact size (e.g. `>=640` × `<480`). A bare
+  number still means an exact match, so existing filters are unchanged.
+
 ## [10.18.0] - 2026-10-13
 
 ### Changed

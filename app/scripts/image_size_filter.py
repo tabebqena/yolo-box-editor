@@ -8,9 +8,11 @@ Used by `app/filters/image_size.yaml`.
                                [--width N] [--height N] [--invert true|false]
 
 A blank `--width` / `--height` matches any value, so a filter with only a width
-keeps every image that wide regardless of height. The image dimensions are read
-from the file header with the standard library only (no Pillow at runtime) for
-PNG, JPEG, GIF, BMP, WebP and TIFF files.
+keeps every image that wide regardless of height. A value may be prefixed with a
+comparison operator — `>=`, `>`, `=`, `<`, `<=` or `!=` — to match a range
+instead of an exact size (e.g. `--width ">=640" --height "<480"`); a bare number
+means `=`. The image dimensions are read from the file header with the standard
+library only (no Pillow at runtime) for PNG, JPEG, GIF, BMP, WebP and TIFF files.
 """
 
 import argparse
@@ -140,18 +142,61 @@ def image_size(path):
     return None
 
 
+_OPERATORS = (">=", "<=", "!=", ">", "<", "=")
+
+
 def _dimension(value):
-    """Parse a `--width` / `--height` value; blank means "any" (None)."""
+    """Parse a `--width` / `--height` value; blank means "any" (None).
+
+    Returns `(operator, number)`, where the operator defaults to `=` when the
+    value is a bare number.
+    """
     value = (value or "").strip()
     if not value:
         return None
+    op = "="
+    for candidate in _OPERATORS:
+        if value.startswith(candidate):
+            op = candidate
+            value = value[len(candidate):].strip()
+            break
     try:
         number = int(float(value))
     except ValueError:
         raise argparse.ArgumentTypeError(f"not a number: {value!r}")
     if number < 1:
         raise argparse.ArgumentTypeError("must be a positive integer")
-    return number
+    return op, number
+
+
+def _compare(actual, constraint):
+    """Whether `actual` satisfies a constraint (None = any, int = `=`)."""
+    if constraint is None:
+        return True
+    if not isinstance(constraint, tuple):
+        constraint = ("=", constraint)
+    op, number = constraint
+    if op == ">=":
+        return actual >= number
+    if op == "<=":
+        return actual <= number
+    if op == ">":
+        return actual > number
+    if op == "<":
+        return actual < number
+    if op == "!=":
+        return actual != number
+    return actual == number
+
+
+def _format(constraint):
+    """Render a constraint for the summary line (`*` when unset)."""
+    if constraint is None:
+        return "*"
+    if isinstance(constraint, tuple):
+        op, number = constraint
+        return f"{op}{number}"
+    return str(constraint)
 
 
 def matches(size, width, height):
@@ -159,11 +204,7 @@ def matches(size, width, height):
     if size is None:
         return False
     w, h = size
-    if width is not None and w != width:
-        return False
-    if height is not None and h != height:
-        return False
-    return True
+    return _compare(w, width) and _compare(h, height)
 
 
 def main(argv=None):
@@ -173,9 +214,11 @@ def main(argv=None):
     parser.add_argument("input_pipe")
     parser.add_argument("output_pipe")
     parser.add_argument("--width", type=_dimension, default=None,
-                        help="required width in pixels (blank = any)")
+                        help="width in pixels, optionally prefixed with an "
+                             "operator (>=, >, =, <, <=, !=); blank = any")
     parser.add_argument("--height", type=_dimension, default=None,
-                        help="required height in pixels (blank = any)")
+                        help="height in pixels, optionally prefixed with an "
+                             "operator (>=, >, =, <, <=, !=); blank = any")
     parser.add_argument("--invert", choices=("true", "false"), default="false",
                         help="keep images that do NOT match (default: false)")
     args = parser.parse_args(argv)
@@ -197,7 +240,7 @@ def main(argv=None):
         for path in kept:
             f.write(path + "\n")
 
-    wanted = f"{args.width or '*'}x{args.height or '*'}"
+    wanted = f"{_format(args.width)}x{_format(args.height)}"
     print(f"image_size_filter: kept {len(kept)} of {len(paths)} "
           f"({'not ' if invert else ''}{wanted})", file=sys.stderr)
     return 0
