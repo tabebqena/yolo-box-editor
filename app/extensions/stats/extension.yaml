@@ -1,0 +1,26 @@
+# Dataset statistics extension package.
+#
+# Reads the loaded dataset and reports counts - images per split, boxes per
+# class, label coverage and tag usage - and answers small queries. It never
+# writes anything, so it works in read-only mode too.
+#
+# The backend (`backend.py`) owns the computation and the routes; the sandboxed
+# panel (`panel.js`) only renders the results and the query box.
+api_version: 6
+id: stats
+name: Dataset statistics
+description: Summary of the dataset (images per split, classes, labels, tags) and a small query box.
+version: 1.0.0
+author: yolo-box-editor
+active: false
+
+# Backend plugin: capabilities `stats.summary` / `stats.query` plus read-only
+# HTTP routes (see permissions.yaml).
+backend: backend.py
+
+ui:
+  api_version: 5
+  title: Statistics
+  script: panel.js
+  location: float
+  height: 380

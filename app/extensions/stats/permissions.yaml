@@ -1,0 +1,17 @@
+# What the Statistics extension declares. It is a shipped (trusted) package and
+# carries the same permission file format as installed ones.
+api_version: 1
+
+# YBE bridge capabilities its panel uses.
+ybe:
+  - state.read        # read whether a dataset is loaded
+  - capabilities      # call its own stats.* backend capabilities
+
+# Code it ships.
+backend: true         # backend.py runs server-side (read-only)
+ui: true              # panel.js runs in a sandboxed iframe
+
+# Extension artifacts it adds.
+routes:
+  - ""
+  - /query

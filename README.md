@@ -174,6 +174,16 @@ Active tags are green, inactive ones are outlined, and clicking toggles.
 New tag names are added to `tags.yaml` when you save the image. If a tag seems
 missing, see [Why can't I see my tag?](docs/tags.md#why-cant-i-see-my-tag).
 
+## Dataset statistics
+
+The **Dataset statistics** extension ships disabled — enable it under
+**Settings → Extensions**. Its **Statistics** panel shows an overview of the
+loaded dataset: images per split, boxes and images per class, label coverage,
+and tag usage (including tags used on images but missing from `tags.yaml`). A
+query box answers questions like `tag:smoke`, `class:person` or
+`split:train tag:2` — whitespace means AND, `or` means OR — and reports the
+matching count, its percentage and a per-split breakdown.
+
 ## Further reading
 
 - [TUTORIAL.md](TUTORIAL.md) — the 3-level tutorial (beginner → expert).

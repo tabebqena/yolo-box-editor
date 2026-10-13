@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.20.0
+- New **Dataset statistics** extension (disabled by default). Its **Statistics** panel summarizes the loaded dataset — images per split, boxes and images per class, label coverage and tag usage — and a query box answers questions like `tag:smoke`, `class:person` or `split:train tag:2`, showing the count, the percentage and a per-split breakdown. Enable it under **Settings → Extensions**.
+
 ## 10.19.0
 - The built-in **Image size** filter now accepts a comparison operator on the width and height: prefix a value with `>=`, `>`, `=`, `<`, `<=` or `!=` to match a range (e.g. `>=640` × `<480`). A bare number still means an exact match.
 

@@ -4,6 +4,21 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.20.0] - 2026-10-13
+
+### Added
+
+- A new **Dataset statistics** extension (`app/extensions/stats/`, disabled by
+  default). Its sandboxed **Statistics** panel summarizes the loaded dataset:
+  images per split; boxes and images per class; label coverage (images with/without
+  labels, total boxes, boxes per image); and tag usage (per-tag counts, tagged vs
+  untagged, and tags used on images but missing from `tags.yaml`). A query box
+  answers small expressions such as `tag:smoke`, `class:person`,
+  `split:train tag:2`, `empty`, `tagged` and `untagged` (whitespace = AND,
+  `or`/`|` = OR), showing the matching count, its percentage and a per-split
+  breakdown. The read-only backend serves the same data at
+  `/api/extension/stats` and `/api/extension/stats/query?expr=...`.
+
 ## [10.19.0] - 2026-10-13
 
 ### Changed
