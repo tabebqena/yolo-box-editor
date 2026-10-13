@@ -134,10 +134,18 @@ backed by `app/scripts/example_filter.py`; copy it to a new `<Name>.yaml` in
   built from the dataset's `names` (`options: {DATASET_CLASS_NAMES}`).
 - **Does not contain class** — `app/filters/not_contains_class.yaml`; the
   inverse.
+- **Image size** — `app/filters/image_size.yaml`; keeps the images whose pixel
+  size matches the **width** and/or **height** you enter (e.g. `640` × `360`).
+  Leave a field blank to ignore it, so `640` with a blank height keeps every
+  image that is 640 px wide whatever its height. Set **invert** to keep the
+  images that do *not* match instead. At least one of width/height is required.
 
 Both class filters use `app/scripts/class_filter.py`, which maps the class name
 to its id via `data.yaml` and checks each image's `labels/.../*.txt` file (an
-image with no label file contains no class).
+image with no label file contains no class). The image-size filter uses
+`app/scripts/image_size_filter.py`, which reads the dimensions from the image
+header with the standard library only (PNG, JPEG, GIF, BMP, WebP and TIFF) — no
+image library is needed at runtime.
 
 The **Has tag** / **Does not have tag** filters ship with the tags extension
 package (`app/extensions/tags/filters/`); enable it under **Settings →

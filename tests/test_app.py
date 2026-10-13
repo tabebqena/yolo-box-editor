@@ -1970,6 +1970,105 @@ def _load_package_script(name):
     return module
 
 
+def _load_shipped_script(name):
+    """Import a shipped helper from app/scripts by path (not on sys.path)."""
+    path = Path(ybe.config.BASE_DIR) / "scripts" / name
+    spec = importlib.util.spec_from_file_location(name[:-3], path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_image_size_helper_reads_common_formats(tmp_path):
+    mod = _load_shipped_script("image_size_filter.py")
+    for ext in ("png", "jpg", "gif", "bmp", "tiff"):
+        image = tmp_path / f"x.{ext}"
+        Image.new("RGB", (640, 360), (1, 2, 3)).save(image)
+        assert mod.image_size(str(image)) == (640, 360)
+    assert mod.image_size(str(tmp_path / "missing.png")) is None
+
+
+def test_image_size_helper_reads_webp(tmp_path):
+    mod = _load_shipped_script("image_size_filter.py")
+
+    def u24(n):
+        return bytes((n & 0xFF, (n >> 8) & 0xFF, (n >> 16) & 0xFF))
+
+    def container(fourcc, payload):
+        chunk = fourcc + len(payload).to_bytes(4, "little") + payload
+        data = b"RIFF" + (4 + len(chunk)).to_bytes(4, "little") + b"WEBP" + chunk
+        path = tmp_path / f"{fourcc.decode().strip()}.webp"
+        path.write_bytes(data)
+        return mod.image_size(str(path))
+
+    # VP8X (extended): flags + reserved, then a 640x360 canvas stored as size - 1.
+    assert container(b"VP8X", b"\x00" * 4 + u24(639) + u24(359)) == (640, 360)
+    # VP8 (lossy): frame tag + start code, then 14-bit width and height.
+    assert container(b"VP8 ", b"\x00" * 3 + b"\x9d\x01\x2a"
+                     + (640).to_bytes(2, "little") + (360).to_bytes(2, "little")) \
+        == (640, 360)
+    # VP8L (lossless): signature byte, then packed (width-1) and (height-1).
+    assert container(b"VP8L", b"\x2f" + (639 | (359 << 14)).to_bytes(4, "little")) \
+        == (640, 360)
+
+
+def test_image_size_match_helpers():
+    mod = _load_shipped_script("image_size_filter.py")
+    assert mod.matches((640, 360), 640, 360) is True
+    assert mod.matches((640, 360), 640, None) is True
+    assert mod.matches((640, 360), None, None) is True
+    assert mod.matches((640, 360), 1280, 360) is False
+    assert mod.matches(None, None, None) is False
+
+
+def test_shipped_image_size_filter_has_width_height(monkeypatch):
+    monkeypatch.setattr(ybe.config, "FILTERS_DIR",
+                        str(Path(ybe.config.BASE_DIR) / "filters"))
+    monkeypatch.setattr(ybe.config, "USER_FILTERS_DIR",
+                        str(Path(ybe.config.BASE_DIR) / "nope"))
+    filters, errors = ybe.load_filters()
+    assert errors == []
+    flt = filters["Image size"]
+    assert [a["name"] for a in flt["arguments"]] == ["width", "height", "invert"]
+
+
+def test_image_size_filter_keeps_matching_images(clean_state, tmp_path, monkeypatch):
+    root = make_dataset(tmp_path, splits=("train",), images=("a", "b", "c"))
+    images = root / "images" / "train"
+    Image.new("RGB", (640, 360), (1, 2, 3)).save(images / "a.jpg")
+    Image.new("RGB", (640, 480), (1, 2, 3)).save(images / "c.jpg")
+    load_into_state(root)
+    monkeypatch.setattr(ybe.config, "APP_SCRIPT_DIR",
+                        str(Path(ybe.config.BASE_DIR) / "scripts"))
+    step = (
+        f'"{sys.executable}" {{APP_SCRIPT_DIR}}/image_size_filter.py '
+        '{DATA_YAML_PATH} {SPLIT} {INPUT_PIPE} {OUTPUT_PIPE} '
+        '--width {WIDTH} --height {HEIGHT} --invert {INVERT}'
+    )
+    write_filter(clean_state, "Size.yaml", filter_yaml(
+        step, name="Size", arguments=[
+            {"name": "width", "default": '""'},
+            {"name": "height", "default": '""'},
+            {"name": "invert", "default": '"false"', "options": "[false, true]"},
+        ]))
+
+    def run(arguments):
+        chain, error = ybe._normalize_filter_chain(
+            [{"name": "Size", "arguments": arguments}])
+        assert error is None
+        result = ybe.run_filter_chain(chain, "train")
+        assert result["ok"]
+        return [e["name"] for e in result["images"]]
+
+    # b.jpg stays 16x16 (the fixture default); a is 640x360, c is 640x480.
+    assert run({"width": "640", "height": "360"}) == ["a.jpg"]
+    # A blank height matches any height.
+    assert run({"width": "640", "height": ""}) == ["a.jpg", "c.jpg"]
+    # Invert keeps the images that do not match.
+    assert run({"width": "640", "height": "360", "invert": "true"}) == \
+        ["b.jpg", "c.jpg"]
+
+
 def test_tag_image_swaps_only_the_images_segment(tmp_path):
     mod = _load_package_script("tag_image.py")
     image = tmp_path / "images_backup" / "dataset" / "images" / "train" / "a.jpg"

@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.17.0
+- New built-in **Image size** filter: keeps the images whose pixel size matches the width and/or height you enter (e.g. `640` × `360`). Leave a field blank to ignore it, and set **invert** to keep the ones that do not match. Dimensions are read from the image header with no extra library.
+
 ## 10.16.0
 - The Tags extension's **Has tag** / **Does not have tag** filters now choose the tag from a **dropdown** of your dataset's tags, instead of a text box. Extension backend plugins can fill a filter's options from live data with a `filter_options` map returned from `register()`.
 

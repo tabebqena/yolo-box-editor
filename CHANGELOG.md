@@ -4,6 +4,17 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.17.0] - 2026-10-13
+
+### Added
+
+- A built-in **Image size** filter keeps the images whose pixel size matches the
+  **width** and/or **height** you enter (e.g. `640` × `360`). Leave either field
+  blank to ignore it, and set **invert** to keep the images that do *not* match
+  instead. It reads the dimensions from the image header with the standard
+  library only (PNG, JPEG, GIF, BMP, WebP, TIFF), so no image library is needed
+  at runtime.
+
 ## [10.16.0] - 2026-10-10
 
 ### Changed
