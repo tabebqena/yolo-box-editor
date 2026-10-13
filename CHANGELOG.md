@@ -4,6 +4,15 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.21.0] - 2026-10-13
+
+### Changed
+
+- The **Dataset statistics** panel now loads on demand. Its summary re-reads the
+  whole dataset, so it no longer refreshes on every `saved` / dataset change
+  (which caused lag on large datasets with auto-save). Click **Load statistics**
+  (then **Refresh**) to compute it; the query box still runs only when asked.
+
 ## [10.20.0] - 2026-10-13
 
 ### Added

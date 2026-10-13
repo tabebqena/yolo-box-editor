@@ -1,8 +1,10 @@
 // Dataset statistics extension panel.
 //
 // Runs in the sandboxed iframe. It only reads: `stats.summary` renders the
-// overview tables and `stats.query` answers the query box. No dataset string
-// is ever written with innerHTML.
+// overview tables and `stats.query` answers the query box. Nothing is computed
+// until the user clicks **Load statistics** (the full dataset scan is too
+// expensive to run on every edit); the button becomes **Refresh** after the
+// first load. No dataset string is ever written with innerHTML.
 (async function () {
   'use strict';
 
@@ -83,9 +85,9 @@
   }
 
   // --- DOM skeleton -------------------------------------------------------- //
-  var refreshBtn = el('button', null, 'Refresh');
+  var refreshBtn = el('button', null, 'Load statistics');
   refreshBtn.type = 'button';
-  var hint = el('span', 'hint', '');
+  var hint = el('span', 'hint', 'Nothing is computed until you load.');
   var bar = el('div', 'bar');
   bar.appendChild(refreshBtn);
   bar.appendChild(hint);
@@ -256,6 +258,7 @@
       renderSummary(s);
       hint.textContent = s && s.data_yaml
         ? s.data_yaml.split(/[\\/]/).pop() : '';
+      refreshBtn.textContent = 'Refresh';
     } catch (e) {
       overview.textContent = 'Could not load statistics: ' +
         (e && e.message ? e.message : String(e));
@@ -270,10 +273,4 @@
   qInput.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); runQuery(); }
   });
-
-  YBE.on('dataset_loaded', refresh);
-  YBE.on('images_list_loaded', refresh);
-  YBE.on('saved', function () { /* labels changed: the summary may change */ refresh(); });
-
-  try { await refresh(); } catch (e) { /* the button still lets the user retry */ }
 }());

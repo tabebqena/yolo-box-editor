@@ -4,6 +4,10 @@ A read-only extension that summarizes the loaded dataset and answers small
 queries about it. It is shipped `active: false` — enable it under
 **Settings → Extensions**, then use the **Statistics** panel.
 
+The summary re-reads the whole dataset, so it is **not** updated automatically:
+click **Load statistics** (then **Refresh**) to compute it on demand. The query
+box only runs when you ask it to.
+
 ## What it shows
 
 - **Overview** — total images, boxes, and tagged / untagged counts.

@@ -2,6 +2,9 @@
 # One `## <version>` section per release; the lines below it are the notes.
 # Keep the matching full entry in the repository's CHANGELOG.md.
 
+## 10.21.0
+- The **Dataset statistics** panel no longer recalculates on every edit. Because the summary re-reads the whole dataset, it now waits for you: click **Load statistics** (then **Refresh**) to compute it on demand. This removes the lag on large datasets.
+
 ## 10.20.0
 - New **Dataset statistics** extension (disabled by default). Its **Statistics** panel summarizes the loaded dataset — images per split, boxes and images per class, label coverage and tag usage — and a query box answers questions like `tag:smoke`, `class:person` or `split:train tag:2`, showing the count, the percentage and a per-split breakdown. Enable it under **Settings → Extensions**.
 
