@@ -126,6 +126,7 @@ test('yaml editor open/close manages the current file', () => {
 });
 
 test('password modal clears its fields and opens', () => {
+  app.api.openPasswordModal();
   app.$('pwCurrent').value = 'old';
   app.$('pwNew').value = 'x';
   app.$('pwConfirm').value = 'y';

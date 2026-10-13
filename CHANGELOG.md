@@ -4,6 +4,18 @@ All notable changes to **yolo-box-editor** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [10.17.1] - 2026-10-13
+
+### Fixed
+
+- The browser's **saved-password suggestion** no longer appears on the app's
+  ordinary text fields. The login form and change-password fields now ship
+  inside inert `<template>` elements and are cloned into the page only when a
+  login is actually required, so a browser with a saved password for the origin
+  finds no credential field to trigger its autofill heuristics on. The earlier
+  `autocomplete="off"` fix (10.15.2) was not enough on its own because browsers
+  ignore it while any password field is present.
+
 ## [10.17.0] - 2026-10-13
 
 ### Added

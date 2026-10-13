@@ -520,7 +520,8 @@ python -m pip install -r app/requirements.txt</pre>
 
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
-  <div id="loginOverlay" class="login-overlay hidden">
+  <div id="loginOverlay" class="login-overlay hidden"></div>
+  <template id="loginTemplate">
     <form id="loginForm" class="login-box" autocomplete="on">
       <div class="login-brand">YOLO Box Editor</div>
       <p class="login-hint" id="loginHint">Sign in to continue</p>
@@ -531,9 +532,10 @@ python -m pip install -r app/requirements.txt</pre>
       <div id="loginError" class="login-error hidden"></div>
       <button type="submit" id="loginBtn" class="primary">Sign in</button>
     </form>
-  </div>
+  </template>
 
-  <div id="passwordModal" class="modal hidden">
+  <div id="passwordModal" class="modal hidden"></div>
+  <template id="passwordTemplate">
     <div class="modal-box password-modal">
       <div class="modal-head">
         <span class="modal-title">Change password</span>
@@ -553,7 +555,7 @@ python -m pip install -r app/requirements.txt</pre>
         <button id="passwordSave" class="primary" type="button">Save</button>
       </div>
     </div>
-  </div>
+  </template>
 
   <script src="{{ url_for('static', filename='js/core.js') }}"></script>
   <script src="{{ url_for('static', filename='js/api.js') }}"></script>

@@ -52,9 +52,21 @@ test('hideLogin clears the overlay and the password', () => {
   assert.equal(app.$('loginPass').value, '');
 });
 
+test('credential fields stay out of the DOM until one is needed', () => {
+  assert.equal(app.$('loginForm'), null);
+  assert.equal(app.$('loginPass'), null);
+  assert.equal(app.$('pwCurrent'), null);
+  app.api.showLogin();
+  assert.ok(app.$('loginForm'));
+  assert.ok(app.$('loginPass'));
+  app.api.openPasswordModal();
+  assert.ok(app.$('pwCurrent'));
+});
+
 test('submitLogin signs in and starts the app', async () => {
   mockStartup();
   app.fetchMock.on('/api/login', () => ({ body: { ok: true } }));
+  app.api.showLogin();
   app.$('loginUser').value = 'admin';
   app.$('loginPass').value = 'admin';
   await app.api.submitLogin({ preventDefault() {} });
@@ -66,6 +78,7 @@ test('submitLogin signs in and starts the app', async () => {
 
 test('submitLogin reports a bad password', async () => {
   app.fetchMock.on('/api/login', () => ({ status: 401, body: { error: 'Bad credentials' } }));
+  app.api.showLogin();
   app.$('loginPass').value = 'wrong';
   await app.api.submitLogin({ preventDefault() {} });
   assert.equal(app.api.isHidden('loginOverlay'), false);

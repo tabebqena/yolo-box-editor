@@ -22,11 +22,42 @@ function setAccountControls(visible) {
 }
 
 /**
+ * Clone the sign-in form into the overlay on first use. The credential markup
+ * ships inside `<template id="loginTemplate">`, which is inert: a browser with a
+ * saved password never sees a password field (or offers autofill) until a login
+ * is actually required.
+ * @returns {void}
+ */
+function ensureLoginForm() {
+  if (el('loginForm')) return;
+  const tpl = el('loginTemplate');
+  if (!tpl) return;
+  el('loginOverlay').appendChild(tpl.content.cloneNode(true));
+  el('loginForm').addEventListener('submit', submitLogin);
+}
+
+/**
+ * Clone the change-password modal into place on first use (see
+ * `ensureLoginForm`).
+ * @returns {void}
+ */
+function ensurePasswordModal() {
+  if (el('passwordModalClose')) return;
+  const tpl = el('passwordTemplate');
+  if (!tpl) return;
+  el('passwordModal').appendChild(tpl.content.cloneNode(true));
+  el('passwordModalClose').addEventListener('click', closePasswordModal);
+  el('passwordCancel').addEventListener('click', closePasswordModal);
+  el('passwordSave').addEventListener('click', savePassword);
+}
+
+/**
  * Show the sign-in overlay, optionally with an error message.
  * @param {string} [message]
  * @returns {void}
  */
 function showLogin(message) {
+  ensureLoginForm();
   const overlay = el('loginOverlay');
   if (!overlay) return;
   setAccountControls(false);
@@ -45,7 +76,8 @@ function showLogin(message) {
 function hideLogin() {
   hideEl('loginOverlay');
   hideEl('loginError');
-  el('loginPass').value = '';
+  const pass = el('loginPass');
+  if (pass) pass.value = '';
 }
 
 /**
@@ -55,6 +87,7 @@ function hideLogin() {
  */
 async function submitLogin(e) {
   if (e) e.preventDefault();
+  ensureLoginForm();
   const btn = el('loginBtn');
   btn.disabled = true;
   try {
@@ -91,6 +124,7 @@ async function logout() {
  * @returns {void}
  */
 function openPasswordModal() {
+  ensurePasswordModal();
   el('pwCurrent').value = '';
   el('pwNew').value = '';
   el('pwConfirm').value = '';
@@ -177,10 +211,8 @@ async function boot() {
 window.addEventListener('error', (e) => dbgWarn('uncaught error', e.error || e.message));
 window.addEventListener('unhandledrejection', (e) => dbgWarn('unhandled rejection', e.reason));
 
-el('loginForm').addEventListener('submit', submitLogin);
+// The login form and password modal are wired by ensureLoginForm /
+// ensurePasswordModal when they are cloned in.
 el('logoutBtn').addEventListener('click', logout);
 el('changePwBtn').addEventListener('click', openPasswordModal);
-el('passwordModalClose').addEventListener('click', closePasswordModal);
-el('passwordCancel').addEventListener('click', closePasswordModal);
-el('passwordSave').addEventListener('click', savePassword);
 boot();
